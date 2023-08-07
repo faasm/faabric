@@ -350,6 +350,10 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         return decision;
     }
 
+#ifndef NDEBUG
+    decision->print();
+#endif
+
     // Given a scheduling decision, depending on the decision type, we want to:
     // 1. Update the host-map to reflect the new host occupation
     // 2. Update the in-flight map to include the new request
@@ -374,8 +378,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             state.inFlightReqs[appId] = std::make_pair(req, decision);
 
             // 3. We send the mappings to all the hosts involved
-            broker.sendMappingsFromSchedulingDecision(*decision,
-                                                      decision->uniqueHosts());
+            broker.setAndSendMappingsFromSchedulingDecision(*decision);
 
             break;
         }
@@ -405,25 +408,26 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             // 3. We want to send the mappings for the _updated_ decision,
             // including _all_ the messages (not just the ones that are being
             // added)
-            broker.sendMappingsFromSchedulingDecision(*oldDec,
-                                                      oldDec->uniqueHosts());
+            broker.setAndSendMappingsFromSchedulingDecision(*oldDec);
 
             break;
         }
         case faabric::batch_scheduler::DecisionType::DIST_CHANGE: {
             auto oldReq = state.inFlightReqs.at(appId).first;
             auto oldDec = state.inFlightReqs.at(appId).second;
-            // Work out the total working set of the hosts involved in the
-            // migration
+            // We want to let all hosts involved in the migration (not only
+            // those in the new decision) that we are gonna migrate. For the
+            // evicted hosts (those present in the old decision but not in the
+            // new one) we need to send the mappings manually
             // TODO: can we make this cleaner?
-            std::vector<std::string> allInvolvedHostsVec;
-            std::set_union(decision->uniqueHosts().cbegin(),
-                           decision->uniqueHosts().cend(),
-                           oldDec->uniqueHosts().cbegin(),
-                           oldDec->uniqueHosts().cend(),
-                           std::back_inserter(allInvolvedHostsVec));
-            std::set<std::string> allInvolvedHosts(allInvolvedHostsVec.begin(),
-                                                   allInvolvedHostsVec.end());
+            std::vector<std::string> evictedHostsVec;
+            std::set_difference(oldDec->uniqueHosts().cbegin(),
+                                oldDec->uniqueHosts().cend(),
+                                decision->uniqueHosts().cbegin(),
+                                decision->uniqueHosts().cend(),
+                                std::back_inserter(evictedHostsVec));
+            std::set<std::string> evictedHosts(evictedHostsVec.begin(),
+                                               evictedHostsVec.end());
 
             // 1. We only need to update the hosts where both decisions differ
             assert(decision->hosts.size() == oldDec->hosts.size());
@@ -449,8 +453,8 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
 
             // 3. We want to sent the new scheduling decision to all the hosts
             // involved in the migration (even the ones that are evicted)
-            broker.sendMappingsFromSchedulingDecision(*decision,
-                                                      allInvolvedHosts);
+            broker.setAndSendMappingsFromSchedulingDecision(*decision);
+            broker.sendMappingsFromSchedulingDecision(*decision, evictedHosts);
 
             break;
         }

@@ -431,9 +431,9 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     // This greatly simplifies the reasoning about which hosts hold which
     // diffs.
 
-    /* TODO: snapshots
     std::string snapshotKey;
     if (isThreads) {
+        /* TODO (threads): snapshots
         if (!firstMsg.snapshotkey().empty()) {
             SPDLOG_ERROR("{} should not provide snapshot key for {} threads",
                          funcStr,
@@ -445,15 +445,17 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
         if (!isSingleHost) {
             snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
         }
+        */
     } else {
-        snapshotKey = firstMsg.snapshotkey();
+        // TODO: can we get the snapshot key from req?
+        snapshotKey = req->messages(0).snapshotkey();
     }
 
     if (!snapshotKey.empty()) {
         auto snap = reg.getSnapshot(snapshotKey);
 
-        for (const auto& host : getFunctionRegisteredHosts(
-               firstMsg.user(), firstMsg.function(), false)) {
+        for (const auto& host :
+             getFunctionRegisteredHosts(req->user(), req->function(), false)) {
             std::shared_ptr<SnapshotClient> c = getSnapshotClient(host);
 
             // See if we've already pushed this snapshot to the given host,
@@ -471,6 +473,7 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
 
         // Now reset the tracking on the snapshot before we start executing
         snap->clearTrackedChanges();
+        /* TODO: fix this elseif
     } else if (!snapshotKey.empty() && isMigration && isForceLocal) {
         // If we are executing a migrated function, we don't need to distribute
         // the snapshot to other hosts, as this snapshot is specific to the
@@ -479,8 +482,8 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
 
         // Now reset the tracking on the snapshot before we start executing
         snap->clearTrackedChanges();
+        */
     }
-    */
 
     // -------------------------------------------
     // EXECUTION
@@ -503,8 +506,8 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     // For threads we only need one executor, for anything else we want
     // one Executor per function in flight.
 
-    /* TODO: threads
     if (isThreads) {
+        /* TODO: thread execution
         // Threads use the existing executor. We assume there's only
         // one running at a time.
         std::vector<std::shared_ptr<Executor>>& thisExecutors =
@@ -529,16 +532,19 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
 
         // Execute the tasks
         e->executeTasks(thisHostIdxs, req);
+        */
     } else {
         // Non-threads require one executor per task
         for (int i = 0; i < nMessages; i++) {
             faabric::Message& localMsg = req->mutable_messages()->at(i);
 
+            // TODO: can we do this without a lock, or can we put the lock
+            // elsewhere?
+            faabric::util::FullLock lock(mx);
             std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
             e->executeTasks({ i }, req);
         }
     }
-    */
 
     // Records for tests
     if (faabric::util::isTestMode()) {
