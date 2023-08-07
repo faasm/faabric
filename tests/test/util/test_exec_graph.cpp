@@ -116,7 +116,6 @@ TEST_CASE_METHOD(ExecGraphTestFixture,
 TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
 {
     faabric::mpi::MpiWorld world;
-    msg.set_appid(1337);
     msg.set_ismpi(true);
     msg.set_recordexecgraph(true);
 
@@ -138,10 +137,10 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
         messages.at(rank).set_recordexecgraph(true);
     }
 
-    world.create(msg, worldId, worldSize);
+    // First call the original message
+    plannerCli.callFunctions(req);
 
-    // Update the result for the main message
-    sch.setFunctionResult(msg);
+    world.create(msg, worldId, worldSize);
 
     // Build expected graph
     ExecGraphNode nodeB1 = { .msg = messages.at(1) };
@@ -154,8 +153,15 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
 
     ExecGraph expected{ .rootNode = nodeA };
 
+    // The MPI base fixture uses the DummyExecutor, which immediately sets
+    // the function result. We want to overwrite said function result with the
+    // chained calls (logged as part of MpiWorld::create) thus we sleep enough
+    // to let the dummy executor set the result, to make sure we can overwrite
+    // it here
+    SLEEP_MS(500);
+    sch.setFunctionResult(msg);
+
     // Wait for the MPI messages to finish
-    auto& plannerCli = faabric::planner::getPlannerClient();
     plannerCli.getMessageResult(msg, 2000);
     for (const auto& id : faabric::util::getChainedFunctions(msg)) {
         plannerCli.getMessageResult(msg.appid(), id, 2000);

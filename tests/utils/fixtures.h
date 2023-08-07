@@ -429,7 +429,8 @@ class MpiBaseTestFixture
       , func("hellompi")
       , worldId(123)
       , worldSize(5)
-      , msg(faabric::util::messageFactory(user, func))
+      , req(faabric::util::batchExecFactory(user, func, 1))
+      , msg(*req->mutable_messages(0))
     {
         std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
           std::make_shared<faabric::scheduler::DummyExecutorFactory>();
@@ -453,7 +454,9 @@ class MpiBaseTestFixture
     int worldId;
     int worldSize;
 
-    faabric::Message msg;
+    std::shared_ptr<BatchExecuteRequest> req;
+    // TODO: refactor to firstMsg
+    faabric::Message& msg;
 };
 
 class MpiTestFixture : public MpiBaseTestFixture

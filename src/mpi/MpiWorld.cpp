@@ -143,9 +143,10 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     // to spawn (size - 1) new functions starting with rank 1
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, size - 1);
+    faabric::util::updateBatchExecAppId(req, call.appid());
     for (int i = 0; i < req->messages_size(); i++) {
+        // Update MPI-related fields
         faabric::Message& msg = req->mutable_messages()->at(i);
-        msg.set_appid(call.appid());
         msg.set_ismpi(true);
         msg.set_mpiworldid(call.mpiworldid());
         msg.set_mpirank(i + 1);
@@ -154,6 +155,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         // Set group ids for remote messaging
         // TODO: this will be set by the planner
         // msg.set_groupid(call.groupid());
+        // TODO: do we need to set this one here?
         msg.set_groupidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
@@ -165,6 +167,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
             // To run migration experiments easily, we may want to propagate
             // the UNDERFULL topology hint. In general however, we don't
             // need to propagate this field
+            // TODO(hints): remove
             if (thisRankMsg->topologyhint() == "UNDERFULL") {
                 msg.set_topologyhint(thisRankMsg->topologyhint());
             }
@@ -299,7 +302,12 @@ void MpiWorld::initLocalRemoteLeaders()
     int groupId = thisRankMsg->groupid();
     auto rankIds = broker.getIdxsRegisteredForGroup(groupId);
     if (rankIds.size() != size) {
-        SPDLOG_ERROR("rankIds != size ({} != {})", rankIds.size(), size);
+        SPDLOG_ERROR("{}:{}:{} rankIds != size ({} != {})",
+                     thisRankMsg->appid(),
+                     groupId,
+                     thisRankMsg->groupidx(),
+                     rankIds.size(),
+                     size);
         throw std::runtime_error("MPI Group-World size mismatch!");
     }
     assert(rankIds.size() == size);

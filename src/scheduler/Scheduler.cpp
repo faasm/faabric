@@ -704,6 +704,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     // Remove the app from in-flight map if still there, and this host is the
     // main host for the message
+    // TODO: remove me
     if (msg.mainhost() == thisHost) {
         removePendingMigration(msg.appid());
     }

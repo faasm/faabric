@@ -330,12 +330,6 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     // hostMap type, to make sure we don't modify our state here
 #endif
 
-    // A scheduling decision will create a new PTP mapping and, as a
-    // consequence, a new group ID
-    int newGroupId = faabric::util::generateGid();
-    decision->groupId = newGroupId;
-    faabric::util::updateBatchExecGroupId(req, newGroupId);
-
     // Handle failures to schedule work
     if (*decision == NOT_ENOUGH_SLOTS_DECISION) {
         SPDLOG_ERROR(
@@ -350,9 +344,11 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         return decision;
     }
 
-#ifndef NDEBUG
-    decision->print();
-#endif
+    // A scheduling decision will create a new PTP mapping and, as a
+    // consequence, a new group ID
+    int newGroupId = faabric::util::generateGid();
+    decision->groupId = newGroupId;
+    faabric::util::updateBatchExecGroupId(req, newGroupId);
 
     // Given a scheduling decision, depending on the decision type, we want to:
     // 1. Update the host-map to reflect the new host occupation
@@ -363,6 +359,11 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     auto& broker = faabric::transport::getPointToPointBroker();
     switch (decisionType) {
         case faabric::batch_scheduler::DecisionType::NEW: {
+            // 0. Log the decision in debug mode
+#ifndef NDEBUG
+            decision->print();
+#endif
+
             // 1. For a scale change request, we only need to update the hosts
             // with the new messages being scheduled
             for (int i = 0; i < decision->hosts.size(); i++) {
@@ -399,11 +400,17 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             auto oldReq = state.inFlightReqs.at(appId).first;
             auto oldDec = state.inFlightReqs.at(appId).second;
             faabric::util::updateBatchExecGroupId(oldReq, newGroupId);
+            oldDec->groupId = newGroupId;
 
             for (int i = 0; i < req->messages_size(); i++) {
                 *oldReq->add_messages() = req->messages(i);
                 oldDec->addMessage(decision->hosts.at(i), req->messages(i));
             }
+
+            // 2.5. Log the updated decision in debug mode
+#ifndef NDEBUG
+            oldDec->print();
+#endif
 
             // 3. We want to send the mappings for the _updated_ decision,
             // including _all_ the messages (not just the ones that are being

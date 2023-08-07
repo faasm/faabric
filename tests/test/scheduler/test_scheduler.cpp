@@ -657,7 +657,6 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     // Create waiters that will submit messages and await their results
     for (int i = 0; i < nWaiters; i++) {
         waiterThreads.emplace_back([nWaiterMessages] {
-            Scheduler& sch = scheduler::getScheduler();
             auto& plannerCli = faabric::planner::getPlannerClient();
 
             std::shared_ptr<faabric::BatchExecuteRequest> req =
