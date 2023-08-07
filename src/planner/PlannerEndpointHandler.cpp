@@ -12,11 +12,6 @@ namespace faabric::planner {
 
 using header = beast::http::field;
 
-// TODO(schedule): this atomic variable is used to temporarily select which
-// host to forward an execute request to. This is because the planner still
-// does not schedule resources to hosts, just acts as a proxy.
-static std::atomic<int> nextHostIdx = 0;
-
 void PlannerEndpointHandler::onRequest(
   faabric::endpoint::HttpRequestContext&& ctx,
   faabric::util::BeastHttpRequest&& request)
@@ -179,27 +174,16 @@ void PlannerEndpointHandler::onRequest(
                 response.body() = "Bad BatchExecRequest";
                 return ctx.sendFunction(std::move(response));
             }
-            ber->set_comesfromplanner(true);
 
-            // Schedule and execute the BER
-            // TODO: make scheduling decision here
-            // FIXME: for the moment, just forward randomly to one node. Note
-            // that choosing the node randomly may yield to uneven load
-            // distributions
-            auto availableHosts =
-              faabric::planner::getPlanner().getAvailableHosts();
-            if (availableHosts.empty()) {
-                SPDLOG_ERROR("Planner doesn't have any registered hosts to"
-                             " schedule EXECUTE_BATCH request to!");
+            // Execute the BER
+            auto decision = getPlanner().callBatch(ber);
+
+            // Handle cases where the scheduling failed
+            if (*decision == NOT_ENOUGH_SLOTS_DECISION) {
                 response.result(beast::http::status::internal_server_error);
-                response.body() = std::string("No available hosts");
+                response.body() = "No available hosts";
                 return ctx.sendFunction(std::move(response));
             }
-            // Note that hostIdx++ is an atomic increment
-            int hostIdx = nextHostIdx++ % availableHosts.size();
-            faabric::scheduler::getFunctionCallClient(
-              availableHosts.at(hostIdx)->ip())
-              ->executeFunctions(ber);
 
             // Prepare the response
             response.result(beast::http::status::ok);
