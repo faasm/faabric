@@ -318,24 +318,22 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     auto decisionType =
       batchScheduler->getDecisionType(state.inFlightReqs, req);
 
-    // First, make scheduling decision
-#ifndef NDEBUG
-#endif
-    // TODO: remove this copy once we finalise on one Host abstraction
+    // Make a copy of the host-map state to make sure the scheduling process
+    // does not modify it
     auto hostMapCopy = convertToBatchSchedHostMap(state.hostMap);
 
     // For a DIST_CHANGE decision (i.e. migration) we want to try to imrpove
-    // on the old decision (we don't care the one we send)
-    // TODO: alternatively we could make sure the ExecutorContext is always set?
-    std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> decision;
+    // on the old decision (we don't care the one we send), so we make sure
+    // we are scheduling the same messages from the old request
     if (decisionType == faabric::batch_scheduler::DecisionType::DIST_CHANGE) {
         auto oldReq = state.inFlightReqs.at(appId).first;
-        decision = batchScheduler->makeSchedulingDecision(
-          hostMapCopy, state.inFlightReqs, oldReq);
-    } else {
-        decision = batchScheduler->makeSchedulingDecision(
-          hostMapCopy, state.inFlightReqs, req);
+        req->clear_messages();
+        for (const auto& msg : oldReq->messages()) {
+            *req->add_messages() = msg;
+        }
     }
+
+    auto decision = batchScheduler->makeSchedulingDecision(hostMapCopy, state.inFlightReqs, req);
 #ifndef NDEBUG
     // Here we make sure the state hasn't changed here (we pass const, but they
     // are const pointers)
@@ -431,21 +429,44 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             break;
         }
         case faabric::batch_scheduler::DecisionType::DIST_CHANGE: {
+            // 0. Log the decision in debug mode
+#ifndef NDEBUG
+            decision->print();
+#endif
+
+            SPDLOG_WARN("here 2?");
+
             auto oldReq = state.inFlightReqs.at(appId).first;
             auto oldDec = state.inFlightReqs.at(appId).second;
+            SPDLOG_WARN("Old hosts: {}", oldDec->uniqueHosts().size());
+            SPDLOG_WARN("New hosts: {}", decision->uniqueHosts().size());
             // We want to let all hosts involved in the migration (not only
             // those in the new decision) that we are gonna migrate. For the
             // evicted hosts (those present in the old decision but not in the
             // new one) we need to send the mappings manually
             // TODO: can we make this cleaner?
             std::vector<std::string> evictedHostsVec;
+            // TODO FIXME why do we need to use vectors and not sets?
+            std::vector<std::string> oldDecHosts = oldDec->hosts;
+            std::sort(oldDecHosts.begin(), oldDecHosts.end());
+            std::vector<std::string> newDecHosts = decision->hosts;
+            std::sort(newDecHosts.begin(), newDecHosts.end());
+            /*
             std::set_difference(oldDec->uniqueHosts().cbegin(),
                                 oldDec->uniqueHosts().cend(),
                                 decision->uniqueHosts().cbegin(),
                                 decision->uniqueHosts().cend(),
+            */
+            std::set_difference(oldDecHosts.begin(),
+                                oldDecHosts.end(),
+                                newDecHosts.begin(),
+                                newDecHosts.end(),
                                 std::back_inserter(evictedHostsVec));
+            SPDLOG_WARN("evicted hosts: {}", evictedHostsVec.size());
             std::set<std::string> evictedHosts(evictedHostsVec.begin(),
                                                evictedHostsVec.end());
+
+            SPDLOG_WARN("here 3?");
 
             // 1. We only need to update the hosts where both decisions differ
             assert(decision->hosts.size() == oldDec->hosts.size());
@@ -465,9 +486,12 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
                        state.hostMap.at(decision->hosts.at(i))->slots());
             }
 
+            SPDLOG_WARN("here 4?");
+
             // 2. For a DIST_CHANGE request (migration), we want to replace the
             // exsiting decision with the new one
-            state.inFlightReqs.at(appId) = std::make_pair(req, decision);
+            faabric::util::updateBatchExecGroupId(oldReq, newGroupId);
+            state.inFlightReqs.at(appId) = std::make_pair(oldReq, decision);
 
             // 3. We want to sent the new scheduling decision to all the hosts
             // involved in the migration (even the ones that are evicted)

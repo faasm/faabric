@@ -11,7 +11,7 @@ class BinPackScheduler final : public BatchScheduler
 {
   public:
     std::shared_ptr<SchedulingDecision> makeSchedulingDecision(
-      const HostMap& hostMap,
+      HostMap& hostMap,
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override;
 
@@ -21,7 +21,7 @@ class BinPackScheduler final : public BatchScheduler
       std::shared_ptr<SchedulingDecision> decisionB) override;
 
     std::vector<Host> getSortedHosts(
-      const HostMap& hostMap,
+      HostMap& hostMap,
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       const DecisionType& decisionType) override;

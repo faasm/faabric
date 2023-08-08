@@ -11,7 +11,9 @@
 using namespace faabric::scheduler;
 
 namespace tests {
-class FunctionMigrationTestFixture : public SchedulerFixture
+class FunctionMigrationTestFixture
+  : public SchedulerFixture
+  , public FunctionCallClientServerFixture
 {
   public:
     FunctionMigrationTestFixture()

@@ -71,7 +71,7 @@ class BatchScheduler
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     virtual std::shared_ptr<SchedulingDecision> makeSchedulingDecision(
-      const HostMap& hostMap,
+      HostMap& hostMap,
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req) = 0;
 
@@ -112,7 +112,7 @@ class BatchScheduler
       std::shared_ptr<SchedulingDecision> decisionB) = 0;
 
     virtual std::vector<Host> getSortedHosts(
-      const HostMap& hostMap,
+      HostMap& hostMap,
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       const DecisionType& decisionType) = 0;

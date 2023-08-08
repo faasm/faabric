@@ -789,8 +789,6 @@ std::string getChainedKey(unsigned int msgId)
 // MIGRATION
 // ----------------------------------------
 
-// To check for migration opportunities, we request a scheduling decision for
-// the same batch execute request
 std::shared_ptr<faabric::PendingMigration>
 Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
                                           int overwriteNewGroupId)
@@ -806,6 +804,9 @@ Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
     // TODO: maybe we could move this into a broker-specific function?
     int newGroupId = 0;
     if (groupIdx == 0) {
+        // To check for migration opportunities, we request a scheduling
+        // decision for the same batch execute request, but setting the right
+        // flag
         auto req =
           faabric::util::batchExecFactory(msg.user(), msg.function(), 1);
         faabric::util::updateBatchExecAppId(req, msg.appid());
