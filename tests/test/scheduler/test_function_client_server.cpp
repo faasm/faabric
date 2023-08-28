@@ -121,10 +121,6 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
         plannerCli.getMessageResult(m, 5 * SHORT_TEST_TIMEOUT_MS);
     }
 
-    // Check no other hosts have been registered
-    faabric::Message m = req->messages().at(0);
-    REQUIRE(sch.getFunctionRegisteredHostCount(m) == 0);
-
     // Check calls have been registered
     REQUIRE(sch.getRecordedMessagesLocal().size() == nCalls);
     REQUIRE(sch.getRecordedMessagesShared().empty());

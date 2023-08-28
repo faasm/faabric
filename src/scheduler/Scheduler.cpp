@@ -65,18 +65,6 @@ Scheduler::~Scheduler()
     }
 }
 
-std::set<std::string> Scheduler::getAvailableHosts()
-{
-    auto availableHosts =
-      faabric::planner::getPlannerClient().getAvailableHosts();
-    std::set<std::string> availableHostsIps;
-    for (const auto& host : availableHosts) {
-        availableHostsIps.insert(host.ip());
-    }
-
-    return availableHostsIps;
-}
-
 void Scheduler::addHostToGlobalSet(
   const std::string& hostIp,
   std::shared_ptr<faabric::HostResources> overwriteResources)
@@ -307,25 +295,6 @@ long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
     return executors[funcStr].size();
 }
 
-int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
-{
-    faabric::util::SharedLock lock(mx);
-    return getFunctionRegisteredHosts(msg.user(), msg.function(), false).size();
-}
-
-const std::set<std::string>& Scheduler::getFunctionRegisteredHosts(
-  const std::string& user,
-  const std::string& func,
-  bool acquireLock)
-{
-    faabric::util::SharedLock lock;
-    if (acquireLock) {
-        lock = faabric::util::SharedLock(mx);
-    }
-    std::string key = user + "/" + func;
-    return registeredHosts[key];
-}
-
 void Scheduler::vacateSlot()
 {
     thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
@@ -377,6 +346,7 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     if (!snapshotKey.empty()) {
         auto snap = reg.getSnapshot(snapshotKey);
 
+        /* TODO(remote-threads): fixme
         for (const auto& host :
              getFunctionRegisteredHosts(req->user(), req->function(), false)) {
             std::shared_ptr<SnapshotClient> c = getSnapshotClient(host);
@@ -393,6 +363,7 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
                 pushedSnapshotsMap[snapshotKey].insert(host);
             }
         }
+        */
 
         // Now reset the tracking on the snapshot before we start executing
         snap->clearTrackedChanges();
@@ -409,9 +380,15 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     }
 
     // -------------------------------------------
-    // EXECUTION
+    // LOCAL EXECTUION
     // -------------------------------------------
+
+    // TODO: can we do this without a lock, or can we put the lock
+    // elsewhere?
+    faabric::util::FullLock lock(mx);
+
     int nMessages = req->messages_size();
+    auto funcStr = faabric::util::funcToString(req);
 
     // Records for tests - copy messages before execution to avoid racing on msg
     size_t recordedMessagesOffset = recordedMessagesAll.size();
@@ -421,17 +398,8 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
         }
     }
 
-    auto funcStr = faabric::util::funcToString(req);
-
-    // -------------------------------------------
-    // LOCAL EXECTUION
-    // -------------------------------------------
     // For threads we only need one executor, for anything else we want
     // one Executor per function in flight.
-
-    // TODO: can we do this without a lock, or can we put the lock
-    // elsewhere?
-    faabric::util::FullLock lock(mx);
     if (isThreads) {
         // Threads use the existing executor. We assume there's only
         // one running at a time.
@@ -487,46 +455,17 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     }
 }
 
-std::vector<std::string> Scheduler::getUnregisteredHosts(
-  const std::string& user,
-  const std::string& function,
-  bool noCache)
-{
-    // Load the list of available hosts
-    if (availableHostsCache.empty() || noCache) {
-        availableHostsCache = getAvailableHosts();
-    }
-
-    // At this point we know we need to enlist unregistered hosts
-    const std::set<std::string>& thisRegisteredHosts =
-      getFunctionRegisteredHosts(user, function, false);
-
-    std::vector<std::string> unregisteredHosts;
-
-    std::set_difference(
-      availableHostsCache.begin(),
-      availableHostsCache.end(),
-      thisRegisteredHosts.begin(),
-      thisRegisteredHosts.end(),
-      std::inserter(unregisteredHosts, unregisteredHosts.begin()));
-
-    // If we've not got any, try again without caching
-    if (unregisteredHosts.empty() && !noCache) {
-        return getUnregisteredHosts(user, function, true);
-    }
-
-    return unregisteredHosts;
-}
-
 void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
                                         const std::string& snapshotKey)
 {
+    /* TODO(snaps): FIXME
     const std::set<std::string>& thisRegisteredHosts =
       getFunctionRegisteredHosts(msg.user(), msg.function(), false);
 
     for (auto host : thisRegisteredHosts) {
         getSnapshotClient(host)->deleteSnapshot(snapshotKey);
     }
+    */
 }
 
 void Scheduler::clearRecordedMessages()

@@ -200,13 +200,6 @@ class Scheduler
 
     long getFunctionExecutorCount(const faabric::Message& msg);
 
-    int getFunctionRegisteredHostCount(const faabric::Message& msg);
-
-    const std::set<std::string>& getFunctionRegisteredHosts(
-      const std::string& user,
-      const std::string& function,
-      bool acquireLock = true);
-
     void flushLocally();
 
     // ----------------------------------
@@ -251,8 +244,6 @@ class Scheduler
     void vacateSlot();
 
     std::string getThisHost();
-
-    std::set<std::string> getAvailableHosts();
 
     void addHostToGlobalSet();
 
@@ -327,13 +318,10 @@ class Scheduler
       faabric::Message& msg,
       faabric::util::FullLock& schedulerLock);
 
-    std::vector<std::string> getUnregisteredHosts(const std::string& user,
-                                                  const std::string& function,
-                                                  bool noCache = false);
-
     // ---- Accounting and debugging ----
     std::vector<faabric::Message> recordedMessagesAll;
     std::vector<faabric::Message> recordedMessagesLocal;
+    // TODO(scheduler-cleanup): this struct can go away
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
 

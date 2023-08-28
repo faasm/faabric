@@ -204,11 +204,11 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
 
     faabric::util::FullLock lock(plannerMx);
 
-    SPDLOG_INFO("Planner setting message result (id: {}) for {}:{}:{}",
-                msg->id(),
-                msg->appid(),
-                msg->groupid(),
-                msg->groupidx());
+    SPDLOG_DEBUG("Planner setting message result (id: {}) for {}:{}:{}",
+                 msg->id(),
+                 msg->appid(),
+                 msg->groupid(),
+                 msg->groupidx());
 
     // Set the result
     state.appResults[appId][msgId] = msg;

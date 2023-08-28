@@ -28,11 +28,6 @@ class FunctionMigrationTestFixture
     ~FunctionMigrationTestFixture()
     {
         faabric::util::setMockMode(false);
-
-        // Remove all hosts from global set
-        for (const std::string& host : sch.getAvailableHosts()) {
-            sch.removeHostFromGlobalSet(host);
-        }
     }
 
   protected:

@@ -23,6 +23,7 @@ getBatchRequests();
 std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>>
 getMessageResults();
 
+// TODO(scheduler-cleanup): remove this one
 void queueResourceResponse(const std::string& host,
                            faabric::HostResources& res);
 
