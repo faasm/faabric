@@ -136,6 +136,8 @@ class PointToPointBroker
 
     void resetThreadLocalCache();
 
+    void postMigrationHook(int groupId, int groupIdx);
+
   private:
     faabric::util::SystemConfig& conf;
 

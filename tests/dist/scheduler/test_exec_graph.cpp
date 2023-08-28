@@ -35,7 +35,7 @@ TEST_CASE_METHOD(DistTestsFixture,
         }
 
         // Call the functions
-        sch.callFunctions(req);
+        plannerCli.callFunctions(req);
 
         faabric::Message& m = req->mutable_messages()->at(0);
 

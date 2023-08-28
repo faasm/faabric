@@ -41,8 +41,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     expectedDecision.addMessage(otherHost, req->messages().at(3));
 
     // Call the functions
-    faabric::batch_scheduler::SchedulingDecision actualDecision =
-      sch.callFunctions(req);
+    auto actualDecision = plannerCli.callFunctions(req);
 
     // Check decision is as expected
     checkSchedulingDecisionEquality(actualDecision, expectedDecision);

@@ -21,7 +21,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
 
     // The first request will schedule two functions on each host
     setLocalSlots(2, worldSize);
-    sch.callFunctions(req1);
+    plannerCli.callFunctions(req1);
 
     // Sleep for a bit to allow for the scheduler to schedule all MPI ranks
     SLEEP_MS(200);
@@ -29,7 +29,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     // Override the local slots so that the same scheduling decision as before
     // is taken
     setLocalSlots(2, worldSize);
-    sch.callFunctions(req2);
+    plannerCli.callFunctions(req2);
 
     checkAllocationAndResult(req1, 15000);
     checkAllocationAndResult(req2, 15000);
@@ -43,7 +43,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     int worldSize = 4;
     setLocalSlots(2, worldSize);
     auto req1 = setRequest("alltoall-sleep");
-    sch.callFunctions(req1);
+    plannerCli.callFunctions(req1);
 
     // Sleep for a bit to allow for the scheduler to schedule all MPI ranks
     SLEEP_MS(200);
@@ -102,7 +102,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
 
     // The first request will schedule two functions on each host
-    sch.callFunctions(req1);
+    plannerCli.callFunctions(req1);
 
     // Sleep for a while so that:
     // - When we schedule the second application the first one is already
@@ -119,7 +119,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     //   a GHA run we have slept so long that the first application has already
     //   finished
     setLocalSlots(2, worldSize);
-    sch.callFunctions(req2);
+    plannerCli.callFunctions(req2);
 
     checkAllocationAndResult(req1, 15000);
     std::vector<std::string> hostsBeforeMigration = {

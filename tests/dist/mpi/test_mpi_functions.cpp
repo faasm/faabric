@@ -16,7 +16,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all gather", "[mpi]")
     auto req = setRequest("allgather");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -28,7 +28,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all reduce", "[mpi]")
     auto req = setRequest("allreduce");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -40,7 +40,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all", "[.][mpi]")
     auto req = setRequest("alltoall");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -60,7 +60,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
         auto req = setRequest("alltoall");
 
         // Call the functions
-        sch.callFunctions(req);
+        plannerCli.callFunctions(req);
 
         checkAllocationAndResult(req);
     }
@@ -77,7 +77,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     auto req = setRequest("alltoall-sleep");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     // Wait for extra time as the test will sleep for five seconds
     checkAllocationAndResult(req, 20000);
@@ -90,7 +90,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI barrier", "[mpi]")
     auto req = setRequest("barrier");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -102,7 +102,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI broadcast", "[mpi]")
     auto req = setRequest("bcast");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -114,7 +114,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI cart create", "[mpi]")
     auto req = setRequest("cart-create");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -126,7 +126,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI cartesian", "[mpi]")
     auto req = setRequest("cartesian");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -138,7 +138,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI checks", "[mpi]")
     auto req = setRequest("checks");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -156,18 +156,16 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
 
     // Check very often for migration opportunities so that we detect it
     // right away
-    msg.set_migrationcheckperiod(1);
     msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
-    // Sleep for a while to let the scheduler schedule the MPI calls
+    // Sleep for a while to let the planner schedule the MPI calls
     SLEEP_MS(500);
 
     // Update the local slots so that a migration opportunity appears
-    int newLocalSlots = worldSize;
-    setLocalSlots(newLocalSlots, worldSize);
+    updateLocalSlots(worldSize);
 
     // The current function migration approach breaks the execution graph, as
     // some messages are left dangling (deliberately) without return value
@@ -186,7 +184,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI gather", "[mpi]")
     auto req = setRequest("gather");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -198,7 +196,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI hello world", "[mpi]")
     auto req = setRequest("hello-world");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -210,7 +208,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI async. send recv", "[mpi]")
     auto req = setRequest("isendrecv");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -222,7 +220,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI order", "[mpi]")
     auto req = setRequest("order");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -234,7 +232,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI reduce", "[mpi]")
     auto req = setRequest("reduce");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -246,7 +244,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI reduce many times", "[mpi]")
     auto req = setRequest("reduce-many");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -258,7 +256,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI scan", "[mpi]")
     auto req = setRequest("scan");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -270,7 +268,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI scatter", "[mpi]")
     auto req = setRequest("scatter");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -282,7 +280,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI send", "[mpi]")
     auto req = setRequest("send");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -296,7 +294,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     auto req = setRequest("send-sync-async");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -308,7 +306,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test sending many MPI messages", "[mpi]")
     auto req = setRequest("send-many");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -320,7 +318,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI send-recv", "[mpi]")
     auto req = setRequest("sendrecv");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -332,7 +330,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI status", "[mpi]")
     auto req = setRequest("status");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
@@ -344,7 +342,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI types sizes", "[mpi]")
     auto req = setRequest("typesize");
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     checkAllocationAndResult(req);
 }

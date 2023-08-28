@@ -19,7 +19,11 @@ class PointToPointDistTestFixture : public DistTestsFixture
     PointToPointDistTestFixture()
     {
         // Check the available hosts
-        std::set<std::string> actualAvailable = sch.getAvailableHosts();
+        auto availableHosts = plannerCli.getAvailableHosts();
+        std::set<std::string> actualAvailable;
+        for (auto& host : availableHosts) {
+            actualAvailable.insert(host.ip());
+        }
         std::set<std::string> expectedAvailable = { getMasterIP(),
                                                     getWorkerIP() };
         REQUIRE(actualAvailable == expectedAvailable);
@@ -103,8 +107,7 @@ TEST_CASE_METHOD(PointToPointDistTestFixture,
       prepareRequestReturnDecision(req);
 
     // Call the functions
-    faabric::batch_scheduler::SchedulingDecision actualDecision =
-      sch.callFunctions(req);
+    auto actualDecision = plannerCli.callFunctions(req);
 
     // Check for equality
     checkReturnCodesAndSchedulingDecision(
@@ -124,8 +127,7 @@ TEST_CASE_METHOD(PointToPointDistTestFixture,
       prepareRequestReturnDecision(req);
 
     // Call the functions
-    faabric::batch_scheduler::SchedulingDecision actualDecision =
-      sch.callFunctions(req);
+    auto actualDecision = plannerCli.callFunctions(req);
 
     // Check for equality
     checkReturnCodesAndSchedulingDecision(
@@ -159,7 +161,7 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     // Call the function
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    std::vector<std::string> executedHosts = sch.callFunctions(req).hosts;
+    std::vector<std::string> executedHosts = plannerCli.callFunctions(req).hosts;
     REQUIRE(expectedHosts == executedHosts);
 
     // Get result

@@ -45,7 +45,7 @@ class DistTestsFixture
 
     std::string getMasterIP() { return conf.endpointHost; }
 
-  private:
+  protected:
     std::string workerIP;
     std::string mainIP;
 };
@@ -53,7 +53,7 @@ class DistTestsFixture
 class MpiDistTestsFixture : public DistTestsFixture
 {
   public:
-    MpiDistTestsFixture() { SLEEP_MS(INTER_MPI_TEST_SLEEP); }
+    MpiDistTestsFixture() {}
 
     ~MpiDistTestsFixture() = default;
 
@@ -64,15 +64,41 @@ class MpiDistTestsFixture : public DistTestsFixture
 
     // The server has four slots, therefore by setting the number of local slots
     // and the world size we are able to infer the expected scheduling decision
-    void setLocalSlots(int numSlots, int worldSizeIn = 0)
+    void setLocalSlots(int numLocalSlots, int worldSizeIn = 0)
     {
-        faabric::HostResources res;
-        res.set_slots(numSlots);
-        sch.setThisHostResources(res);
-
         if (worldSizeIn > 0) {
             worldSize = worldSizeIn;
         }
+        int numRemoteSlots = worldSize - numLocalSlots;
+
+        faabric::HostResources localRes;
+        faabric::HostResources remoteRes;
+
+        if (numLocalSlots == numRemoteSlots) {
+            localRes.set_slots(2 * numLocalSlots);
+            localRes.set_usedslots(numLocalSlots);
+            remoteRes.set_slots(numRemoteSlots);
+        } else if (numLocalSlots > numRemoteSlots) {
+            localRes.set_slots(numLocalSlots);
+            remoteRes.set_slots(numRemoteSlots);
+        } else {
+            SPDLOG_ERROR(
+              "Unfeasible MPI world slots config (local: {} - remote: {})",
+              numLocalSlots,
+              numRemoteSlots);
+            throw std::runtime_error("Unfeasible slots configuration");
+        }
+
+        sch.setThisHostResources(localRes);
+        sch.addHostToGlobalSet(workerIP, std::make_shared<HostResources>(remoteRes));
+    }
+
+    void updateLocalSlots(int newLocalSlots, int newUsedLocalSlots = 0)
+    {
+        faabric::HostResources localRes;
+        localRes.set_slots(newLocalSlots);
+        localRes.set_usedslots(newUsedLocalSlots);
+        sch.setThisHostResources(localRes);
     }
 
     std::shared_ptr<faabric::BatchExecuteRequest> setRequest(

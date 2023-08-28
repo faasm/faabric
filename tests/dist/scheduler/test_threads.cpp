@@ -49,7 +49,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     reg.registerSnapshot(snapshotKey, snap);
 
     // Call the functions
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     // Check threads executed on this host
     for (int i = 0; i < nLocalSlots; i++) {

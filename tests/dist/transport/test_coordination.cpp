@@ -24,7 +24,7 @@ TEST_CASE_METHOD(DistTestsFixture, "Test distributed lock", "[ptp][transport]")
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("ptp", "lock", 1);
 
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     faabric::Message& m = req->mutable_messages()->at(0);
     faabric::Message result = plannerCli.getMessageResult(m, 30000);

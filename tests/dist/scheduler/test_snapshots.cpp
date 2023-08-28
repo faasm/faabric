@@ -51,8 +51,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     sch.setThisHostResources(res);
 
     std::vector<std::string> expectedHosts = { getWorkerIP() };
-    faabric::batch_scheduler::SchedulingDecision decision =
-      sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
@@ -101,8 +100,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     sch.setThisHostResources(res);
 
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    faabric::batch_scheduler::SchedulingDecision decision =
-      sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
@@ -127,8 +125,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     sch.setThisHostResources(res);
 
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    faabric::batch_scheduler::SchedulingDecision decision =
-      sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 

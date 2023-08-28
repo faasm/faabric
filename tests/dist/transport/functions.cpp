@@ -142,14 +142,13 @@ int handleDistributedLock(tests::DistTestExecutor* exec,
             m.set_groupidx(i);
         }
 
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        auto decision = sch.callFunctions(nestedReq);
+        auto& plannerCli = faabric::planner::getPlannerClient();
+        auto decision = plannerCli.callFunctions(nestedReq);
 
         // Await results
         bool success = true;
         for (const auto& msg : nestedReq->messages()) {
-            faabric::Message res =
-              faabric::planner::getPlannerClient().getMessageResult(msg, 30000);
+            faabric::Message res = plannerCli.getMessageResult(msg, 30000);
             if (res.returnvalue() != 0) {
                 success = false;
             }
@@ -266,13 +265,12 @@ class DistributedCoordinationTestRunner
             m.set_inputdata(msg.inputdata());
         }
 
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        sch.callFunctions(chainReq);
+        auto& plannerCli = faabric::planner::getPlannerClient();
+        plannerCli.callFunctions(chainReq);
 
         bool success = true;
         for (const auto& m : chainReq->messages()) {
-            faabric::Message result =
-              faabric::planner::getPlannerClient().getMessageResult(m, 10000);
+            faabric::Message result = plannerCli.getMessageResult(m, 10000);
             if (result.returnvalue() != 0) {
                 SPDLOG_ERROR("Distributed coordination check call failed: {}",
                              m.id());
