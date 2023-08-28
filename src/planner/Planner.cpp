@@ -333,7 +333,8 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         }
     }
 
-    auto decision = batchScheduler->makeSchedulingDecision(hostMapCopy, state.inFlightReqs, req);
+    auto decision = batchScheduler->makeSchedulingDecision(
+      hostMapCopy, state.inFlightReqs, req);
 #ifndef NDEBUG
     // Here we make sure the state hasn't changed here (we pass const, but they
     // are const pointers)

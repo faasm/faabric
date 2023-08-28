@@ -25,10 +25,7 @@ class FunctionMigrationTestFixture
         setExecutorFactory(fac);
     }
 
-    ~FunctionMigrationTestFixture()
-    {
-        faabric::util::setMockMode(false);
-    }
+    ~FunctionMigrationTestFixture() { faabric::util::setMockMode(false); }
 
   protected:
     std::string mainHost = faabric::util::getSystemConfig().endpointHost;
@@ -53,7 +50,9 @@ class FunctionMigrationTestFixture
             if (i == 0) {
                 sch.setThisHostResources(resources);
             } else {
-                sch.addHostToGlobalSet(registeredHosts.at(i), std::make_shared<faabric::HostResources>(resources));
+                sch.addHostToGlobalSet(
+                  registeredHosts.at(i),
+                  std::make_shared<faabric::HostResources>(resources));
             }
         }
     }
@@ -214,7 +213,8 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
         msg.set_appid(appId);
         msg.set_groupid(groupId);
         msg.set_groupidx(i);
-        auto expectedMigration = sch.checkForMigrationOpportunities(msg, newGroupId);
+        auto expectedMigration =
+          sch.checkForMigrationOpportunities(msg, newGroupId);
         if (mustMigrate) {
             REQUIRE(expectedMigration != nullptr);
             REQUIRE(expectedMigration->appid() == appId);

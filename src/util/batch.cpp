@@ -61,8 +61,16 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
         if (msg.user() != user || msg.function() != func ||
             msg.appid() != appId) {
             SPDLOG_ERROR("Malformed message in BER");
-            SPDLOG_ERROR("Got: (id: {} - user: {} - func: {} - app: {})", msg.id(), msg.user(), msg.function(), msg.appid());
-            SPDLOG_ERROR("Expected: (id: {} - user: {} - func: {} - app: {})", msg.id(), user, func, appId);
+            SPDLOG_ERROR("Got: (id: {} - user: {} - func: {} - app: {})",
+                         msg.id(),
+                         msg.user(),
+                         msg.function(),
+                         msg.appid());
+            SPDLOG_ERROR("Expected: (id: {} - user: {} - func: {} - app: {})",
+                         msg.id(),
+                         user,
+                         func,
+                         appId);
             return false;
         }
     }

@@ -555,7 +555,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
         REQUIRE(res.returnvalue() == 0);
 
         for (int mid : faabric::util::getChainedFunctions(msg)) {
-            auto chainedRes = plannerCli.getMessageResult(msg.appid(), mid, LONG_TEST_TIMEOUT_MS);
+            auto chainedRes = plannerCli.getMessageResult(
+              msg.appid(), mid, LONG_TEST_TIMEOUT_MS);
             REQUIRE(chainedRes.returnvalue() == 0);
         }
 

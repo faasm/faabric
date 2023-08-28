@@ -693,7 +693,8 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
     int nSlotsOtherHost = 2;
     faabric::HostResources resourcesOtherHost;
     resourcesOtherHost.set_slots(nSlotsOtherHost);
-    sch.addHostToGlobalSet(otherHost, std::make_shared<HostResources>(resourcesOtherHost));
+    sch.addHostToGlobalSet(otherHost,
+                           std::make_shared<HostResources>(resourcesOtherHost));
 
     // Set up request
     int numMessages = 4;

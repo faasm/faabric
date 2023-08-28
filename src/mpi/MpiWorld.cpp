@@ -1627,7 +1627,7 @@ void MpiWorld::prepareMigration(int thisRank)
           "Migrating with pending async messages is not supported");
     }
 
-        // Update local records
+    // Update local records
     if (thisRank == localLeader) {
         // TODO: we may be able to just initLocalRemote here?
         initLocalRemoteLeaders();
