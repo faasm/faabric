@@ -2,6 +2,7 @@
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/transport/common.h>
+#include <faabric/util/batch.h>
 #include <faabric/util/concurrent_map.h>
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
@@ -267,11 +268,7 @@ faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
     // The planner decision sets a group id for PTP communication. Make sure we
     // propagate the group id to the messages in the request. The group idx
     // is set when creating the request
-
-    req->set_groupid(decision.groupId);
-    for (auto& msg : *req->mutable_messages()) {
-        msg.set_groupid(decision.groupId);
-    }
+    faabric::util::updateBatchExecGroupId(req, decision.groupId);
 
     return decision;
 }

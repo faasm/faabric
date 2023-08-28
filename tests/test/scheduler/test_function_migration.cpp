@@ -139,7 +139,6 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     sch.setFunctionResult(*req->mutable_messages(1));
 }
 
-/*
 TEST_CASE_METHOD(FunctionMigrationTestFixture,
                  "Test MPI migration opportunities",
                  "[scheduler]")
@@ -168,12 +167,17 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
     // Call function that wil just sleep
     auto decision = plannerCli.callFunctions(req);
-    // updateGroupId(req, decision.groupId);
 
     // Manually create the world, and trigger a second function invocation in
     // the remote host
     faabric::mpi::MpiWorld world;
     world.create(*firstMsg, worldId, worldSize);
+
+    // TODO: check the original MPI scheduling
+
+    // Get the group ID _after_ we create the world (it is only assigned then)
+    int appId = firstMsg->appid();
+    int groupId = firstMsg->groupid();
 
     // Update host resources so that a migration opportunity appears
     bool mustMigrate;
@@ -185,64 +189,50 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
     SECTION("Must not migrate") { mustMigrate = false; }
 
-    auto oldDecision = plannerCli.getSchedulingDecision(req);
-    // Check the expected migration for each rank. The expected migration will
-    // not be null if we have updated the local resoruces. In that case, only
-    // group idxs 2 and 3 will migrate
-    std::shared_ptr<faabric::PendingMigration> expectedMigration;
-    expectedMigration =
+    // The group leader (message with index 0) will detect the migration, but
+    // does not have to migrate
+    auto migration0 =
       sch.checkForMigrationOpportunities(*req->mutable_messages(0));
-    auto newDecision = plannerCli.getSchedulingDecision(req);
-
-    REQUIRE(oldDecision.appId == newDecision.appId);
-    REQUIRE(oldDecision.hosts.size() == newDecision.hosts.size());
+    int newGroupId;
     if (mustMigrate) {
-        REQUIRE(expectedMigration != nullptr);
-        REQUIRE(oldDecision.groupId != newDecision.groupId);
-        REQUIRE(expectedMigration->appid() == newDecision.appId);
-        REQUIRE(expectedMigration->groupid() == newDecision.groupId);
-        REQUIRE(expectedMigration->groupidx() == 0);
-        REQUIRE(expectedMigration->srchost() == oldDecision.hosts.at(0));
-        REQUIRE(expectedMigration->dsthost() == newDecision.hosts.at(0));
+        REQUIRE(migration0 != nullptr);
+        // App id is the same, but group id has changed as the distribution has
+        // changed
+        REQUIRE(migration0->appid() == decision.appId);
+        REQUIRE(migration0->groupid() != decision.groupId);
+        // Group idx 0 does not have to migrate
+        REQUIRE(migration0->groupidx() == 0);
+        REQUIRE(migration0->srchost() == migration0->dsthost());
+        REQUIRE(decision.hosts.at(0) == migration0->dsthost());
+        newGroupId = migration0->groupid();
     } else {
-        REQUIRE(expectedMigration == nullptr);
-        REQUIRE(oldDecision.groupId == newDecision.groupId);
+        REQUIRE(migration0 == nullptr);
+        newGroupId = groupId;
     }
 
-    // Impersonate other group idxs
+    // Ideally, we checkMigrationOpportunities with each thread's message.
+    // Unfortunately, for MPI, the ranks >= 1 messages' are created
+    // automatically, as part of a scale change. Thus, in the tests we fake
+    // these messages (we just need to set the app id, group id, and group idx)
     for (int i = 1; i < worldSize; i++) {
         faabric::Message msg;
-        msg.set_appid(oldDecision.appId);
-        msg.set_groupid(oldDecision.groupId);
+        msg.set_appid(appId);
+        msg.set_groupid(groupId);
         msg.set_groupidx(i);
-        expectedMigration =
-          sch.checkForMigrationOpportunities(msg, newDecision.groupId);
+        auto expectedMigration = sch.checkForMigrationOpportunities(msg, newGroupId);
         if (mustMigrate) {
             REQUIRE(expectedMigration != nullptr);
-            REQUIRE(expectedMigration->appid() == newDecision.appId);
-            REQUIRE(expectedMigration->groupid() == newDecision.groupId);
+            REQUIRE(expectedMigration->appid() == appId);
+            REQUIRE(expectedMigration->groupid() != groupId);
             REQUIRE(expectedMigration->groupidx() == i);
-            // Note that we don't check the source host in the expected
-            // migration because we set the field to `thisHost`, which we can't
-            // impersonate in the tests
-            REQUIRE(expectedMigration->dsthost() == newDecision.hosts.at(i));
-            // Check that group idxs 2 and 3 migrate to a different host
-            if (i > 1) {
-                REQUIRE(oldDecision.hosts.at(i) != newDecision.hosts.at(i));
-            } else {
-                REQUIRE(oldDecision.hosts.at(i) == newDecision.hosts.at(i));
-            }
+            // All ranks migrate to the mainHost
+            REQUIRE(expectedMigration->dsthost() == mainHost);
         } else {
             REQUIRE(expectedMigration == nullptr);
         }
     }
 
-    faabric::Message res =
-      sch.getFunctionResult(req->messages().at(0), 2 * timeToSleep);
-    REQUIRE(res.returnvalue() == 0);
-
     // Clean up
     world.destroy();
 }
-*/
 }

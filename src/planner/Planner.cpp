@@ -434,12 +434,8 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             decision->print();
 #endif
 
-            SPDLOG_WARN("here 2?");
-
             auto oldReq = state.inFlightReqs.at(appId).first;
             auto oldDec = state.inFlightReqs.at(appId).second;
-            SPDLOG_WARN("Old hosts: {}", oldDec->uniqueHosts().size());
-            SPDLOG_WARN("New hosts: {}", decision->uniqueHosts().size());
             // We want to let all hosts involved in the migration (not only
             // those in the new decision) that we are gonna migrate. For the
             // evicted hosts (those present in the old decision but not in the
@@ -462,11 +458,8 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
                                 newDecHosts.begin(),
                                 newDecHosts.end(),
                                 std::back_inserter(evictedHostsVec));
-            SPDLOG_WARN("evicted hosts: {}", evictedHostsVec.size());
             std::set<std::string> evictedHosts(evictedHostsVec.begin(),
                                                evictedHostsVec.end());
-
-            SPDLOG_WARN("here 3?");
 
             // 1. We only need to update the hosts where both decisions differ
             assert(decision->hosts.size() == oldDec->hosts.size());
@@ -485,8 +478,6 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
                 assert(state.hostMap.at(decision->hosts.at(i))->usedslots() <=
                        state.hostMap.at(decision->hosts.at(i))->slots());
             }
-
-            SPDLOG_WARN("here 4?");
 
             // 2. For a DIST_CHANGE request (migration), we want to replace the
             // exsiting decision with the new one

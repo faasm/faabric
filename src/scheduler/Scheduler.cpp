@@ -1,4 +1,5 @@
 // TODO: re-visit includes after re-factor
+#include <faabric/batch-scheduler/BatchScheduler.h>
 #include <faabric/batch-scheduler/DecisionCache.h>
 #include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/PlannerClient.h>
@@ -805,15 +806,21 @@ Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
     int newGroupId = 0;
     if (groupIdx == 0) {
         // To check for migration opportunities, we request a scheduling
-        // decision for the same batch execute request, but setting the right
-        // flag
+        // decision for the same batch execute request, but setting the
+        // migration flag
         auto req =
           faabric::util::batchExecFactory(msg.user(), msg.function(), 1);
         faabric::util::updateBatchExecAppId(req, msg.appid());
         faabric::util::updateBatchExecGroupId(req, msg.groupid());
         req->set_type(faabric::BatchExecuteRequest::MIGRATION);
         auto decision = planner::getPlannerClient().callFunctions(req);
-        newGroupId = decision.groupId;
+
+        // Update the group ID if we want to migrate
+        if (decision == DO_NOT_MIGRATE_DECISION) {
+            newGroupId = groupId;
+        } else {
+            newGroupId = decision.groupId;
+        }
 
         // Send the new group id to all the members of the group
         auto groupIdxs = broker.getIdxsRegisteredForGroup(groupId);
@@ -827,7 +834,8 @@ Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
         newGroupId = faabric::util::bytesToInt(bytes);
     } else {
         // In some settings, like tests, we already know the new group id, so
-        // we can set it here
+        // we can set it here (and in fact, we need to do so when faking two
+        // hosts)
         newGroupId = overwriteNewGroupId;
     }
 
