@@ -24,37 +24,29 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     plannerCli.callFunctions(req1);
 
     // Sleep for a bit to allow for the scheduler to schedule all MPI ranks
-    SLEEP_MS(200);
+    SLEEP_MS(400);
 
-    // Override the local slots so that the same scheduling decision as before
-    // is taken
-    setLocalSlots(2, worldSize);
+    // Override the local and remote slots so that the same scheduling
+    // decision as before is taken (2 on each host). Given that both hosts
+    // have the same number of slots, the planner will pick as main host the
+    // one with more total slots
+    bool sameMainHost;
+
+    SECTION("Same main host")
+    {
+        sameMainHost = true;
+        updateLocalSlots(2 * worldSize, 2 * worldSize - 2);
+        updateRemoteSlots(worldSize, 2);
+    }
+
+    SECTION("Different main host")
+    {
+        sameMainHost = false;
+        updateLocalSlots(worldSize, 2);
+        updateRemoteSlots(2 * worldSize, 2 * worldSize - 2);
+    }
+
     plannerCli.callFunctions(req2);
-
-    checkAllocationAndResult(req1, 15000);
-    checkAllocationAndResult(req2, 15000);
-}
-
-TEST_CASE_METHOD(MpiDistTestsFixture,
-                 "Test concurrent MPI applications with different main host",
-                 "[mpi]")
-{
-    // Prepare the first request (local): 2 ranks locally, 2 remotely
-    int worldSize = 4;
-    setLocalSlots(2, worldSize);
-    auto req1 = setRequest("alltoall-sleep");
-    plannerCli.callFunctions(req1);
-
-    // Sleep for a bit to allow for the scheduler to schedule all MPI ranks
-    SLEEP_MS(200);
-
-    // Prepare the second request (remote): 4 ranks remotely, 2 locally
-    int newWorldSize = 6;
-    setLocalSlots(2, newWorldSize);
-    auto req2 = setRequest("alltoall-sleep");
-    // Request remote execution
-    faabric::scheduler::FunctionCallClient cli(getWorkerIP());
-    cli.executeFunctions(req2);
 
     // Skip the automated exec graph check, and check manually
     bool skipExecGraphCheck = true;
@@ -77,9 +69,14 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     // Check exec graph for second request
     auto execGraph2 =
       faabric::util::getFunctionExecGraph(req2->mutable_messages()->at(0));
-    std::vector<std::string> expectedHosts2 = { getWorkerIP(), getWorkerIP(),
-                                                getMasterIP(), getMasterIP(),
-                                                getWorkerIP(), getWorkerIP() };
+    std::vector<std::string> expectedHosts2;
+    if (sameMainHost) {
+        expectedHosts2 = expectedHosts1;
+    } else {
+        expectedHosts2 = {
+            getWorkerIP(), getWorkerIP(), getMasterIP(), getMasterIP()
+        };
+    }
     REQUIRE(expectedHosts2 ==
             faabric::util::getMpiRankHostsFromExecGraph(execGraph2));
 }
@@ -98,35 +95,114 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     auto req1 = setRequest("alltoall-sleep");
     auto req2 = setRequest("migration");
     auto& msg = req2->mutable_messages()->at(0);
-    msg.set_migrationcheckperiod(1);
     msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
 
     // The first request will schedule two functions on each host
     plannerCli.callFunctions(req1);
 
-    // Sleep for a while so that:
-    // - When we schedule the second application the first one is already
-    //   running
-    // - When the first application finishes, the function migration thread
-    //   picks up a migration opportunity
-    // - The previous point happens before the second application has checked
-    //   for migration opportunities internally
-    SLEEP_MS(5000);
+    // Sleep for a while to let the application make some progress
+    SLEEP_MS(1000);
 
-    // The previous three points are likely to be out-of-sync in a GHA test so:
-    // - We sleep for a very long time (almost the duration of the first app)
-    // - Even though we don't need it, we overwrite the local slots in case in
-    //   a GHA run we have slept so long that the first application has already
-    //   finished
-    setLocalSlots(2, worldSize);
+    // Update the slots to make space for another app. Same scheduling as
+    // the first one: two slots locally, two remotely
+    updateLocalSlots(2 * worldSize, 2 * worldSize - 2);
+    updateRemoteSlots(worldSize, 2);
+
     plannerCli.callFunctions(req2);
+
+    // Sleep for a tiny bit for all MPI ranks to begin doing work
+    SLEEP_MS(200);
+
+    // Update the slots to create a migration opportunity. We migrate two ranks
+    // from one host to the other, and we test migrating both ways
+    bool migratingMainRank;
+
+    SECTION("Migrate main rank")
+    {
+        // Make more space remotely, so we migrate the first half of ranks
+        // (including the main rank)
+        migratingMainRank = true;
+        updateRemoteSlots(worldSize);
+    }
+
+    SECTION("Don't migrate main rank")
+    {
+        // Make more space locally, so we migrate the second half of ranks
+        migratingMainRank = false;
+        updateLocalSlots(worldSize);
+    }
 
     checkAllocationAndResult(req1, 15000);
     std::vector<std::string> hostsBeforeMigration = {
         getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
     };
-    std::vector<std::string> hostsAfterMigration(worldSize, getMasterIP());
+    std::vector<std::string> hostsAfterMigration;
+    if (migratingMainRank) {
+        hostsAfterMigration = {
+            getWorkerIP(), getWorkerIP(), getWorkerIP(), getWorkerIP()
+        };
+    } else {
+        hostsAfterMigration = {
+            getMasterIP(), getMasterIP(), getMasterIP(), getMasterIP()
+        };
+    }
     checkAllocationAndResultMigration(
       req2, hostsBeforeMigration, hostsAfterMigration, 15000);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Test migrating two MPI applications in parallel",
+                 "[mpi]")
+{
+    // Set the slots for the first request: 2 locally and 2 remote
+    int worldSize = 4;
+    setLocalSlots(2, worldSize);
+
+    // Prepare both requests: both will do work and check for migration
+    // opportunities
+    auto req1 = setRequest("migration");
+    req1->mutable_messages(0)->set_inputdata(
+      std::to_string(NUM_MIGRATION_LOOPS));
+    auto req2 = setRequest("migration");
+    req2->mutable_messages(0)->set_inputdata(
+      std::to_string(NUM_MIGRATION_LOOPS));
+
+    // The first request will schedule two functions on each host
+    plannerCli.callFunctions(req1);
+
+    // Sleep for a tiny bit for all MPI ranks to begin doing work
+    SLEEP_MS(200);
+
+    // Update the slots to make space for another app. Same scheduling as
+    // the first one: two slots locally, two remotely
+    updateLocalSlots(2 * worldSize, 2 * worldSize - 2);
+    updateRemoteSlots(worldSize, 2);
+    plannerCli.callFunctions(req2);
+
+    // Sleep for a tiny bit for all MPI ranks to begin doing work
+    SLEEP_MS(200);
+
+    // Update the slots to create two migration opportunities. For each app, we
+    // migrate two ranks from one host to the other. The first app will
+    // migrate towards the local host, and the second one towards the remote
+    // one (we set the used slots to a high value, because if we set it to 0
+    // the planner will find an inconsistent state: we are migrating from
+    // somewhere that has 0 used slots)
+    updateLocalSlots(3 * worldSize, 2 * worldSize);
+    updateRemoteSlots(2 * worldSize, worldSize);
+
+    std::vector<std::string> hostsBeforeMigration1 = {
+        getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
+    };
+    std::vector<std::string> hostsAfterMigration1(worldSize, getMasterIP());
+    checkAllocationAndResultMigration(
+      req1, hostsBeforeMigration1, hostsAfterMigration1, 15000);
+
+    std::vector<std::string> hostsBeforeMigration2 = {
+        getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
+    };
+    std::vector<std::string> hostsAfterMigration2(worldSize, getWorkerIP());
+    checkAllocationAndResultMigration(
+      req2, hostsBeforeMigration2, hostsAfterMigration2, 15000);
 }
 }

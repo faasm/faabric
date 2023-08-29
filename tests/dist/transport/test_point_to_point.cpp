@@ -161,7 +161,8 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     // Call the function
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    std::vector<std::string> executedHosts = plannerCli.callFunctions(req).hosts;
+    std::vector<std::string> executedHosts =
+      plannerCli.callFunctions(req).hosts;
     REQUIRE(expectedHosts == executedHosts);
 
     // Get result

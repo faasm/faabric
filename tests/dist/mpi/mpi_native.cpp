@@ -850,7 +850,8 @@ void mpiMigrationPoint(int entrypointFuncArg)
                      faabric::util::getSystemConfig().endpointHost,
                      hostToMigrateTo);
 
-        faabric::scheduler::getFunctionCallClient(hostToMigrateTo)->executeFunctions(req);
+        faabric::scheduler::getFunctionCallClient(hostToMigrateTo)
+          ->executeFunctions(req);
 
         if (call->recordexecgraph()) {
             faabric::util::logChainedFunction(*call, msg);

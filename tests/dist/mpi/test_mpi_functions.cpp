@@ -191,9 +191,13 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
     };
     std::vector<std::string> hostsAfterMigration;
     if (migratingMainRank) {
-        hostsAfterMigration = { getWorkerIP(), getWorkerIP(), getWorkerIP(), getWorkerIP() };
+        hostsAfterMigration = {
+            getWorkerIP(), getWorkerIP(), getWorkerIP(), getWorkerIP()
+        };
     } else {
-        hostsAfterMigration = { getMasterIP(), getMasterIP(), getMasterIP(), getMasterIP() };
+        hostsAfterMigration = {
+            getMasterIP(), getMasterIP(), getMasterIP(), getMasterIP()
+        };
     }
     checkAllocationAndResultMigration(
       req, hostsBeforeMigration, hostsAfterMigration, 15000);

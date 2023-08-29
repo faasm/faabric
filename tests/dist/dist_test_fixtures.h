@@ -75,7 +75,8 @@ class MpiDistTestsFixture : public DistTestsFixture
         faabric::HostResources remoteRes;
         remoteRes.set_slots(newRemoteSlots);
         remoteRes.set_usedslots(newRemoteUsedSlots);
-        sch.addHostToGlobalSet(workerIP, std::make_shared<HostResources>(remoteRes));
+        sch.addHostToGlobalSet(workerIP,
+                               std::make_shared<HostResources>(remoteRes));
     }
 
     void setLocalSlots(int numLocalSlots, int worldSizeIn = 0)
