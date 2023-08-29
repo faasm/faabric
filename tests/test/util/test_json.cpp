@@ -38,8 +38,6 @@ class JsonTestFixture
         auto& intMap = *msg.mutable_intexecgraphdetails();
         intMap["foo"] = 0;
 
-        msg.set_migrationcheckperiod(33);
-
         msg.set_topologyhint("TEST_TOPOLOGY_HINT");
 
         msg.set_inputdata("foo bar");

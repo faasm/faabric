@@ -141,9 +141,6 @@ message Message {
     map<string, int32> intExecGraphDetails = 37;
     map<string, string> execGraphDetails = 38;
 
-    // Function migration
-    int32 migrationCheckPeriod = 39 [json_name = "migration_check_period"];
-
     // Scheduling
     string topologyHint = 40 [json_name = "topology_hint"];
 }
