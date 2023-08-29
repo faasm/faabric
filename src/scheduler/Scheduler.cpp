@@ -576,7 +576,9 @@ void Scheduler::registerThread(uint32_t msgId)
 {
     // Here we need to ensure the promise is registered locally so
     // callers can start waiting
-    threadResults[msgId];
+    if (threadResults.find(msgId) == threadResults.end()) {
+        threadResults[msgId];
+    }
 }
 
 void Scheduler::setThreadResult(
@@ -649,11 +651,11 @@ std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
 int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 {
     faabric::util::SharedLock lock(mx);
-    auto it = threadResults.find(messageId);
-    if (it == threadResults.end()) {
-        SPDLOG_ERROR("Thread {} not registered on this host", messageId);
-        throw std::runtime_error("Awaiting unregistered thread");
+    if (threadResults.find(messageId) == threadResults.end()) {
+        SPDLOG_WARN("Registering thread result {} before thread started", messageId);
+        threadResults[messageId];
     }
+    auto it = threadResults.find(messageId);
     lock.unlock();
 
     return it->second.get_future().get();

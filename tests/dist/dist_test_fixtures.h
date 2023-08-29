@@ -87,9 +87,6 @@ class MpiDistTestsFixture : public DistTestsFixture
         int numRemoteSlots = worldSize - numLocalSlots;
 
         if (numLocalSlots == numRemoteSlots) {
-            // localRes.set_slots(2 * numLocalSlots);
-            // localRes.set_usedslots(numLocalSlots);
-            // remoteRes.set_slots(numRemoteSlots);
             updateLocalSlots(2 * numLocalSlots, numLocalSlots);
             updateRemoteSlots(numRemoteSlots);
         } else if (numLocalSlots > numRemoteSlots) {

@@ -14,11 +14,14 @@ namespace tests {
 
 TEST_CASE_METHOD(DistTestsFixture, "Test distributed lock", "[ptp][transport]")
 {
-    // Set up this host's resources
-    int nLocalSlots = 5;
+    // Set up the host resources. The distributed lock test will start 10 other
+    // functions (so we need 11 slots). We give each host 8 slots for an even
+    // distribution
+    int nSlotsPerHost = 8;
     faabric::HostResources res;
-    res.set_slots(nLocalSlots);
+    res.set_slots(nSlotsPerHost);
     sch.setThisHostResources(res);
+    sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
 
     // Set up the request
     std::shared_ptr<faabric::BatchExecuteRequest> req =

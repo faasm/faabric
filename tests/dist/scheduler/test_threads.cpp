@@ -17,15 +17,15 @@
 
 namespace tests {
 
+/* TODO(remote-threads): this test now runs on one single host
 TEST_CASE_METHOD(DistTestsFixture,
                  "Test executing threads on multiple hosts",
                  "[snapshots][threads]")
 {
     // Set up this host's resources
-    int nLocalSlots = 2;
     int nThreads = 4;
     faabric::HostResources res;
-    res.set_slots(nLocalSlots);
+    res.set_slots(nThreads);
     sch.setThisHostResources(res);
 
     // Set up the message
@@ -52,7 +52,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     plannerCli.callFunctions(req);
 
     // Check threads executed on this host
-    for (int i = 0; i < nLocalSlots; i++) {
+    for (int i = 0; i < nThreads; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
         int res = sch.awaitThreadResult(m.id());
         REQUIRE(res == m.id() / 2);
@@ -65,4 +65,5 @@ TEST_CASE_METHOD(DistTestsFixture,
         REQUIRE(res == m.id() / 2);
     }
 }
+*/
 }

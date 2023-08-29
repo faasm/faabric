@@ -17,15 +17,19 @@ TEST_CASE_METHOD(DistTestsFixture,
                  "Test executing functions on multiple hosts",
                  "[funcs]")
 {
-    // Set up this host's resources
+    std::string thisHost = conf.endpointHost;
+    std::string otherHost = getWorkerIP();
+
+    // Set up this host's resources (2 functions locally, 2 remotely)
     int nLocalSlots = 2;
     int nFuncs = 4;
     faabric::HostResources res;
-    res.set_slots(nLocalSlots);
+    res.set_slots(nFuncs);
+    res.set_usedslots(nLocalSlots);
     sch.setThisHostResources(res);
-
-    std::string thisHost = conf.endpointHost;
-    std::string otherHost = getWorkerIP();
+    res.set_slots(nLocalSlots);
+    res.set_usedslots(0);
+    sch.addHostToGlobalSet(otherHost, std::make_shared<HostResources>(res));
 
     // Set up the messages
     std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -50,11 +54,11 @@ TEST_CASE_METHOD(DistTestsFixture,
     for (int i = 0; i < nLocalSlots; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
 
-        plannerCli.getMessageResult(m, 1000);
+        auto resultMsg = plannerCli.getMessageResult(m, 1000);
         std::string expected =
           fmt::format("Function {} executed on host {}", m.id(), getMasterIP());
 
-        REQUIRE(m.outputdata() == expected);
+        REQUIRE(resultMsg.outputdata() == expected);
     }
 
     // Check functions executed on the other host

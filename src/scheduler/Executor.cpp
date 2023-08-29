@@ -119,17 +119,17 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     std::string funcStr = faabric::util::funcToString(req);
 
     // Set group ID, this will get overridden in there's a cached decision
+    /*
     int groupId = faabric::util::generateGid();
     for (auto& m : *req->mutable_messages()) {
         m.set_groupid(groupId);
         m.set_groupsize(req->messages_size());
     }
+    */
 
-    // Get the scheduling decision
-    // TODO: this is WRONG FIXME
-    auto decision = faabric::planner::getPlannerClient().callFunctions(req);
-    bool isSingleHost = decision.isSingleHost();
-
+    // TODO(remote-threads): we always run single-host when executing threads
+    /*
+    bool isSingleHost = true;
     // Do snapshotting if not on a single host
     faabric::Message& msg = req->mutable_messages()->at(0);
     std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
@@ -171,12 +171,16 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
               mr.offset, mr.length, mr.dataType, mr.operation);
         }
     }
+    */
 
     // Invoke threads and await
-    faabric::planner::getPlannerClient().callFunctions(req, decision);
+    auto decision = faabric::planner::getPlannerClient().callFunctions(req);
+    // If we await immediately after we call the functions, it may happen that
+    // the threads are not registered yet
     std::vector<std::pair<uint32_t, int32_t>> results =
       sch.awaitThreadResults(req);
 
+    /* TODO(remote-threads): currently threads are always single-host
     // Perform snapshot updates if not on single host
     if (!isSingleHost) {
         // Write queued changes to snapshot
@@ -194,6 +198,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker->startTracking(memView);
         tracker->startThreadLocalTracking(memView);
     }
+    */
 
     // Deregister the threads
     sch.deregisterThreads(req);

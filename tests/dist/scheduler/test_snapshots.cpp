@@ -19,6 +19,7 @@
 
 namespace tests {
 
+/* TODO(remote-threads): remote threads temporarily disabled
 TEST_CASE_METHOD(DistTestsFixture,
                  "Check snapshots sent back from worker are queued",
                  "[snapshots][threads]")
@@ -107,6 +108,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     faabric::Message actualResult = plannerCli.getMessageResult(msg, 10000);
     REQUIRE(actualResult.returnvalue() == 333);
 }
+*/
 
 TEST_CASE_METHOD(DistTestsFixture,
                  "Check repeated reduction",
@@ -119,9 +121,9 @@ TEST_CASE_METHOD(DistTestsFixture,
       faabric::util::batchExecFactory(user, function, 1);
     faabric::Message& msg = req->mutable_messages()->at(0);
 
-    // Main function and one thread execute on this host, others on another
+    // TODO(remote-threads): all threads execute in one host
     faabric::HostResources res;
-    res.set_slots(3);
+    res.set_slots(100);
     sch.setThisHostResources(res);
 
     std::vector<std::string> expectedHosts = { getMasterIP() };

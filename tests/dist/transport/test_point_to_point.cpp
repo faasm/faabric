@@ -33,21 +33,37 @@ class PointToPointDistTestFixture : public DistTestsFixture
 
     void setSlotsAndNumFuncs(int nLocalSlotsIn, int nFuncsIn)
     {
+        int nRemoteSlots = nFuncsIn - nLocalSlotsIn;
         nLocalSlots = nLocalSlotsIn;
         nFuncs = nFuncsIn;
 
-        // Set local resources
-        faabric::HostResources res;
-        res.set_slots(nLocalSlots);
-        sch.setThisHostResources(res);
+        faabric::HostResources localRes;
+        std::shared_ptr<faabric::HostResources> remoteRes = std::make_shared<HostResources>();
+
+        if (nLocalSlots == nRemoteSlots) {
+            localRes.set_slots(2 * nLocalSlots);
+            localRes.set_usedslots(nLocalSlots);
+            remoteRes->set_slots(nRemoteSlots);
+        } else if (nLocalSlots > nRemoteSlots) {
+            localRes.set_slots(nLocalSlots);
+            remoteRes->set_slots(nRemoteSlots);
+        } else {
+            SPDLOG_ERROR(
+              "Unfeasible PTP slots config (local: {} - remote: {})",
+              nLocalSlots,
+              nRemoteSlots);
+            throw std::runtime_error("Unfeasible slots configuration");
+        }
+
+        sch.setThisHostResources(localRes);
+        sch.addHostToGlobalSet(getWorkerIP(), remoteRes);
     }
 
     faabric::batch_scheduler::SchedulingDecision prepareRequestReturnDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
         // Prepare expected decision
-        faabric::batch_scheduler::SchedulingDecision expectedDecision(appId,
-                                                                      groupId);
+        faabric::batch_scheduler::SchedulingDecision expectedDecision(req->appid(), req->groupid());
         std::vector<std::string> expectedHosts(nFuncs, getWorkerIP());
         for (int i = 0; i < nLocalSlots; i++) {
             expectedHosts.at(i) = getMasterIP();
@@ -57,9 +73,9 @@ class PointToPointDistTestFixture : public DistTestsFixture
         for (int i = 0; i < nFuncs; i++) {
             faabric::Message& msg = req->mutable_messages()->at(i);
 
-            msg.set_appid(appId);
+            msg.set_appid(req->appid());
             msg.set_appidx(i);
-            msg.set_groupid(groupId);
+            msg.set_groupid(req->groupid());
             msg.set_groupidx(i);
 
             // Add to expected decision
@@ -87,9 +103,6 @@ class PointToPointDistTestFixture : public DistTestsFixture
     }
 
   protected:
-    int appId = 222;
-    int groupId = 333;
-
     int nLocalSlots;
     int nFuncs;
 };
@@ -98,7 +111,7 @@ TEST_CASE_METHOD(PointToPointDistTestFixture,
                  "Test point-to-point messaging on multiple hosts",
                  "[ptp][transport]")
 {
-    setSlotsAndNumFuncs(1, 4);
+    setSlotsAndNumFuncs(2, 4);
 
     // Set up batch request and scheduling decision
     std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -140,11 +153,13 @@ TEST_CASE_METHOD(DistTestsFixture,
 {
     // Set up this host's resources, force execution across hosts
     int nChainedFuncs = 4;
-    int nLocalSlots = 2;
+    int nLocalSlots = 3;
 
     faabric::HostResources res;
     res.set_slots(nLocalSlots);
     sch.setThisHostResources(res);
+    res.set_slots(2);
+    sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
 
     std::string function;
     SECTION("Barrier") { function = "barrier"; }
