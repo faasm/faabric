@@ -652,7 +652,8 @@ int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 {
     faabric::util::SharedLock lock(mx);
     if (threadResults.find(messageId) == threadResults.end()) {
-        SPDLOG_WARN("Registering thread result {} before thread started", messageId);
+        SPDLOG_WARN("Registering thread result {} before thread started",
+                    messageId);
         threadResults[messageId];
     }
     auto it = threadResults.find(messageId);

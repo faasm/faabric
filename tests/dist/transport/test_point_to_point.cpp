@@ -38,7 +38,8 @@ class PointToPointDistTestFixture : public DistTestsFixture
         nFuncs = nFuncsIn;
 
         faabric::HostResources localRes;
-        std::shared_ptr<faabric::HostResources> remoteRes = std::make_shared<HostResources>();
+        std::shared_ptr<faabric::HostResources> remoteRes =
+          std::make_shared<HostResources>();
 
         if (nLocalSlots == nRemoteSlots) {
             localRes.set_slots(2 * nLocalSlots);
@@ -48,10 +49,9 @@ class PointToPointDistTestFixture : public DistTestsFixture
             localRes.set_slots(nLocalSlots);
             remoteRes->set_slots(nRemoteSlots);
         } else {
-            SPDLOG_ERROR(
-              "Unfeasible PTP slots config (local: {} - remote: {})",
-              nLocalSlots,
-              nRemoteSlots);
+            SPDLOG_ERROR("Unfeasible PTP slots config (local: {} - remote: {})",
+                         nLocalSlots,
+                         nRemoteSlots);
             throw std::runtime_error("Unfeasible slots configuration");
         }
 
@@ -63,7 +63,8 @@ class PointToPointDistTestFixture : public DistTestsFixture
       std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
         // Prepare expected decision
-        faabric::batch_scheduler::SchedulingDecision expectedDecision(req->appid(), req->groupid());
+        faabric::batch_scheduler::SchedulingDecision expectedDecision(
+          req->appid(), req->groupid());
         std::vector<std::string> expectedHosts(nFuncs, getWorkerIP());
         for (int i = 0; i < nLocalSlots; i++) {
             expectedHosts.at(i) = getMasterIP();

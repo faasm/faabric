@@ -20,7 +20,8 @@ TEST_CASE_METHOD(DistTestsFixture,
         faabric::HostResources res;
         res.set_slots(nLocalSlots);
         sch.setThisHostResources(res);
-        sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
+        sch.addHostToGlobalSet(getWorkerIP(),
+                               std::make_shared<HostResources>(res));
 
         // Set up the messages
         std::shared_ptr<faabric::BatchExecuteRequest> req =
