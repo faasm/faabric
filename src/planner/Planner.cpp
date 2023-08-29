@@ -505,10 +505,14 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     assert(req->appid() == decision->appId);
     assert(req->groupid() == decision->groupId);
 
-    // Lastly, asynchronously dispatch the decision to the corresponding hosts
-    // (we may not need the lock here anymore, but we are eager to make the
+    // Lastly, asynchronously dispatch the execute requests to the
+    // corresponding hosts if new functions need to be spawned (not if
+    // migrating)
+    // We may not need the lock here anymore, but we are eager to make the
     // whole function atomic)
-    dispatchSchedulingDecision(req, decision);
+    if (decisionType != faabric::batch_scheduler::DecisionType::DIST_CHANGE) {
+        dispatchSchedulingDecision(req, decision);
+    }
 
     return decision;
 }

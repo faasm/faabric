@@ -53,10 +53,18 @@ int MPI_Init(int* argc, char*** argv)
     faabric::Message* call = getExecutingCall();
 
     if (call->mpirank() <= 0) {
-        SPDLOG_TRACE("MPI - MPI_Init (create)");
+        // If we are rank 0 and the world already exists, it means we are being
+        // migrated
+        if (getMpiWorldRegistry().worldExists(call->mpiworldid())) {
+            SPDLOG_TRACE("MPI - MPI_Init (join)");
 
-        int worldId = executingContext.createWorld(*call);
-        call->set_mpiworldid(worldId);
+            executingContext.joinWorld(*call);
+        } else {
+            SPDLOG_TRACE("MPI - MPI_Init (create)");
+
+            int worldId = executingContext.createWorld(*call);
+            call->set_mpiworldid(worldId);
+        }
     } else {
         SPDLOG_TRACE("MPI - MPI_Init (join)");
         executingContext.joinWorld(*call);

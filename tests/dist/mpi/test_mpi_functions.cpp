@@ -164,15 +164,37 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
     // Sleep for a while to let the planner schedule the MPI calls
     SLEEP_MS(500);
 
-    // Update the local slots so that a migration opportunity appears
-    updateLocalSlots(worldSize);
+    // Update the slots so that a migration opportunity appears. We update
+    // either the local or remote worlds to force the migration of one
+    // half of the ranks or the other one
+    bool migratingMainRank;
+
+    SECTION("Migrate main rank")
+    {
+        // Make more space remotely, so we migrate the first half of ranks
+        // (including the main rank)
+        migratingMainRank = true;
+        updateRemoteSlots(worldSize);
+    }
+
+    SECTION("Don't migrate main rank")
+    {
+        // Make more space locally, so we migrate the second half of ranks
+        migratingMainRank = false;
+        updateLocalSlots(worldSize);
+    }
 
     // The current function migration approach breaks the execution graph, as
     // some messages are left dangling (deliberately) without return value
     std::vector<std::string> hostsBeforeMigration = {
         getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
     };
-    std::vector<std::string> hostsAfterMigration(worldSize, getMasterIP());
+    std::vector<std::string> hostsAfterMigration;
+    if (migratingMainRank) {
+        hostsAfterMigration = { getWorkerIP(), getWorkerIP(), getWorkerIP(), getWorkerIP() };
+    } else {
+        hostsAfterMigration = { getMasterIP(), getMasterIP(), getMasterIP(), getMasterIP() };
+    }
     checkAllocationAndResultMigration(
       req, hostsBeforeMigration, hostsAfterMigration, 15000);
 }

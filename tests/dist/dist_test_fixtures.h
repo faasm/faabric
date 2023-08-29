@@ -62,8 +62,22 @@ class MpiDistTestsFixture : public DistTestsFixture
     int worldSize = 4;
     bool origIsMsgOrderingOn;
 
-    // The server has four slots, therefore by setting the number of local slots
-    // and the world size we are able to infer the expected scheduling decision
+    void updateLocalSlots(int newLocalSlots, int newUsedLocalSlots = 0)
+    {
+        faabric::HostResources localRes;
+        localRes.set_slots(newLocalSlots);
+        localRes.set_usedslots(newUsedLocalSlots);
+        sch.setThisHostResources(localRes);
+    }
+
+    void updateRemoteSlots(int newRemoteSlots, int newRemoteUsedSlots = 0)
+    {
+        faabric::HostResources remoteRes;
+        remoteRes.set_slots(newRemoteSlots);
+        remoteRes.set_usedslots(newRemoteUsedSlots);
+        sch.addHostToGlobalSet(workerIP, std::make_shared<HostResources>(remoteRes));
+    }
+
     void setLocalSlots(int numLocalSlots, int worldSizeIn = 0)
     {
         if (worldSizeIn > 0) {
@@ -71,16 +85,15 @@ class MpiDistTestsFixture : public DistTestsFixture
         }
         int numRemoteSlots = worldSize - numLocalSlots;
 
-        faabric::HostResources localRes;
-        faabric::HostResources remoteRes;
-
         if (numLocalSlots == numRemoteSlots) {
-            localRes.set_slots(2 * numLocalSlots);
-            localRes.set_usedslots(numLocalSlots);
-            remoteRes.set_slots(numRemoteSlots);
+            // localRes.set_slots(2 * numLocalSlots);
+            // localRes.set_usedslots(numLocalSlots);
+            // remoteRes.set_slots(numRemoteSlots);
+            updateLocalSlots(2 * numLocalSlots, numLocalSlots);
+            updateRemoteSlots(numRemoteSlots);
         } else if (numLocalSlots > numRemoteSlots) {
-            localRes.set_slots(numLocalSlots);
-            remoteRes.set_slots(numRemoteSlots);
+            updateLocalSlots(numLocalSlots);
+            updateRemoteSlots(numRemoteSlots);
         } else {
             SPDLOG_ERROR(
               "Unfeasible MPI world slots config (local: {} - remote: {})",
@@ -88,17 +101,6 @@ class MpiDistTestsFixture : public DistTestsFixture
               numRemoteSlots);
             throw std::runtime_error("Unfeasible slots configuration");
         }
-
-        sch.setThisHostResources(localRes);
-        sch.addHostToGlobalSet(workerIP, std::make_shared<HostResources>(remoteRes));
-    }
-
-    void updateLocalSlots(int newLocalSlots, int newUsedLocalSlots = 0)
-    {
-        faabric::HostResources localRes;
-        localRes.set_slots(newLocalSlots);
-        localRes.set_usedslots(newUsedLocalSlots);
-        sch.setThisHostResources(localRes);
     }
 
     std::shared_ptr<faabric::BatchExecuteRequest> setRequest(
@@ -179,7 +181,10 @@ class MpiDistTestsFixture : public DistTestsFixture
     {
         faabric::Message& msg = req->mutable_messages()->at(0);
         faabric::Message result = plannerCli.getMessageResult(msg, timeoutMs);
-        REQUIRE(result.returnvalue() == 0);
+
+        if (result.returnvalue() != MIGRATED_FUNCTION_RETURN_VALUE) {
+            REQUIRE(result.returnvalue() == 0);
+        }
         SLEEP_MS(1000);
         auto execGraph = faabric::util::getFunctionExecGraph(msg);
         checkSchedulingFromExecGraph(
