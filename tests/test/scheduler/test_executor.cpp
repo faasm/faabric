@@ -288,6 +288,12 @@ class TestExecutorFixture
           std::make_shared<TestExecutorFactory>();
         setExecutorFactory(fac);
 
+        // Give enough resources for the tests
+        faabric::HostResources thisResources;
+        thisResources.set_slots(20);
+        thisResources.set_usedslots(1);
+        sch.setThisHostResources(thisResources);
+
         restoreCount = 0;
         resetCount = 0;
     }
