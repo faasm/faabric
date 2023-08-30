@@ -439,6 +439,11 @@ class MpiBaseTestFixture
         msg.set_mpiworldid(worldId);
         msg.set_mpiworldsize(worldSize);
 
+        // Make enough space in this host to run MPI functions
+        faabric::HostResources res;
+        res.set_slots(2 * worldSize);
+        sch.setThisHostResources(res);
+
         // Call the request, so that we have the original message recorded
         // in the planner
         plannerCli.callFunctions(req);

@@ -82,7 +82,6 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
                                               "mpi",
                                               "mpi_world_size",
                                               "record_exec_graph",
-                                              "migration_check_period",
                                               "start_ts",
                                               "finish_ts",
                                               "topology_hint" };
