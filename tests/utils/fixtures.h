@@ -453,11 +453,6 @@ class MpiBaseTestFixture
     {
         // Make sure we get the message result to avoid data races
         plannerCli.getMessageResult(msg, 500);
-
-        // TODO - without this sleep, we sometimes clear the PTP broker before
-        // all the executor threads have been set up, and when trying to query
-        // for the comm. group we throw a runtime error.
-        SLEEP_MS(200);
     }
 
   protected:
