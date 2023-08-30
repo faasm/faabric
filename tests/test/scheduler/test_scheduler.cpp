@@ -250,7 +250,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         sch.awaitThreadResults(reqOne);
     } else {
         for (int i = 0; i < nCallsOne; i++) {
-            plannerCli.getMessageResult(appId, reqOneMsgIds.at(i), 10000);
+            plannerCli.getMessageResult(appId, reqOneMsgIds.at(i), 500);
         }
     }
 
@@ -301,10 +301,10 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 
     // Await the results
     if (isThreads) {
-        sch.awaitThreadResults(reqOne);
+        sch.awaitThreadResults(reqTwo);
     } else {
-        for (int i = 0; i < nCallsOne; i++) {
-            plannerCli.getMessageResult(appId, reqOneMsgIds.at(i), 10000);
+        for (int i = 0; i < nCallsTwo; i++) {
+            plannerCli.getMessageResult(appId2, reqTwoMsgIds.at(i), 10000);
         }
     }
 
