@@ -27,7 +27,7 @@ TEST_ENV = {
 
 # If executing in CI, give us some extra CPU cores to run the tests
 if IS_CI:
-    TEST_ENV["OVERRIDE_CPU_COUNT"] = 5
+    TEST_ENV["OVERRIDE_CPU_COUNT"] = "5"
 
 
 @task(default=True)
