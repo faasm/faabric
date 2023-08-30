@@ -75,16 +75,11 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
     // We consume the generated JSON files from a variety of places, so this
     // test ensures that the keywords we use elsewhere are generated as part
     // of the serialisation process
-    std::vector<std::string> requiredKeys = { "input_data",
-                                              "python",
-                                              "py_user",
-                                              "py_func",
-                                              "mpi",
-                                              "mpi_world_size",
-                                              "record_exec_graph",
-                                              "start_ts",
-                                              "finish_ts",
-                                              "topology_hint" };
+    std::vector<std::string> requiredKeys = {
+        "input_data", "python",         "py_user",           "py_func",
+        "mpi",        "mpi_world_size", "record_exec_graph", "start_ts",
+        "finish_ts",  "topology_hint"
+    };
     std::string jsonString = faabric::util::messageToJson(msg);
 
     for (const auto& key : requiredKeys) {
