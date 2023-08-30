@@ -55,7 +55,8 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
         auto msg = ber->messages(i);
         // We allow chained messages in the BER to have different function
         // names (for chaining), but not empty
-        if (msg.user() != user || msg.function().empty() || msg.appid() != appId) {
+        if (msg.user() != user || msg.function().empty() ||
+            msg.appid() != appId) {
             SPDLOG_ERROR("Malformed message in BER");
             SPDLOG_ERROR("Got: (id: {} - user: {} - func: {} - app: {})",
                          msg.id(),
