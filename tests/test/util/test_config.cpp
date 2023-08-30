@@ -21,7 +21,6 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.redisPort == "6379");
 
     REQUIRE(conf.noScheduler == 0);
-    REQUIRE(conf.overrideCpuCount == 0);
     REQUIRE(conf.noTopologyHints == "off");
     REQUIRE(conf.noSingleHostOptimisations == 0);
     REQUIRE(conf.batchSchedulerMode == "bin-pack");

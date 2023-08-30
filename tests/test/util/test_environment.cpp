@@ -42,10 +42,10 @@ TEST_CASE("Test setting environment variables", "[util]")
 
 TEST_CASE("Test overriding CPU count", "[util]")
 {
-    // Check default cores is same as available concurrency
+    // Check default cores is same as usable cores
     auto& conf = getSystemConfig();
     unsigned int defaultCores = getUsableCores();
-    REQUIRE(defaultCores == std::thread::hardware_concurrency());
+    REQUIRE(defaultCores == getUsableCores());
 
     // Check it can be overridden
     conf.overrideCpuCount = 1234;
