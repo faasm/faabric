@@ -65,6 +65,9 @@ class Planner
     std::shared_ptr<faabric::BatchExecuteRequestStatus> getBatchResults(
       int32_t appId);
 
+    std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>
+    getSchedulingDecision(std::shared_ptr<BatchExecuteRequest> req);
+
     std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> callBatch(
       std::shared_ptr<BatchExecuteRequest> req);
 

@@ -96,6 +96,7 @@ TEST_CASE_METHOD(PlannerClientServerFixture,
                  "[planner]")
 {
     faabric::util::setMockMode(true);
+
     auto msgPtr = std::make_shared<faabric::Message>(
       faabric::util::messageFactory("foo", "bar"));
 
@@ -129,5 +130,88 @@ TEST_CASE_METHOD(PlannerClientServerFixture,
     // Shutdown the scheduler as we are using the function client/server (even
     // if mocked)
     faabric::scheduler::getScheduler().shutdown();
+}
+
+class PlannerClientServerExecTestFixture
+  : public PlannerClientServerFixture
+  , public FunctionCallClientServerFixture
+{
+  public:
+    PlannerClientServerExecTestFixture()
+      : sch(faabric::scheduler::getScheduler())
+    {
+        sch.shutdown();
+        sch.addHostToGlobalSet();
+
+        std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        faabric::scheduler::setExecutorFactory(fac);
+    }
+
+    ~PlannerClientServerExecTestFixture()
+    {
+        sch.shutdown();
+        sch.addHostToGlobalSet();
+    }
+
+  protected:
+    faabric::scheduler::Scheduler& sch;
+};
+
+TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
+                 "Test executing a batch of functions",
+                 "[planner]")
+{
+    int nFuncs = 4;
+    faabric::HostResources res;
+    res.set_slots(nFuncs);
+    sch.setThisHostResources(res);
+
+    auto req = faabric::util::batchExecFactory("foo", "bar", nFuncs);
+
+    auto decision = plannerCli.callFunctions(req);
+
+    for (auto mid : decision.messageIds) {
+        auto resultMsg = plannerCli.getMessageResult(decision.appId, mid, 500);
+        REQUIRE(resultMsg.returnvalue() == 0);
+    }
+}
+
+TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
+                 "Test getting the scheduling decision from the planner client",
+                 "[planner]")
+{
+    int nFuncs = 4;
+    faabric::HostResources res;
+    res.set_slots(nFuncs);
+    sch.setThisHostResources(res);
+
+    auto req = faabric::util::batchExecFactory("foo", "bar", nFuncs);
+
+    auto decision = plannerCli.callFunctions(req);
+
+    bool appExists;
+
+    SECTION("App not registered")
+    {
+        appExists = false;
+        faabric::util::updateBatchExecAppId(req, 1337);
+    }
+
+    SECTION("App registered") { appExists = true; }
+
+    auto actualDecision = plannerCli.getSchedulingDecision(req);
+
+    if (appExists) {
+        checkSchedulingDecisionEquality(decision, actualDecision);
+    } else {
+        faabric::batch_scheduler::SchedulingDecision emptyDecision(0, 0);
+        checkSchedulingDecisionEquality(emptyDecision, actualDecision);
+    }
+
+    for (auto mid : decision.messageIds) {
+        auto resultMsg = plannerCli.getMessageResult(decision.appId, mid, 500);
+        REQUIRE(resultMsg.returnvalue() == 0);
+    }
 }
 }

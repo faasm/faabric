@@ -451,6 +451,9 @@ class MpiBaseTestFixture
 
     ~MpiBaseTestFixture()
     {
+        // Make sure we get the message result to avoid data races
+        plannerCli.getMessageResult(msg, 500);
+
         // TODO - without this sleep, we sometimes clear the PTP broker before
         // all the executor threads have been set up, and when trying to query
         // for the comm. group we throw a runtime error.
@@ -466,6 +469,40 @@ class MpiBaseTestFixture
     std::shared_ptr<BatchExecuteRequest> req;
     // TODO: refactor to firstMsg
     faabric::Message& msg;
+
+    // This method waits for all MPI messages to be scheduled. In MPI,
+    // (worldSize - 1) messages are scheduled after calling MpiWorld::create.
+    // Thus, it is hard when this second batch has already started executing
+    void waitForMpiMessages(int expectedWorldSize = 0) const
+    {
+        if (expectedWorldSize == 0) {
+            expectedWorldSize = worldSize;
+        }
+
+        int maxRetries = 5;
+        int numRetries = 0;
+        auto decision = plannerCli.getSchedulingDecision(req);
+        while (decision.messageIds.size() != expectedWorldSize) {
+            if (numRetries >= maxRetries) {
+                SPDLOG_ERROR(
+                  "Timed-out waiting for MPI messages to be scheduled ({}/{})",
+                  decision.messageIds.size(),
+                  expectedWorldSize);
+                throw std::runtime_error("Timed-out waiting for MPI messges");
+            }
+
+            SPDLOG_DEBUG("Waiting for MPI messages to be scheduled ({}/{})",
+                         decision.messageIds.size(),
+                         expectedWorldSize);
+            SLEEP_MS(200);
+
+            numRetries += 1;
+        }
+
+        for (auto mid : decision.messageIds) {
+            plannerCli.getMessageResult(decision.appId, mid, 500);
+        }
+    }
 };
 
 class MpiTestFixture : public MpiBaseTestFixture

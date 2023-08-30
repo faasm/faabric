@@ -55,12 +55,14 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
     // Set a new world size
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     int origSize = conf.defaultMpiWorldSize;
-    int defaultWorldSize = 12;
+    int defaultWorldSize = 3;
     conf.defaultMpiWorldSize = defaultWorldSize;
 
     faabric::HostResources res;
     res.set_slots(defaultWorldSize * 2);
     sch.setThisHostResources(res);
+
+    SLEEP_MS(200);
 
     // Request different sizes
     int requestedWorldSize;
@@ -83,6 +85,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
     conf.defaultMpiWorldSize = origSize;
 
     world.destroy();
+
+    waitForMpiMessages(defaultWorldSize);
 }
 
 TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")

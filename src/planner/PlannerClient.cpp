@@ -277,8 +277,23 @@ faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::batch_scheduler::SchedulingDecision& hint)
 {
+    // TODO(remote-threads): FIXME
     SPDLOG_ERROR("Ignoring hints just for the minute...");
     return callFunctions(req);
+}
+
+faabric::batch_scheduler::SchedulingDecision
+PlannerClient::getSchedulingDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::PointToPointMappings response;
+    syncSend(PlannerCalls::GetSchedulingDecision, req.get(), &response);
+
+    auto decision =
+      faabric::batch_scheduler::SchedulingDecision::fromPointToPointMappings(
+        response);
+
+    return decision;
 }
 
 // -----------------------------------

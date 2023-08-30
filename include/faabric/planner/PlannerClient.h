@@ -89,6 +89,9 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::batch_scheduler::SchedulingDecision& hint);
 
+    faabric::batch_scheduler::SchedulingDecision getSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
+
   private:
     std::mutex plannerCacheMx;
     PlannerCache cache;

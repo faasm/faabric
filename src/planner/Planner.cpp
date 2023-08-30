@@ -292,6 +292,21 @@ std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(
     return berStatus;
 }
 
+std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>
+Planner::getSchedulingDecision(std::shared_ptr<BatchExecuteRequest> req)
+{
+    int appId = req->appid();
+
+    // Acquire a read lock to get the scheduling decision for the requested app
+    faabric::util::SharedLock lock(plannerMx);
+
+    if (state.inFlightReqs.find(appId) == state.inFlightReqs.end()) {
+        return nullptr;
+    }
+
+    return state.inFlightReqs.at(appId).second;
+}
+
 static faabric::batch_scheduler::HostMap convertToBatchSchedHostMap(
   std::map<std::string, std::shared_ptr<Host>> hostMapIn)
 {
