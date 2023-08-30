@@ -1,6 +1,7 @@
 #include <faabric/util/batch.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::util {
 std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory()
@@ -52,8 +53,21 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
     // All messages in the BER must have the same app id, user, and function
     for (int i = 0; i < ber->messages_size(); i++) {
         auto msg = ber->messages(i);
-        if (msg.user() != user || msg.function() != func ||
+        // We allow chained messages in the BER to have different function
+        // names (for chaining), but not empty
+        if (msg.user() != user || msg.function().empty() ||
             msg.appid() != appId) {
+            SPDLOG_ERROR("Malformed message in BER");
+            SPDLOG_ERROR("Got: (id: {} - user: {} - func: {} - app: {})",
+                         msg.id(),
+                         msg.user(),
+                         msg.function(),
+                         msg.appid());
+            SPDLOG_ERROR("Expected: (id: {} - user: {} - func: {} - app: {})",
+                         msg.id(),
+                         user,
+                         func,
+                         appId);
             return false;
         }
     }

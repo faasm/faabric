@@ -61,7 +61,8 @@ TEST_CASE("Test batch. exec request sanity checks")
         ber->mutable_messages(0)->set_user("");
     }
 
-    // An empty function deems a BER invalid
+    // An empty function (or a different function name) is admissible to allow
+    // for function chaining by name
     SECTION("Empty function")
     {
         isBerValid = false;
@@ -75,10 +76,11 @@ TEST_CASE("Test batch. exec request sanity checks")
         ber->mutable_messages(1)->set_user("foo");
     }
 
-    // A function mismatch between the messages deems a BER invalid
+    // A function mismatch between the messages is acceptable to allow for
+    // function chaining
     SECTION("Function mismatch")
     {
-        isBerValid = false;
+        isBerValid = true;
         ber->mutable_messages(1)->set_function("foo");
     }
 
