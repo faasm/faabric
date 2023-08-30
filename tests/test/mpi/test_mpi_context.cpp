@@ -58,6 +58,10 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
     int defaultWorldSize = 12;
     conf.defaultMpiWorldSize = defaultWorldSize;
 
+    faabric::HostResources res;
+    res.set_slots(defaultWorldSize * 2);
+    sch.setThisHostResources(res);
+
     // Request different sizes
     int requestedWorldSize;
     SECTION("Under zero") { requestedWorldSize = -1; }
