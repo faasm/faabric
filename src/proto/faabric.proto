@@ -67,12 +67,6 @@ message HostResources {
     int32 usedSlots = 2;
 }
 
-message UnregisterRequest {
-    string host = 1;
-    string user = 2;
-    string function = 3;
-}
-
 message FunctionStatusResponse {
     enum FunctionStatus {
         OK = 0;

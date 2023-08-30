@@ -257,22 +257,6 @@ int Scheduler::reapStaleExecutors()
             auto removed = std::remove(execs.begin(), execs.end(), exec);
             execs.erase(removed, execs.end());
         }
-
-        // Unregister this host if no more executors remain on this host, and
-        // it's not the main
-        if (execs.empty()) {
-            SPDLOG_TRACE("No remaining executors for {}", key);
-
-            bool isMaster = thisHost == mainHost;
-            if (!isMaster) {
-                faabric::UnregisterRequest req;
-                req.set_host(thisHost);
-                req.set_user(user);
-                req.set_function(function);
-            }
-
-            keysToRemove.emplace_back(key);
-        }
     }
 
     // Remove and erase

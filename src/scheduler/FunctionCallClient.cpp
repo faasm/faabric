@@ -21,16 +21,6 @@ static std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
   batchMessages;
 
-static std::vector<std::pair<std::string, faabric::EmptyRequest>>
-  resourceRequests;
-
-static std::unordered_map<std::string,
-                          faabric::util::Queue<faabric::HostResources>>
-  queuedResourceResponses;
-
-static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
-  unregisterRequests;
-
 static std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>>
   messageResults;
 
@@ -61,24 +51,11 @@ getMessageResults()
     return messageResults;
 }
 
-void queueResourceResponse(const std::string& host, faabric::HostResources& res)
-{
-    faabric::util::UniqueLock lock(mockMutex);
-    queuedResourceResponses[host].enqueue(res);
-}
-
 void clearMockRequests()
 {
     faabric::util::UniqueLock lock(mockMutex);
     functionCalls.clear();
     batchMessages.clear();
-    resourceRequests.clear();
-    unregisterRequests.clear();
-
-    for (auto& p : queuedResourceResponses) {
-        p.second.reset();
-    }
-    queuedResourceResponses.clear();
     messageResults.clear();
 }
 
