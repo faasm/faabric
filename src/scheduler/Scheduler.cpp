@@ -164,9 +164,6 @@ void Scheduler::reset()
     thisHostUsedSlots.store(0, std::memory_order_release);
 
     // Reset scheduler state
-    availableHostsCache.clear();
-    registeredHosts.clear();
-    threadResults.clear();
     threadResultMessages.clear();
 
     pushedSnapshotsMap.clear();
@@ -302,17 +299,23 @@ void Scheduler::vacateSlot()
 
 void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
+    // TODO: can we do this without a lock, or can we put the lock
+    // elsewhere?
+    faabric::util::FullLock lock(mx);
+
     // -------------------------------------------
     // THREADS TODO FIXME
     // -------------------------------------------
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
 
     // Register thread results if necessary
+    /*
     if (isThreads) {
         for (const auto& m : req->messages()) {
             registerThread(m.id());
         }
     }
+    */
 
     // -------------------------------------------
     // SNAPSHOTS
@@ -382,10 +385,6 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     // -------------------------------------------
     // LOCAL EXECTUION
     // -------------------------------------------
-
-    // TODO: can we do this without a lock, or can we put the lock
-    // elsewhere?
-    faabric::util::FullLock lock(mx);
 
     int nMessages = req->messages_size();
     auto funcStr = faabric::util::funcToString(req);
@@ -572,15 +571,6 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
       std::make_shared<faabric::Message>(msg));
 }
 
-void Scheduler::registerThread(uint32_t msgId)
-{
-    // Here we need to ensure the promise is registered locally so
-    // callers can start waiting
-    if (threadResults.find(msgId) == threadResults.end()) {
-        threadResults[msgId];
-    }
-}
-
 void Scheduler::setThreadResult(
   const faabric::Message& msg,
   int32_t returnValue,
@@ -607,26 +597,32 @@ void Scheduler::setThreadResult(
         }
 
         // Set thread result locally
-        setThreadResultLocally(msg.id(), returnValue);
+        setThreadResultLocally(msg.appid(), msg.id(), returnValue);
     } else {
         // Push thread result and diffs together
         getSnapshotClient(msg.mainhost())
-          ->pushThreadResult(msg.id(), returnValue, key, diffs);
+          ->pushThreadResult(msg.appid(), msg.id(), returnValue, key, diffs);
     }
 }
 
-void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
+void Scheduler::setThreadResultLocally(uint32_t appId,
+                                       uint32_t msgId,
+                                       int32_t returnValue)
 {
-    faabric::util::FullLock lock(mx);
-    SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
-    threadResults.at(msgId).set_value(returnValue);
+    faabric::Message msg;
+    msg.set_id(msgId);
+    msg.set_appid(appId);
+    msg.set_returnvalue(returnValue);
+
+    setFunctionResult(msg);
 }
 
-void Scheduler::setThreadResultLocally(uint32_t msgId,
+void Scheduler::setThreadResultLocally(uint32_t appId,
+                                       uint32_t msgId,
                                        int32_t returnValue,
                                        faabric::transport::Message& message)
 {
-    setThreadResultLocally(msgId, returnValue);
+    setThreadResultLocally(appId, msgId, returnValue);
 
     // Keep the message
     faabric::util::FullLock lock(mx);
@@ -641,71 +637,17 @@ std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
     for (int i = 0; i < req->messages_size(); i++) {
         uint32_t messageId = req->messages().at(i).id();
 
-        int result = awaitThreadResult(messageId);
-        results.emplace_back(messageId, result);
+        auto msgResult = faabric::planner::getPlannerClient().getMessageResult(
+          req->appid(), messageId, 500);
+        results.emplace_back(messageId, msgResult.returnvalue());
     }
 
     return results;
 }
 
-int32_t Scheduler::awaitThreadResult(uint32_t messageId)
-{
-    faabric::util::SharedLock lock(mx);
-    if (threadResults.find(messageId) == threadResults.end()) {
-        SPDLOG_WARN("Registering thread result {} before thread started",
-                    messageId);
-        threadResults[messageId];
-    }
-    auto it = threadResults.find(messageId);
-    lock.unlock();
-
-    return it->second.get_future().get();
-}
-
-void Scheduler::deregisterThreads(
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    faabric::util::FullLock eraseLock(mx);
-    for (auto m : req->messages()) {
-        threadResults.erase(m.id());
-        threadResultMessages.erase(m.id());
-    }
-}
-
-void Scheduler::deregisterThread(uint32_t msgId)
-{
-    // Erase the cached message and thread result
-    faabric::util::FullLock eraseLock(mx);
-    threadResults.erase(msgId);
-    threadResultMessages.erase(msgId);
-}
-
-std::vector<uint32_t> Scheduler::getRegisteredThreads()
-{
-    faabric::util::SharedLock lock(mx);
-
-    std::vector<uint32_t> registeredIds;
-    for (auto const& p : threadResults) {
-        registeredIds.push_back(p.first);
-    }
-
-    std::sort(registeredIds.begin(), registeredIds.end());
-
-    return registeredIds;
-}
-
 size_t Scheduler::getCachedMessageCount()
 {
     return threadResultMessages.size();
-}
-
-faabric::HostResources Scheduler::getThisHostResources()
-{
-    faabric::util::SharedLock lock(mx);
-    faabric::HostResources hostResources = thisHostResources;
-    hostResources.set_usedslots(
-      this->thisHostUsedSlots.load(std::memory_order_acquire));
-    return hostResources;
 }
 
 void Scheduler::setThisHostResources(faabric::HostResources& res)

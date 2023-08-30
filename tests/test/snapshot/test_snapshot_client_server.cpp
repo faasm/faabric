@@ -286,10 +286,10 @@ TEST_CASE_METHOD(SnapshotClientServerTestFixture,
       SnapshotDataType::Int, SnapshotMergeOperation::Sum, offsetA2, intDataA2);
 
     // Push diffs with result for a fake thread
+    int appId = 111;
     int msgId = 345;
-    sch.registerThread(msgId);
     diffs = { diffA1, diffA2 };
-    snapshotClient.pushThreadResult(msgId, 0, snapKey, diffs);
+    snapshotClient.pushThreadResult(appId, msgId, 0, snapKey, diffs);
 
     // Write and check diffs have been applied according to the merge operations
     snap->writeQueuedDiffs();
@@ -401,10 +401,10 @@ TEST_CASE_METHOD(SnapshotClientServerTestFixture,
     SnapshotDiff diff(dataType, operation, offset, diffData);
 
     // Push diffs for a fake thread
+    int appId = 777;
     int msgId = 123;
-    sch.registerThread(msgId);
     std::vector<SnapshotDiff> diffs = { diff };
-    snapshotClient.pushThreadResult(msgId, 0, snapKey, diffs);
+    snapshotClient.pushThreadResult(appId, msgId, 0, snapKey, diffs);
 
     // Ensure the right number of diffs is applied
     REQUIRE(snap->getQueuedDiffsCount() == 1);
@@ -416,8 +416,6 @@ TEST_CASE_METHOD(SnapshotClientServerTestFixture,
     std::vector<uint8_t> actualData =
       snap->getDataCopy(offset, expectedData.size());
     REQUIRE(actualData == expectedData);
-
-    sch.deregisterThread(msgId);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerTestFixture,
@@ -425,28 +423,28 @@ TEST_CASE_METHOD(SnapshotClientServerTestFixture,
                  "[snapshot]")
 {
     // Register threads on this host
+    int appIdA = 7;
+    int appIdB = 8;
     int threadIdA = 123;
     int threadIdB = 345;
     int returnValueA = 88;
     int returnValueB = 99;
-    sch.registerThread(threadIdA);
-    sch.registerThread(threadIdB);
 
-    snapshotClient.pushThreadResult(threadIdA, returnValueA, "", {});
-    snapshotClient.pushThreadResult(threadIdB, returnValueB, "", {});
+    snapshotClient.pushThreadResult(appIdA, threadIdA, returnValueA, "", {});
+    snapshotClient.pushThreadResult(appIdB, threadIdB, returnValueB, "", {});
 
     int rA = 0;
     int rB = 0;
 
     // Set up two threads to await the results
-    std::jthread tA([&rA, threadIdA] {
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        rA = sch.awaitThreadResult(threadIdA);
+    std::jthread tA([&rA, appIdA, threadIdA] {
+        auto& plannerCli = faabric::planner::getPlannerClient();
+        rA = plannerCli.getMessageResult(appIdA, threadIdA, 500).returnvalue();
     });
 
-    std::jthread tB([&rB, threadIdB] {
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        rB = sch.awaitThreadResult(threadIdB);
+    std::jthread tB([&rB, appIdB, threadIdB] {
+        auto& plannerCli = faabric::planner::getPlannerClient();
+        rB = plannerCli.getMessageResult(appIdB, threadIdB, 500).returnvalue();
     });
 
     if (tA.joinable()) {

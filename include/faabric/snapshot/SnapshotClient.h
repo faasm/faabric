@@ -53,6 +53,7 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
     void deleteSnapshot(const std::string& key);
 
     void pushThreadResult(
+      uint32_t appId,
       uint32_t messageId,
       int returnValue,
       const std::string& key,

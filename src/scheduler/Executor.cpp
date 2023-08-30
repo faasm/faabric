@@ -201,7 +201,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     */
 
     // Deregister the threads
-    sch.deregisterThreads(req);
+    // sch.deregisterThreads(req);
 
     return results;
 }

@@ -114,11 +114,9 @@ int32_t TestExecutor::executeTask(
         plannerCli.callFunctions(chainedReq);
 
         // Await the results
-        for (const auto& msg : chainedReq->messages()) {
-            // Register thread before we await for it
-            sch.registerThread(msg.id());
-            int32_t result = sch.awaitThreadResult(msg.id());
-            if (result != msg.id() / 100) {
+        auto results = sch.awaitThreadResults(chainedReq);
+        for (const auto& [mid, result] : results) {
+            if (result != (mid / 100)) {
                 SPDLOG_ERROR("TestExecutor got invalid thread result, {} != {}",
                              result,
                              msg.id() / 100);
@@ -448,10 +446,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
       executeWithTestExecutorHint(req, hint);
 
     // Await the results on this host
-    for (int i = 0; i < nLocally; i++) {
-        uint32_t msgId = req->messages().at(i).id();
-        int32_t result = sch.awaitThreadResult(msgId);
-        REQUIRE(result == msgId / 100);
+    auto results = sch.awaitThreadResults(req);
+    for (const auto& [mid, result] : results) {
+        REQUIRE(result == mid / 100);
     }
 
     // Check sent to other host if necessary
@@ -493,10 +490,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<std::string> expectedHosts(nThreads, conf.endpointHost);
     REQUIRE(actualHosts == expectedHosts);
 
-    for (int i = 0; i < nThreads; i++) {
-        uint32_t msgId = messageIds.at(i);
-        int32_t result = sch.awaitThreadResult(msgId);
-        REQUIRE(result == msgId / 100);
+    auto results = sch.awaitThreadResults(req);
+    for (const auto& [mid, res] : results) {
+        REQUIRE(res == mid / 100);
     }
 }
 
@@ -647,8 +643,10 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test erroring thread", "[executor]")
 
     executeWithTestExecutor(req, false);
 
-    int32_t res = sch.awaitThreadResult(msg.id());
-    REQUIRE(res == 1);
+    auto results = sch.awaitThreadResults(req);
+    for (const auto& [mid, res] : results) {
+        REQUIRE(res == 1);
+    }
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -1038,10 +1036,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
     plannerCli.callFunctions(req);
 
     // Await execution
-    for (auto msgId : msgIds) {
-        if (requestType == faabric::BatchExecuteRequest::THREADS) {
-            sch.awaitThreadResult(msgId);
-        } else {
+    if (requestType == faabric::BatchExecuteRequest::THREADS) {
+        sch.awaitThreadResults(req);
+    } else {
+        for (auto msgId : msgIds) {
             plannerCli.getMessageResult(appId, msgId, 2000);
         }
     }

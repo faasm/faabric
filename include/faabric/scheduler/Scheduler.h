@@ -174,17 +174,6 @@ class Scheduler
 
     void executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    /*
-    faabric::batch_scheduler::SchedulingDecision makeSchedulingDecision(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::batch_scheduler::SchedulingTopologyHint topologyHint =
-        faabric::batch_scheduler::SchedulingTopologyHint::NONE);
-
-    faabric::batch_scheduler::SchedulingDecision callFunctions(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::batch_scheduler::SchedulingDecision& hint);
-    */
-
     void reset();
 
     void resetThreadLocalCache();
@@ -215,29 +204,22 @@ class Scheduler
                          const std::string& key,
                          const std::vector<faabric::util::SnapshotDiff>& diffs);
 
-    void setThreadResultLocally(uint32_t msgId, int32_t returnValue);
+    void setThreadResultLocally(uint32_t appId,
+                                uint32_t msgId,
+                                int32_t returnValue);
 
     /**
      * Caches a message along with the thread result, to allow the thread result
      * to refer to data held in that message (i.e. snapshot diffs). The message
      * will be destroyed once the thread result is consumed.
      */
-    void setThreadResultLocally(uint32_t msgId,
+    void setThreadResultLocally(uint32_t appId,
+                                uint32_t msgId,
                                 int32_t returnValue,
                                 faabric::transport::Message& message);
 
     std::vector<std::pair<uint32_t, int32_t>> awaitThreadResults(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-    int32_t awaitThreadResult(uint32_t messageId);
-
-    void registerThread(uint32_t msgId);
-
-    void deregisterThreads(std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-    void deregisterThread(uint32_t msgId);
-
-    std::vector<uint32_t> getRegisteredThreads();
 
     size_t getCachedMessageCount();
 
@@ -252,8 +234,6 @@ class Scheduler
       std::shared_ptr<faabric::HostResources> overwriteResources = nullptr);
 
     void removeHostFromGlobalSet(const std::string& host);
-
-    faabric::HostResources getThisHostResources();
 
     void setThisHostResources(faabric::HostResources& res);
 
@@ -292,7 +272,6 @@ class Scheduler
     // ---- Threads ----
     faabric::snapshot::SnapshotRegistry& reg;
 
-    std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
     std::unordered_map<uint32_t, faabric::transport::Message>
       threadResultMessages;
 
@@ -309,10 +288,6 @@ class Scheduler
 
     // ---- Actual scheduling ----
     SchedulerReaperThread reaperThread;
-
-    std::set<std::string> availableHostsCache;
-
-    std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
     std::shared_ptr<Executor> claimExecutor(
       faabric::Message& msg,

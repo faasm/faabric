@@ -246,10 +246,10 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     checkSchedulingDecisionEquality(actualDecisionOne, expectedDecisionOne);
 
     // Await the results
-    for (int i = 0; i < nCallsOne; i++) {
-        if (isThreads) {
-            sch.awaitThreadResult(reqOneMsgIds.at(i));
-        } else {
+    if (isThreads) {
+        sch.awaitThreadResults(reqOne);
+    } else {
+        for (int i = 0; i < nCallsOne; i++) {
             plannerCli.getMessageResult(appId, reqOneMsgIds.at(i), 10000);
         }
     }
@@ -300,11 +300,11 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     checkSchedulingDecisionEquality(actualDecisionTwo, expectedDecisionTwo);
 
     // Await the results
-    for (int i = 0; i < nCallsTwo; i++) {
-        if (isThreads) {
-            sch.awaitThreadResult(reqTwoMsgIds.at(i));
-        } else {
-            plannerCli.getMessageResult(appId2, reqTwoMsgIds.at(i), 10000);
+    if (isThreads) {
+        sch.awaitThreadResults(reqOne);
+    } else {
+        for (int i = 0; i < nCallsOne; i++) {
+            plannerCli.getMessageResult(appId, reqOneMsgIds.at(i), 10000);
         }
     }
 
@@ -758,6 +758,7 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
     REQUIRE(sentMappings.at(0).first == otherHost);
 }
 
+/* TODO(scheduler-cleanup): remove me!
 TEST_CASE_METHOD(DummyExecutorTestFixture,
                  "Test scheduler register and deregister threads",
                  "[scheduler]")
@@ -780,6 +781,7 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
     expected = { msgIdA };
     REQUIRE(sch.getRegisteredThreads() == expected);
 }
+*/
 
 TEST_CASE_METHOD(DummyExecutorTestFixture,
                  "Test caching message data when setting thread result",
@@ -806,11 +808,11 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
         msgData[2] = 3;
 
         // Register a thread
+        int appId = 1;
         uint32_t msgId = 123;
-        sch.registerThread(msgId);
 
         // Set result along with the message to cache
-        sch.setThreadResultLocally(msgId, 0, msg);
+        sch.setThreadResultLocally(appId, msgId, 0, msg);
     }
 
     // Now check that it's cached

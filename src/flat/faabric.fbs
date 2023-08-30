@@ -30,6 +30,7 @@ table SnapshotUpdateRequest {
 }
 
 table ThreadResultRequest {
+  app_id: int;
   message_id:int;
   return_value:int;
   key:string;

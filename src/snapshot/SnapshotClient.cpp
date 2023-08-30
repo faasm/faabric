@@ -190,6 +190,7 @@ void SnapshotClient::deleteSnapshot(const std::string& key)
 }
 
 void SnapshotClient::pushThreadResult(
+  uint32_t appId,
   uint32_t messageId,
   int returnValue,
   const std::string& key,
@@ -231,7 +232,7 @@ void SnapshotClient::pushThreadResult(
         auto diffsOffset = mb.CreateVector(diffsFbVector);
 
         requestOffset = CreateThreadResultRequest(
-          mb, messageId, returnValue, keyOffset, diffsOffset);
+          mb, appId, messageId, returnValue, keyOffset, diffsOffset);
 
         mb.Finish(requestOffset);
         SEND_FB_MSG(SnapshotCalls::ThreadResult, mb);
