@@ -320,6 +320,18 @@ static faabric::batch_scheduler::HostMap convertToBatchSchedHostMap(
     return hostMap;
 }
 
+static void claimHostSlots(std::shared_ptr<Host> host, int slotsToClaim = 1)
+{
+    host->set_usedslots(host->usedslots() + slotsToClaim);
+    assert(host->usedslots() <= host->slots());
+}
+
+static void releaseHostSlots(std::shared_ptr<Host> host, int slotsToRelease = 1)
+{
+    host->set_usedslots(host->usedslots() - slotsToRelease);
+    assert(host->usedslots() >= 0);
+}
+
 std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>
 Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
 {
@@ -350,12 +362,6 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
 
     auto decision = batchScheduler->makeSchedulingDecision(
       hostMapCopy, state.inFlightReqs, req);
-#ifndef NDEBUG
-    // Here we make sure the state hasn't changed here (we pass const, but they
-    // are const pointers)
-    // NOTE: maybe it is a good idea to force us to make a copy into the right
-    // hostMap type, to make sure we don't modify our state here
-#endif
 
     // Handle failures to schedule work
     if (*decision == NOT_ENOUGH_SLOTS_DECISION) {
@@ -392,12 +398,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             // 1. For a scale change request, we only need to update the hosts
             // with the new messages being scheduled
             for (int i = 0; i < decision->hosts.size(); i++) {
-                // TODO: re-factor into something nicer
-                state.hostMap.at(decision->hosts.at(i))
-                  ->set_usedslots(
-                    state.hostMap.at(decision->hosts.at(i))->usedslots() + 1);
-                assert(state.hostMap.at(decision->hosts.at(i))->usedslots() <=
-                       state.hostMap.at(decision->hosts.at(i))->slots());
+                claimHostSlots(state.hostMap.at(decision->hosts.at(i)));
             }
 
             // 2. For a new decision, we just add it to the in-flight map
@@ -412,12 +413,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             // 1. For a scale change request, we only need to update the hosts
             // with the _new_ messages being scheduled
             for (int i = 0; i < decision->hosts.size(); i++) {
-                // TODO: re-factor into something nicer
-                state.hostMap.at(decision->hosts.at(i))
-                  ->set_usedslots(
-                    state.hostMap.at(decision->hosts.at(i))->usedslots() + 1);
-                assert(state.hostMap.at(decision->hosts.at(i))->usedslots() <=
-                       state.hostMap.at(decision->hosts.at(i))->slots());
+                claimHostSlots(state.hostMap.at(decision->hosts.at(i)));
             }
 
             // 2. For a scale change request, we want to update the BER with the
@@ -452,23 +448,19 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
 
             auto oldReq = state.inFlightReqs.at(appId).first;
             auto oldDec = state.inFlightReqs.at(appId).second;
+
             // We want to let all hosts involved in the migration (not only
             // those in the new decision) that we are gonna migrate. For the
             // evicted hosts (those present in the old decision but not in the
             // new one) we need to send the mappings manually
-            // TODO: can we make this cleaner?
+
+            // Work out the evicted host set (unfortunately, couldn't come up
+            // with a less verbose way to do it)
             std::vector<std::string> evictedHostsVec;
-            // TODO FIXME why do we need to use vectors and not sets?
             std::vector<std::string> oldDecHosts = oldDec->hosts;
             std::sort(oldDecHosts.begin(), oldDecHosts.end());
             std::vector<std::string> newDecHosts = decision->hosts;
             std::sort(newDecHosts.begin(), newDecHosts.end());
-            /*
-            std::set_difference(oldDec->uniqueHosts().cbegin(),
-                                oldDec->uniqueHosts().cend(),
-                                decision->uniqueHosts().cbegin(),
-                                decision->uniqueHosts().cend(),
-            */
             std::set_difference(oldDecHosts.begin(),
                                 oldDecHosts.end(),
                                 newDecHosts.begin(),
@@ -483,16 +475,9 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
                 if (decision->hosts.at(i) == oldDec->hosts.at(i)) {
                     continue;
                 }
-                // TODO: re-factor into something nicer
-                state.hostMap.at(oldDec->hosts.at(i))
-                  ->set_usedslots(
-                    state.hostMap.at(oldDec->hosts.at(i))->usedslots() - 1);
-                assert(state.hostMap.at(oldDec->hosts.at(i))->usedslots() >= 0);
-                state.hostMap.at(decision->hosts.at(i))
-                  ->set_usedslots(
-                    state.hostMap.at(decision->hosts.at(i))->usedslots() + 1);
-                assert(state.hostMap.at(decision->hosts.at(i))->usedslots() <=
-                       state.hostMap.at(decision->hosts.at(i))->slots());
+
+                releaseHostSlots(state.hostMap.at(oldDec->hosts.at(i)));
+                claimHostSlots(state.hostMap.at(decision->hosts.at(i)));
             }
 
             // 2. For a DIST_CHANGE request (migration), we want to replace the
