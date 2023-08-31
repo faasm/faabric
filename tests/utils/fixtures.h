@@ -433,7 +433,9 @@ class MpiBaseTestFixture
     // This method waits for all MPI messages to be scheduled. In MPI,
     // (worldSize - 1) messages are scheduled after calling MpiWorld::create.
     // Thus, it is hard when this second batch has already started executing
-    void waitForMpiMessages(std::shared_ptr<BatchExecuteRequest> reqIn = nullptr, int expectedWorldSize = 0) const
+    void waitForMpiMessages(
+      std::shared_ptr<BatchExecuteRequest> reqIn = nullptr,
+      int expectedWorldSize = 0) const
     {
         if (reqIn == nullptr) {
             reqIn = req;

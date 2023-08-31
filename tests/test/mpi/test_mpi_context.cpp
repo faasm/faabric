@@ -109,9 +109,9 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
     cA.createWorld(msgA);
     int worldId = cA.getWorldId();
 
-    // Set the function result to have access to the chained messages
-    SLEEP_MS(500);
+    waitForMpiMessages(reqA, worldSize);
     Scheduler& sch = getScheduler();
+    // Set the function result to have access to the chained messages
     sch.setFunctionResult(msgA);
 
     auto chainedMsgs = faabric::util::getChainedFunctions(msgA);
