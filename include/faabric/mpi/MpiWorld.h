@@ -265,8 +265,5 @@ class MpiWorld
                 int count,
                 MPI_Status* status,
                 MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
-
-    /* Function migration */
-    bool hasBeenMigrated = false;
 };
 }

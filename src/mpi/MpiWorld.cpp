@@ -152,10 +152,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(call.mpiworldsize());
 
-        // Set group ids for remote messaging
-        // TODO: this will be set by the planner
-        // msg.set_groupid(call.groupid());
-        // TODO: do we need to set this one here?
+        // Set group idxs for remote messaging
         msg.set_groupidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
@@ -1408,10 +1405,6 @@ void MpiWorld::barrier(int thisRank)
         send(thisRank, 0, nullptr, MPI_INT, 0, MPIMessage::BARRIER_JOIN);
     }
 
-    if (thisRank == localLeader && hasBeenMigrated) {
-        hasBeenMigrated = false;
-    }
-
     // Rank 0 broadcasts that the barrier is done (the others block here)
     broadcast(0, thisRank, nullptr, MPI_INT, 0, MPIMessage::BARRIER_DONE);
     SPDLOG_TRACE("MPI - barrier done {}", thisRank);
@@ -1620,11 +1613,7 @@ void MpiWorld::prepareMigration(int thisRank)
 
     // Update local records
     if (thisRank == localLeader) {
-        // TODO: we may be able to just initLocalRemote here?
         initLocalRemoteLeaders();
-
-        // Set the migration flag
-        hasBeenMigrated = true;
 
         // Add the necessary new local messaging queues
         initLocalQueues();
