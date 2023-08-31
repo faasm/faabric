@@ -80,6 +80,10 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     plannerCli.callFunctions(reqB);
     worldB.create(msgB, worldIdB, worldSizeB);
 
+    // Wait to make sure all messages are delivered
+    waitForMpiMessages(reqA, worldSizeA);
+    waitForMpiMessages(reqB, worldSizeB);
+
     // Check getters on worlds
     REQUIRE(worldA.getSize() == worldSizeA);
     REQUIRE(worldA.getId() == worldIdA);

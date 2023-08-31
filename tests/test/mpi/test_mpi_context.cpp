@@ -86,7 +86,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
 
     world.destroy();
 
-    waitForMpiMessages(defaultWorldSize);
+    waitForMpiMessages(req, defaultWorldSize);
 }
 
 TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")

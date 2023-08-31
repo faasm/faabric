@@ -428,21 +428,24 @@ class MpiBaseTestFixture
     int worldSize;
 
     std::shared_ptr<BatchExecuteRequest> req;
-    // TODO: refactor to firstMsg
     faabric::Message& msg;
 
     // This method waits for all MPI messages to be scheduled. In MPI,
     // (worldSize - 1) messages are scheduled after calling MpiWorld::create.
     // Thus, it is hard when this second batch has already started executing
-    void waitForMpiMessages(int expectedWorldSize = 0) const
+    void waitForMpiMessages(std::shared_ptr<BatchExecuteRequest> reqIn = nullptr, int expectedWorldSize = 0) const
     {
+        if (reqIn == nullptr) {
+            reqIn = req;
+        }
+
         if (expectedWorldSize == 0) {
             expectedWorldSize = worldSize;
         }
 
         int maxRetries = 5;
         int numRetries = 0;
-        auto decision = plannerCli.getSchedulingDecision(req);
+        auto decision = plannerCli.getSchedulingDecision(reqIn);
         while (decision.messageIds.size() != expectedWorldSize) {
             if (numRetries >= maxRetries) {
                 SPDLOG_ERROR(

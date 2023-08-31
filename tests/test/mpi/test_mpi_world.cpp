@@ -30,6 +30,9 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
     REQUIRE(world.getUser() == user);
     REQUIRE(world.getFunction() == func);
 
+    // Wait to make sure all messages are scheduled and dispatched
+    waitForMpiMessages(req, worldSize);
+
     // Check that chained function calls are made as expected
     std::vector<faabric::Message> actual = sch.getRecordedMessages();
     REQUIRE(actual.size() == worldSize);
