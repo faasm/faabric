@@ -169,9 +169,7 @@ void Scheduler::reset()
     pushedSnapshotsMap.clear();
 
     // Records
-    recordedMessagesAll.clear();
-    recordedMessagesLocal.clear();
-    recordedMessagesShared.clear();
+    recordedMessages.clear();
 
     // Restart reaper thread
     reaperThread.start(conf.reaperIntervalSeconds);
@@ -374,10 +372,9 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     auto funcStr = faabric::util::funcToString(req);
 
     // Records for tests - copy messages before execution to avoid racing on msg
-    size_t recordedMessagesOffset = recordedMessagesAll.size();
     if (faabric::util::isTestMode()) {
         for (int i = 0; i < nMessages; i++) {
-            recordedMessagesAll.emplace_back(req->messages().at(i));
+            recordedMessages.emplace_back(req->messages().at(i));
         }
     }
 
@@ -420,22 +417,6 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
             e->executeTasks({ i }, req);
         }
     }
-
-    // Records for tests
-    if (faabric::util::isTestMode()) {
-        for (int i = 0; i < nMessages; i++) {
-            std::string executedHost = thisHost;
-            const faabric::Message& msg =
-              recordedMessagesAll.at(recordedMessagesOffset + i);
-
-            // Log results if in test mode
-            if (executedHost.empty() || executedHost == thisHost) {
-                recordedMessagesLocal.emplace_back(msg);
-            } else {
-                recordedMessagesShared.emplace_back(executedHost, msg);
-            }
-        }
-    }
 }
 
 void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
@@ -454,28 +435,13 @@ void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
 void Scheduler::clearRecordedMessages()
 {
     faabric::util::FullLock lock(mx);
-    recordedMessagesAll.clear();
-    recordedMessagesLocal.clear();
-    recordedMessagesShared.clear();
+    recordedMessages.clear();
 }
 
-std::vector<faabric::Message> Scheduler::getRecordedMessagesAll()
+std::vector<faabric::Message> Scheduler::getRecordedMessages()
 {
     faabric::util::SharedLock lock(mx);
-    return recordedMessagesAll;
-}
-
-std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
-{
-    faabric::util::SharedLock lock(mx);
-    return recordedMessagesLocal;
-}
-
-std::vector<std::pair<std::string, faabric::Message>>
-Scheduler::getRecordedMessagesShared()
-{
-    faabric::util::SharedLock lock(mx);
-    return recordedMessagesShared;
+    return recordedMessages;
 }
 
 std::shared_ptr<Executor> Scheduler::claimExecutor(

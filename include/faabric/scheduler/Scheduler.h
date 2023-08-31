@@ -240,12 +240,7 @@ class Scheduler
     // ----------------------------------
     // Testing
     // ----------------------------------
-    std::vector<faabric::Message> getRecordedMessagesAll();
-
-    std::vector<faabric::Message> getRecordedMessagesLocal();
-
-    std::vector<std::pair<std::string, faabric::Message>>
-    getRecordedMessagesShared();
+    std::vector<faabric::Message> getRecordedMessages();
 
     void clearRecordedMessages();
 
@@ -294,11 +289,7 @@ class Scheduler
       faabric::util::FullLock& schedulerLock);
 
     // ---- Accounting and debugging ----
-    std::vector<faabric::Message> recordedMessagesAll;
-    std::vector<faabric::Message> recordedMessagesLocal;
-    // TODO(scheduler-cleanup): this struct can go away
-    std::vector<std::pair<std::string, faabric::Message>>
-      recordedMessagesShared;
+    std::vector<faabric::Message> recordedMessages;
 
     // ---- Point-to-point ----
     faabric::transport::PointToPointBroker& broker;

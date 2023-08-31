@@ -91,7 +91,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     REQUIRE(worldB.getFunction() == funcB);
 
     // Check that chained function calls are made as expected
-    auto actual = sch.getRecordedMessagesAll();
+    auto actual = sch.getRecordedMessages();
     // The first recorded message is sent as part of the test fixture, so we
     // remove it
     actual.erase(actual.begin());

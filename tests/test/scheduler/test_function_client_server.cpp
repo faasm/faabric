@@ -79,7 +79,7 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
     plannerCli.getMessageResult(msgB, 2000);
 
     // Check messages passed
-    std::vector<faabric::Message> msgs = sch.getRecordedMessagesAll();
+    std::vector<faabric::Message> msgs = sch.getRecordedMessages();
     REQUIRE(msgs.size() == 2);
     REQUIRE(msgs.at(0).function() == "foo");
     REQUIRE(msgs.at(1).function() == "bar");
@@ -122,8 +122,7 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
     }
 
     // Check calls have been registered
-    REQUIRE(sch.getRecordedMessagesLocal().size() == nCalls);
-    REQUIRE(sch.getRecordedMessagesShared().empty());
+    REQUIRE(sch.getRecordedMessages().size() == nCalls);
 }
 
 TEST_CASE_METHOD(FunctionClientServerTestFixture,

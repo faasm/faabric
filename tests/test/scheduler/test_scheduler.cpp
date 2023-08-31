@@ -265,7 +265,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     }
 
     // Check the number of messages executed locally and remotely
-    REQUIRE(sch.getRecordedMessagesLocal().size() == nCallsOne);
+    REQUIRE(sch.getRecordedMessages().size() == nCallsOne);
 
     // Now schedule a second batch and check the decision
     std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
@@ -309,7 +309,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     }
 
     // Check no other functions have been scheduled on this host
-    REQUIRE(sch.getRecordedMessagesLocal().size() == nCallsOne + nCallsTwo);
+    REQUIRE(sch.getRecordedMessages().size() == nCallsOne + nCallsTwo);
 
     if (isThreads) {
         REQUIRE(sch.getFunctionExecutorCount(m) == 1);
@@ -333,7 +333,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture, "Check test mode", "[scheduler]")
 
         plannerCli.callFunctions(reqA);
         plannerCli.getMessageResult(msgA, 500);
-        REQUIRE(sch.getRecordedMessagesAll().empty());
+        REQUIRE(sch.getRecordedMessages().empty());
     }
 
     SECTION("Test mode")
@@ -349,7 +349,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture, "Check test mode", "[scheduler]")
         plannerCli.getMessageResult(msgC, 500);
 
         std::vector<int> expectedIds = { msgA.id(), msgB.id(), msgC.id() };
-        std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
+        std::vector<faabric::Message> actual = sch.getRecordedMessages();
 
         REQUIRE(actual.size() == expectedIds.size());
         for (int i = 0; i < expectedIds.size(); i++) {

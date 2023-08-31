@@ -31,7 +31,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
     REQUIRE(world.getFunction() == func);
 
     // Check that chained function calls are made as expected
-    std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
+    std::vector<faabric::Message> actual = sch.getRecordedMessages();
     REQUIRE(actual.size() == worldSize);
 
     // Check all messages but the first one, which we only modify during
@@ -66,7 +66,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating world of size 1", "[mpi]")
     REQUIRE(world.getFunction() == func);
 
     // Check only one message is sent
-    REQUIRE(sch.getRecordedMessagesAll().size() == worldSize);
+    REQUIRE(sch.getRecordedMessages().size() == worldSize);
 
     world.destroy();
 }
