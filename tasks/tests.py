@@ -4,6 +4,8 @@ from os.path import join
 from subprocess import run
 from tasks.util.env import FAABRIC_STATIC_BUILD_DIR, PROJ_ROOT
 
+IS_CI = "HOST_TYPE" in environ and environ["HOST_TYPE"] == "ci"
+
 TEST_ENV = {
     "LOG_LEVEL": "info",
     "PLANNER_HOST": "localhost",
@@ -22,6 +24,10 @@ TEST_ENV = {
     ),
     "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1",
 }
+
+# If executing in CI, give us some extra CPU cores to run the tests
+if IS_CI:
+    TEST_ENV["OVERRIDE_CPU_COUNT"] = "5"
 
 
 @task(default=True)
