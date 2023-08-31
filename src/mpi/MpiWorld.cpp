@@ -134,8 +134,6 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     call.set_mpirank(0);
     call.set_mpiworldid(id);
     call.set_mpiworldsize(size);
-    // This doesn't really matter anymore does it?
-    // call.set_groupid(call.mpiworldid());
     call.set_groupidx(call.mpirank());
     call.set_appidx(call.mpirank());
 
