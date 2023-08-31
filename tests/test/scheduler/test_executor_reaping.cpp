@@ -19,6 +19,10 @@ class SchedulerReapingTestFixture
   public:
     SchedulerReapingTestFixture()
     {
+        faabric::HostResources res;
+        res.set_slots(20);
+        sch.setThisHostResources(res);
+
         std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
           std::make_shared<faabric::scheduler::DummyExecutorFactory>();
         faabric::scheduler::setExecutorFactory(fac);
