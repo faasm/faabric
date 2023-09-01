@@ -21,14 +21,30 @@ class ExecGraphTestFixture
 
 TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[util]")
 {
-    auto ber = faabric::util::batchExecFactory("demo", "echo", 7);
+    int nMsg = 7;
+    auto thisHost = faabric::util::getSystemConfig().endpointHost;
+    auto ber = faabric::util::batchExecFactory("demo", "echo", nMsg);
     faabric::Message msgA = *ber->mutable_messages(0);
+    msgA.set_executedhost(thisHost);
     faabric::Message msgB1 = *ber->mutable_messages(1);
+    msgB1.set_executedhost(thisHost);
     faabric::Message msgB2 = *ber->mutable_messages(2);
+    msgB2.set_executedhost(thisHost);
     faabric::Message msgC1 = *ber->mutable_messages(3);
+    msgC1.set_executedhost(thisHost);
     faabric::Message msgC2 = *ber->mutable_messages(4);
+    msgC2.set_executedhost(thisHost);
     faabric::Message msgC3 = *ber->mutable_messages(5);
+    msgC3.set_executedhost(thisHost);
     faabric::Message msgD = *ber->mutable_messages(6);
+    msgD.set_executedhost(thisHost);
+
+    // If we want to set a function result, the planner must see as many used
+    // slots as results we are setting
+    faabric::HostResources res;
+    res.set_slots(nMsg);
+    res.set_usedslots(nMsg);
+    sch.setThisHostResources(res);
 
     // Set up chaining relationships
     logChainedFunction(msgA, msgB1);
@@ -118,6 +134,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     faabric::mpi::MpiWorld world;
     msg.set_ismpi(true);
     msg.set_recordexecgraph(true);
+    auto thisHost = faabric::util::getSystemConfig().endpointHost;
 
     // Build the message vector to reconstruct the graph
     std::vector<faabric::Message> messages(worldSize);
@@ -128,8 +145,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
         messages.at(rank).set_finishtimestamp(0);
         messages.at(rank).set_resultkey("");
         messages.at(rank).set_statuskey("");
-        messages.at(rank).set_executedhost(
-          faabric::util::getSystemConfig().endpointHost);
+        messages.at(rank).set_executedhost(thisHost);
         messages.at(rank).set_ismpi(true);
         messages.at(rank).set_mpiworldid(worldId);
         messages.at(rank).set_mpirank(rank);
@@ -159,6 +175,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     // to let the dummy executor set the result, to make sure we can overwrite
     // it here
     SLEEP_MS(500);
+    msg.set_executedhost(thisHost);
     sch.setFunctionResult(msg);
 
     // Wait for the MPI messages to finish
