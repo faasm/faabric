@@ -26,8 +26,6 @@ TEST_CASE_METHOD(DistTestsFixture,
     int nThreads = 4;
     faabric::HostResources res;
 
-    // TODO add section for single-host case
-
     // Set the resources so that the "main" threads are on the main worker
     res.set_usedslots(nLocalSlots);
     res.set_slots(nThreads);

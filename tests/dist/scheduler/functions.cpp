@@ -101,10 +101,10 @@ int handleFakeDiffsThreadedFunction(
         auto req =
           faabric::util::batchExecFactory(msg.user(), msg.function(), nThreads);
         req->set_type(faabric::BatchExecuteRequest::THREADS);
+        faabric::util::updateBatchExecAppId(req, msg.appid());
 
         for (int i = 0; i < nThreads; i++) {
             auto& m = req->mutable_messages()->at(i);
-            m.set_appid(msg.appid());
             m.set_appidx(i);
             m.set_inputdata(std::string("thread_" + std::to_string(i)));
 

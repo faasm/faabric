@@ -100,6 +100,16 @@ TEST_CASE_METHOD(PlannerClientServerFixture,
     auto msgPtr = std::make_shared<faabric::Message>(
       faabric::util::messageFactory("foo", "bar"));
 
+    // Register a host with the planner so that we can set/get results from it
+    std::string hostIp = "foo";
+    Host thisHost;
+    thisHost.set_ip(hostIp);
+    thisHost.set_usedslots(2);
+    thisHost.set_slots(12);
+    auto regReq = std::make_shared<faabric::planner::RegisterHostRequest>();
+    *regReq->mutable_host() = thisHost;
+    plannerCli.registerHost(regReq);
+
     // If we try to get the message result before setting it first, nothing
     // happens (note that we need to pass a 0 timeout to not block)
     auto resultMsg =
@@ -110,6 +120,7 @@ TEST_CASE_METHOD(PlannerClientServerFixture,
     // from the mocked requests)
     int expectedReturnValue = 1337;
     msgPtr->set_returnvalue(expectedReturnValue);
+    msgPtr->set_executedhost(hostIp);
     plannerCli.setMessageResult(msgPtr);
     SLEEP_MS(500);
 

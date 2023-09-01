@@ -81,7 +81,6 @@ TEST_CASE_METHOD(DistTestsFixture,
     REQUIRE(actualB == expectedB);
 }
 
-/* TODO(remote-threads): remote threads temporarily disabled
 TEST_CASE_METHOD(DistTestsFixture,
                  "Check snapshot diffs sent back from child threads",
                  "[snapshots][threads]")
@@ -96,11 +95,15 @@ TEST_CASE_METHOD(DistTestsFixture,
     faabric::Message& msg = req->mutable_messages()->at(0);
     msg.set_inputdata(std::to_string(nThreads));
 
-    // Force the function itself to be executed on this host, but its child
-    // threads on another host
+    // Executing one function that spawns three threads. We execute one locally
+    // and the two others remotely
     faabric::HostResources res;
-    res.set_slots(1);
+    res.set_slots(3);
+    res.set_usedslots(1);
     sch.setThisHostResources(res);
+    res.set_slots(2);
+    res.set_usedslots(0);
+    sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
 
     std::vector<std::string> expectedHosts = { getMasterIP() };
     auto decision = plannerCli.callFunctions(req);
@@ -110,13 +113,11 @@ TEST_CASE_METHOD(DistTestsFixture,
     faabric::Message actualResult = plannerCli.getMessageResult(msg, 10000);
     REQUIRE(actualResult.returnvalue() == 333);
 }
-*/
 
 TEST_CASE_METHOD(DistTestsFixture,
                  "Check repeated reduction",
                  "[snapshots][threads]")
 {
-    // TODO: add single-host section
     std::string user = "snapshots";
     std::string function = "reduction";
 
