@@ -422,7 +422,6 @@ TEST_CASE_METHOD(SnapshotClientServerTestFixture,
                  "Test set thread result",
                  "[snapshot]")
 {
-    // Register threads on this host
     int appIdA = 7;
     int appIdB = 8;
     int threadIdA = 123;
@@ -430,8 +429,29 @@ TEST_CASE_METHOD(SnapshotClientServerTestFixture,
     int returnValueA = 88;
     int returnValueB = 99;
 
+    // If we want to set a function result, the planner must see at least one
+    // slot, and at least one used slot in this host
+    faabric::HostResources res;
+    res.set_slots(2);
+    res.set_usedslots(2);
+    sch.setThisHostResources(res);
+
     snapshotClient.pushThreadResult(appIdA, threadIdA, returnValueA, "", {});
     snapshotClient.pushThreadResult(appIdB, threadIdB, returnValueB, "", {});
+
+    // Set tmp function results too (so that they are accessible)
+    Message msgA;
+    msgA.set_appid(appIdA);
+    msgA.set_id(threadIdA);
+    msgA.set_returnvalue(returnValueA);
+    msgA.set_executedhost(faabric::util::getSystemConfig().endpointHost);
+    sch.setFunctionResult(msgA);
+    Message msgB;
+    msgB.set_appid(appIdB);
+    msgB.set_id(threadIdB);
+    msgB.set_returnvalue(returnValueB);
+    msgB.set_executedhost(faabric::util::getSystemConfig().endpointHost);
+    sch.setFunctionResult(msgB);
 
     int rA = 0;
     int rB = 0;
