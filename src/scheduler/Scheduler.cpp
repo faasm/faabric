@@ -465,9 +465,6 @@ void Scheduler::setThreadResult(
     }
 
     // Finally, set the message result in the planner
-    SPDLOG_WARN("Setting thread result for msg {} executed at {}",
-                msg.id(),
-                msg.executedhost());
     setFunctionResult(msg);
 }
 
@@ -497,6 +494,7 @@ void Scheduler::setThreadResultLocally(uint32_t appId,
 }
 
 // TODO(scheduler-cleanup): move method elsewhere
+// TODO: set timeout to constant (or argument)
 std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {

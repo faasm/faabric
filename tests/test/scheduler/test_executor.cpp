@@ -110,8 +110,17 @@ int32_t TestExecutor::executeTask(
         }
 
         // Call the threads
-        auto& plannerCli = faabric::planner::getPlannerClient();
-        plannerCli.callFunctions(chainedReq);
+        if (reqOrig->singlehost()) {
+            chainedReq->set_singlehost(true);
+            for (int i = 0; i < chainedReq->messages_size(); i++) {
+                chainedReq->mutable_messages(i)->set_executedhost(
+                  faabric::util::getSystemConfig().endpointHost);
+            }
+            sch.executeBatch(chainedReq);
+        } else {
+            auto& plannerCli = faabric::planner::getPlannerClient();
+            plannerCli.callFunctions(chainedReq);
+        }
 
         // Await the results
         auto results = sch.awaitThreadResults(chainedReq);
@@ -190,18 +199,12 @@ int32_t TestExecutor::executeTask(
                      offset,
                      offset + data.size());
 
-        SPDLOG_WARN("Thread {} here!", threadPoolIdx);
         if (dummyMemorySize < offset + data.size()) {
             throw std::runtime_error(
               "TestExecutor memory not large enough for test");
         }
-        SPDLOG_WARN("Thread {} also here!", threadPoolIdx);
-        if (dummyMemory == nullptr) {
-            SPDLOG_WARN("dummyMemory points to null!");
-        }
 
         ::memcpy(dummyMemory.get() + offset, data.data(), data.size());
-        SPDLOG_WARN("Thread {} finally here!", threadPoolIdx);
         return 0;
     }
 
@@ -313,6 +316,7 @@ class TestExecutorFixture
 
     MemoryRegion dummyMemory;
 
+    // TODO: should probably remove this one
     std::vector<std::string> executeWithTestExecutorHint(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::batch_scheduler::SchedulingDecision hint)
@@ -330,12 +334,17 @@ class TestExecutorFixture
       bool forceLocal)
     {
         initThreadSnapshot(req);
-        // conf.overrideCpuCount = 10;
-        // conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
 
         // If we are indicated to force local execution, we directly call the
         // scheduler method
         if (forceLocal) {
+            // Set the executed host if executing locally (otherwise set in
+            // the function call server)
+            req->set_singlehost(true);
+            for (int i = 0; i < req->messages_size(); i++) {
+                req->mutable_messages(i)->set_executedhost(conf.endpointHost);
+            }
+
             sch.executeBatch(req);
             return std::vector<std::string>(req->messages_size(),
                                             conf.endpointHost);
@@ -436,43 +445,55 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::string thisHost = conf.endpointHost;
     std::string otherHost = "other";
 
+    // Set resources
+    HostResources localHost;
+    localHost.set_slots(nThreads);
+    localHost.set_usedslots(nThreads);
+    sch.setThisHostResources(localHost);
+
+    // Prepare request
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
 
-    int nLocally = 0;
     SECTION("Single host")
     {
         expectedRestoreCount = 0;
-        nLocally = nThreads;
+        req->set_singlehost(true);
     }
 
-    // Set up a hint to force the scheduler to execute single host or not
-    faabric::batch_scheduler::SchedulingDecision hint(123, 345);
+    SECTION("Non-single host") { expectedRestoreCount = 1; }
+
     std::vector<std::string> expectedHosts;
-    for (int i = 0; i < nLocally; i++) {
+    for (int i = 0; i < nThreads; i++) {
         expectedHosts.emplace_back(thisHost);
     }
 
-    for (int i = 0; i < nThreads; i++) {
-        hint.addMessage(expectedHosts.at(i), req->messages().at(i));
-    }
+    // Turn mock mode on to catch any cross-host messages
+    setMockMode(true);
 
     // Execute the functions
-    std::vector<std::string> actualHosts =
-      executeWithTestExecutorHint(req, hint);
+    initThreadSnapshot(req);
+    for (int i = 0; i < req->messages_size(); i++) {
+        req->mutable_messages(i)->set_executedhost(conf.endpointHost);
+    }
+    sch.executeBatch(req);
+
+    // Sleep to avoid not finding the messages when we query (otherwise, the
+    // function call client/server will be mocked and we won't receive the
+    // callback with the message result)
+    SLEEP_MS(500);
 
     // Await the results on this host
     auto results = sch.awaitThreadResults(req);
     for (const auto& [mid, result] : results) {
-        REQUIRE(result == mid / 100);
+        REQUIRE(result == (mid / 100));
     }
 
     // Check sent to other host if necessary
     auto batchRequests = getBatchRequests();
 
     // Check the hosts match up
-    REQUIRE(actualHosts == expectedHosts);
     REQUIRE(restoreCount == expectedRestoreCount);
 }
 
@@ -490,6 +511,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
         conf.noSingleHostOptimisations = 1;
     }
 
+    // Set resources
+    HostResources localHost;
+    localHost.set_slots(nThreads);
+    localHost.set_usedslots(nThreads);
+    sch.setThisHostResources(localHost);
+
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
@@ -498,11 +525,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_appidx(i);
+        msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
 
         messageIds.emplace_back(req->messages().at(i).id());
     }
 
-    std::vector<std::string> actualHosts = executeWithTestExecutor(req, false);
+    std::vector<std::string> actualHosts = executeWithTestExecutor(req, true);
 
     std::vector<std::string> expectedHosts(nThreads, conf.endpointHost);
     REQUIRE(actualHosts == expectedHosts);
@@ -526,11 +554,17 @@ TEST_CASE_METHOD(TestExecutorFixture,
         conf.noSingleHostOptimisations = 1;
     }
 
+    // Set resources
+    HostResources localHost;
+    localHost.set_slots(nThreads + 1);
+    localHost.set_usedslots(nThreads + 1);
+    sch.setThisHostResources(localHost);
+
     auto req = faabric::util::batchExecFactory("dummy", "thread-check", 1);
     faabric::Message msg = req->messages(0);
     req->mutable_messages(0)->set_inputdata(std::to_string(nThreads));
 
-    std::vector<std::string> actualHosts = executeWithTestExecutor(req, false);
+    std::vector<std::string> actualHosts = executeWithTestExecutor(req, true);
     std::vector<std::string> expectedHosts = { conf.endpointHost };
     REQUIRE(actualHosts == expectedHosts);
 
@@ -551,6 +585,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     conf.boundTimeout = LONG_TEST_TIMEOUT_MS;
     faabric::HostResources hostResources;
     hostResources.set_slots(conf.overrideCpuCount);
+    hostResources.set_usedslots(conf.overrideCpuCount);
     sch.setThisHostResources(hostResources);
 
     for (int i = 0; i < nRepeats; i++) {
@@ -559,7 +594,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         faabric::Message msg = req->messages(0);
         req->mutable_messages(0)->set_inputdata(std::to_string(nThreads));
 
-        auto actualHosts = executeWithTestExecutor(req, false);
+        auto actualHosts = executeWithTestExecutor(req, true);
         std::vector<std::string> expectedHosts = { conf.endpointHost };
         REQUIRE(actualHosts == expectedHosts);
 
@@ -588,6 +623,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
+
+    // Set resources
+    HostResources localHost;
+    localHost.set_slots(nThreads);
+    localHost.set_usedslots(nThreads);
+    sch.setThisHostResources(localHost);
 
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
@@ -656,7 +697,12 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test erroring thread", "[executor]")
     faabric::Message msg = req->messages(0);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
 
-    executeWithTestExecutor(req, false);
+    // Set resources
+    HostResources localHost;
+    localHost.set_slots(10);
+    localHost.set_usedslots(10);
+    sch.setThisHostResources(localHost);
+    executeWithTestExecutor(req, true);
 
     auto results = sch.awaitThreadResults(req);
     for (const auto& [mid, res] : results) {
@@ -755,6 +801,13 @@ TEST_CASE_METHOD(TestExecutorFixture,
 {
     auto req = faabric::util::batchExecFactory("foo", "bar");
     faabric::Message msg = req->messages(0);
+    req->mutable_messages(0)->set_executedhost(
+      faabric::util::getSystemConfig().endpointHost);
+
+    HostResources localHost;
+    localHost.set_slots(5);
+    localHost.set_usedslots(5);
+    sch.setThisHostResources(localHost);
 
     std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
       faabric::scheduler::getExecutorFactory();
@@ -784,12 +837,17 @@ TEST_CASE_METHOD(TestExecutorFixture,
     exec->shutdown();
 }
 
-/* TODO(remote-threads): we currently disable remote threads
 TEST_CASE_METHOD(TestExecutorFixture,
                  "Test snapshot diffs returned to main",
                  "[executor]")
 {
     int nThreads = 4;
+
+    // Give enough resources for the tests
+    faabric::HostResources thisResources;
+    thisResources.set_slots(nThreads);
+    thisResources.set_usedslots(nThreads);
+    sch.setThisHostResources(thisResources);
 
     SECTION("XOR diffs") { conf.diffingMode = "xor"; }
 
@@ -813,12 +871,15 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_mainhost(otherHost);
+        msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
         msg.set_appidx(i);
 
         messageIds.emplace_back(msg.id());
     }
 
-    executeWithTestExecutor(req, true);
+    // Execute directly calling the scheduler
+    initThreadSnapshot(req);
+    sch.executeBatch(req);
 
     // Results aren't set on this host as it's not the main, so we have to
     // wait
@@ -878,9 +939,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
     // Check no merge regions left on the snapshot
     REQUIRE(reg.getSnapshot(mainThreadSnapshotKey)->getMergeRegions().empty());
 }
-*/
 
-/* TODO(remote-threads): we currently disable remote threads
+/* TODO(thread-opt): currently, we push the full snapshot every time from the
+ * planner (and not diffs on subsequent executions)
 TEST_CASE_METHOD(TestExecutorFixture,
                  "Test snapshot diffs pushed to workers after initial snapshot",
                  "[executor]")
@@ -923,11 +984,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
             sch.awaitThreadResult(messageIds.at(i));
         }
     }
-
-    // Check the other host is registered
-    std::set<std::string> expectedRegistered = { otherHost };
-    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()) ==
-            expectedRegistered);
 
     // Check snapshot has been pushed
     auto pushes = faabric::snapshot::getSnapshotPushes();
@@ -1044,11 +1100,25 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<int> msgIds;
     for (auto& m : *req->mutable_messages()) {
         m.set_mainhost(hostOverride);
+        m.set_executedhost(hostOverride);
         msgIds.push_back(m.id());
     }
 
+    // Set resources
+    HostResources localHost;
+    localHost.set_slots(20);
+    localHost.set_usedslots(10);
+    sch.setThisHostResources(localHost);
+
     // Call functions
-    plannerCli.callFunctions(req);
+    if (requestType == faabric::BatchExecuteRequest::THREADS) {
+        // For threads, we call directly the scheduler method (instead of
+        // routing through the planner) to avoid sending/receiving snapshots
+        initThreadSnapshot(req);
+        sch.executeBatch(req);
+    } else {
+        plannerCli.callFunctions(req);
+    }
 
     // Await execution
     if (requestType == faabric::BatchExecuteRequest::THREADS) {
@@ -1076,19 +1146,22 @@ TEST_CASE_METHOD(TestExecutorFixture,
     int nMessages = singleHosts.size();
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "single-host", nMessages);
+
     int appId = req->messages(0).appid();
     std::vector<int> msgIds;
-
-    int expectedResult = 20;
-
-    // TODO(remote-threads): we ignore hints, so this has no effect
-    faabric::batch_scheduler::SchedulingDecision hint(123, 123);
     for (int i = 0; i < nMessages; i++) {
-        hint.addMessage(singleHosts[i], req->messages().at(i));
         msgIds.push_back(req->messages(i).id());
     }
 
-    executeWithTestExecutorHint(req, hint);
+    // Give enough resources for the tests
+    faabric::HostResources thisResources;
+    thisResources.set_slots(nMessages + 1);
+    thisResources.set_usedslots(nMessages + 1);
+    sch.setThisHostResources(thisResources);
+
+    int expectedResult = 20;
+
+    executeWithTestExecutor(req, true);
 
     // Await results on this host
     for (int i = 0; i < nMessages; i++) {

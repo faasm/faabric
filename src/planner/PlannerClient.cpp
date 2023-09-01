@@ -307,9 +307,6 @@ faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
             snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
         }
     } else {
-        // TODO: whill this break migration? we don't need to send anything
-        // during migration right? (it won't because we don't go through
-        // callFunctions in migration)
         snapshotKey = req->messages(0).snapshotkey();
     }
 

@@ -246,7 +246,7 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
     // Dispatch an async message to all hosts that are waiting
     if (state.appResultWaiters.find(msgId) != state.appResultWaiters.end()) {
         for (const auto& host : state.appResultWaiters[msgId]) {
-            SPDLOG_INFO("Sending result to waiting host: {}", host);
+            SPDLOG_DEBUG("Sending result to waiting host: {}", host);
             faabric::scheduler::getFunctionCallClient(host)->setMessageResult(
               msg);
         }
