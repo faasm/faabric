@@ -2,6 +2,7 @@
 
 #include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/util/PeriodicBackgroundThread.h>
 
@@ -32,12 +33,14 @@ class KeepAliveThread : public faabric::util::PeriodicBackgroundThread
 };
 
 /*
- * Local state associated with the current host, used to cache results and
- * avoid unnecessary interactions with the planner server.
+ * Local state associated with the current host, used to store useful state
+ * like cached results to unnecessary interactions with the planner server.
  */
 struct PlannerCache
 {
     std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
+    // Keeps track of the snapshots that have been pushed to the planner
+    std::set<std::string> pushedSnapshots;
 };
 
 /*
@@ -95,6 +98,9 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
   private:
     std::mutex plannerCacheMx;
     PlannerCache cache;
+
+    // Snapshot client for the planner snapshot server
+    std::shared_ptr<faabric::snapshot::SnapshotClient> snapshotClient;
 
     faabric::Message doGetMessageResult(
       std::shared_ptr<faabric::Message> msgPtr,

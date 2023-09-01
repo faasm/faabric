@@ -239,6 +239,23 @@ void SnapshotClient::pushThreadResult(
     }
 }
 
+/*
+void SnapshotClient::broadcastSnapshotDelete(const std::string& snapshotKey)
+{
+    std::set<std::string> hostsToSendDelete;
+    {
+        faabric::util::SharedLock lock(mx);
+        if (pushedSnapshotsMap.contains(snapshotKey)) {
+            hostsToSendDelete = pushedSnapshotsMap.at(snapshotKey);
+        }
+    }
+
+    for (auto host : hostsToSendDelete) {
+        getSnapshotClient(host)->deleteSnapshot(snapshotKey);
+    }
+}
+*/
+
 // -----------------------------------
 // Static setter/getters
 // -----------------------------------

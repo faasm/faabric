@@ -128,6 +128,8 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
         }
 
         // Queue on the snapshot
+        SPDLOG_DEBUG(
+          "Queueing {} diffs to snapshot {}", diffs.size(), r->key()->str());
         snap->queueDiffs(diffs);
     }
 

@@ -5,6 +5,23 @@
 
 namespace faabric::batch_scheduler {
 
+void printHostMap(HostMap hostMap, const std::string& logLevel)
+{
+    std::string printedText;
+    std::string header = "\n-------------- Host Map --------------";
+    std::string subhead = "Ip\t\tSlots";
+    std::string footer = "--------------------------------------";
+
+    printedText += header + "\n" + subhead + "\n";
+    for (const auto& [ip, hostState] : hostMap) {
+        printedText += fmt::format(
+          "{}\t\t{}/{}\n", ip, hostState->usedSlots, hostState->slots);
+    }
+    printedText += footer;
+
+    SPDLOG_DEBUG(printedText);
+}
+
 // We have one static instance of the BatchScheduler globally. Note that the
 // BatchScheduler is stateless, so having one static instance is very much like
 // having a C++ interface

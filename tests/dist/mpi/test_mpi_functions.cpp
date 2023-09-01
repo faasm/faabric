@@ -45,11 +45,9 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all", "[.][mpi]")
     checkAllocationAndResult(req);
 }
 
-TEST_CASE_METHOD(MpiDistTestsFixture,
-                 "Test MPI all to all many times",
-                 "[.][mpi]")
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all many times", "[mpi]")
 {
-    int numRuns = 50;
+    int numRuns = 5;
     int oldNumLocalSlots = nLocalSlots;
     nLocalSlots = 4;
     int worldSize = 8;

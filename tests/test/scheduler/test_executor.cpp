@@ -190,12 +190,19 @@ int32_t TestExecutor::executeTask(
                      offset,
                      offset + data.size());
 
+        SPDLOG_WARN("Thread {} here!", threadPoolIdx);
         if (dummyMemorySize < offset + data.size()) {
             throw std::runtime_error(
               "TestExecutor memory not large enough for test");
         }
+        SPDLOG_WARN("Thread {} also here!", threadPoolIdx);
+        if (dummyMemory == nullptr) {
+            SPDLOG_WARN("dummyMemory points to null!");
+        }
 
         ::memcpy(dummyMemory.get() + offset, data.data(), data.size());
+        SPDLOG_WARN("Thread {} finally here!", threadPoolIdx);
+        return 0;
     }
 
     if (msg.function() == "echo") {
@@ -326,8 +333,12 @@ class TestExecutorFixture
         // conf.overrideCpuCount = 10;
         // conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
 
+        // If we are indicated to force local execution, we directly call the
+        // scheduler method
         if (forceLocal) {
-            req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
+            sch.executeBatch(req);
+            return std::vector<std::string>(req->messages_size(),
+                                            conf.endpointHost);
         }
 
         return plannerCli.callFunctions(req).hosts;
@@ -566,7 +577,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 }
 
-/* TODO(remote-threads): we currently disable remote threads
 TEST_CASE_METHOD(TestExecutorFixture,
                  "Test thread results returned on non-main",
                  "[executor]")
@@ -610,7 +620,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     REQUIRE(actualMessageIds == messageIds);
 }
-*/
 
 TEST_CASE_METHOD(TestExecutorFixture, "Test non-zero return code", "[executor]")
 {

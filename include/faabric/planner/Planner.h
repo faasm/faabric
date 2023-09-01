@@ -4,6 +4,7 @@
 #include <faabric/planner/PlannerState.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 
 #include <shared_mutex>
 
@@ -78,6 +79,9 @@ class Planner
 
     PlannerState state;
     PlannerConfig config;
+
+    // Snapshot registry to distribute snapshots in THREADS requests
+    faabric::snapshot::SnapshotRegistry& snapshotRegistry;
 
     // ----------
     // Util private API

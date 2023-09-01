@@ -377,6 +377,7 @@ void SnapshotData::queueDiffs(const std::vector<SnapshotDiff>& diffs)
     for (const auto& diff : diffs) {
         queuedDiffs.emplace_back(std::move(diff));
     }
+    SPDLOG_WARN("Queued diffs size: {}", queuedDiffs.size());
 }
 
 int SnapshotData::writeQueuedDiffs()

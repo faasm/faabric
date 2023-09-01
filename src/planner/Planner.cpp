@@ -3,11 +3,13 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/batch.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
@@ -15,9 +17,31 @@
 #include <string>
 
 namespace faabric::planner {
+
+// ----------------------
+// Utility Functions
+// ----------------------
+
+static void claimHostSlots(std::shared_ptr<Host> host, int slotsToClaim = 1)
+{
+    host->set_usedslots(host->usedslots() + slotsToClaim);
+    assert(host->usedslots() <= host->slots());
+}
+
+static void releaseHostSlots(std::shared_ptr<Host> host, int slotsToRelease = 1)
+{
+    host->set_usedslots(host->usedslots() - slotsToRelease);
+    assert(host->usedslots() >= 0);
+}
+
+// ----------------------
+// Planner
+// ----------------------
+
 // Planner is used globally as a static variable. This constructor relies on
 // the fact that C++ static variable's initialisation is thread-safe
 Planner::Planner()
+  : snapshotRegistry(faabric::snapshot::getSnapshotRegistry())
 {
     // Note that we don't initialise the config in a separate method to prevent
     // that method from being called elsewhere in the codebase (as it would be
@@ -210,6 +234,12 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
                  msg->groupid(),
                  msg->groupidx());
 
+    // Release the slot only once
+    assert(state.hostMap.contains(msg->executedhost()));
+    if (!state.appResults[appId].contains(msgId)) {
+        releaseHostSlots(state.hostMap.at(msg->executedhost()));
+    }
+
     // Set the result
     state.appResults[appId][msgId] = msg;
 
@@ -320,18 +350,6 @@ static faabric::batch_scheduler::HostMap convertToBatchSchedHostMap(
     return hostMap;
 }
 
-static void claimHostSlots(std::shared_ptr<Host> host, int slotsToClaim = 1)
-{
-    host->set_usedslots(host->usedslots() + slotsToClaim);
-    assert(host->usedslots() <= host->slots());
-}
-
-static void releaseHostSlots(std::shared_ptr<Host> host, int slotsToRelease = 1)
-{
-    host->set_usedslots(host->usedslots() - slotsToRelease);
-    assert(host->usedslots() >= 0);
-}
-
 std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>
 Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
 {
@@ -360,6 +378,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         }
     }
 
+    printHostMap(hostMapCopy);
     auto decision = batchScheduler->makeSchedulingDecision(
       hostMapCopy, state.inFlightReqs, req);
 
@@ -369,6 +388,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
           "Not enough free slots to schedule app: {} (requested: {})",
           appId,
           req->messages_size());
+        printHostMap(hostMapCopy);
         return decision;
     }
 
@@ -544,9 +564,21 @@ void Planner::dispatchSchedulingDecision(
             hostRequests[thisHost]->set_type(req->type());
             hostRequests[thisHost]->set_subtype(req->subtype());
             hostRequests[thisHost]->set_contextdata(req->contextdata());
+
+            // TODO: request is ALWAYS single host
+            if (decision->isSingleHost()) {
+                hostRequests[thisHost]->set_singlehost(true);
+            }
         }
 
         *hostRequests[thisHost]->add_messages() = msg;
+    }
+
+    bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
+    bool isSingleHost = req->singlehost();
+    if (isSingleHost && !decision->isSingleHost()) {
+        SPDLOG_ERROR(
+          "User provided single-host hint in BER, but decision is not!");
     }
 
     for (const auto& [hostIp, hostReq] : hostRequests) {
@@ -554,6 +586,28 @@ void Planner::dispatchSchedulingDecision(
                      hostReq->messages_size(),
                      hostIp);
         assert(faabric::util::isBatchExecRequestValid(hostReq));
+
+        // In a THREADS request, before sending an execution request we need to
+        // push the main (caller) thread snapshot to all non-main hosts
+        if (isThreads && !isSingleHost) {
+            auto snapshotKey =
+              faabric::util::getMainThreadSnapshotKey(hostReq->messages(0));
+            try {
+                auto snap = snapshotRegistry.getSnapshot(snapshotKey);
+
+                // TODO: push only diffs
+                if (hostIp != req->messages(0).mainhost()) {
+                    faabric::snapshot::getSnapshotClient(hostIp)->pushSnapshot(
+                      snapshotKey, snap);
+                }
+            } catch (std::runtime_error& e) {
+                // Catch errors, but don't let them crash the planner. Let the
+                // worker crash instead
+                SPDLOG_ERROR("Snapshot {} not regsitered in planner!",
+                             snapshotKey);
+            }
+        }
+
         faabric::scheduler::getFunctionCallClient(hostIp)->executeFunctions(
           hostReq);
     }

@@ -199,14 +199,16 @@ class Scheduler
     // the planner controls scheduling
     void setFunctionResult(faabric::Message& msg);
 
-    void setThreadResult(const faabric::Message& msg,
+    void setThreadResult(faabric::Message& msg,
                          int32_t returnValue,
                          const std::string& key,
                          const std::vector<faabric::util::SnapshotDiff>& diffs);
 
+    /*
     void setThreadResultLocally(uint32_t appId,
                                 uint32_t msgId,
                                 int32_t returnValue);
+    */
 
     /**
      * Caches a message along with the thread result, to allow the thread result
@@ -269,8 +271,6 @@ class Scheduler
 
     std::unordered_map<uint32_t, faabric::transport::Message>
       threadResultMessages;
-
-    std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;

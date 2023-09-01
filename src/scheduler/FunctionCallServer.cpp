@@ -68,12 +68,15 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
     PARSE_MSG(faabric::BatchExecuteRequest, buffer.data(), buffer.size())
 
     // This host has now been told to execute these functions no matter what
-    parsedMsg.mutable_messages()->at(0).set_timestamp(
-      faabric::util::getGlobalClock().epochMillis());
-    parsedMsg.mutable_messages()->at(0).set_mainhost(
-      faabric::util::getSystemConfig().endpointHost);
+    for (int i = 0; i < parsedMsg.messages_size(); i++) {
+        parsedMsg.mutable_messages()->at(i).set_timestamp(
+          faabric::util::getGlobalClock().epochMillis());
+        parsedMsg.mutable_messages()->at(i).set_executedhost(
+          faabric::util::getSystemConfig().endpointHost);
+    }
 
-    // TODO: consider moving the logic from the scheduler here?
+    // TODO(scheduler-cleanup): consider moving executeBatch from Scheduler to
+    // Executor
     scheduler.executeBatch(
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 }

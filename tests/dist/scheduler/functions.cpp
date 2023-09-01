@@ -229,7 +229,7 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
             auto req = faabric::util::batchExecFactory(
               msg.user(), msg.function(), nThreads);
             req->set_type(faabric::BatchExecuteRequest::THREADS);
-            // faabric::util::updateBatchExecAppId(req, msg.appid());
+            faabric::util::updateBatchExecAppId(req, msg.appid());
 
             // Set app/ group info
             for (int i = 0; i < nThreads; i++) {

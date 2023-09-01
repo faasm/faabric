@@ -59,6 +59,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
     conf.defaultMpiWorldSize = defaultWorldSize;
 
     faabric::HostResources res;
+    res.set_usedslots(1);
     res.set_slots(defaultWorldSize * 2);
     sch.setThisHostResources(res);
 
@@ -94,12 +95,12 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
     const std::string expectedHost =
       faabric::util::getSystemConfig().endpointHost;
 
-    // faabric::Message msgA = faabric::util::messageFactory("mpi", "hellompi");
     auto reqA = faabric::util::batchExecFactory("mpi", "hellompi", 1);
     auto& msgA = *reqA->mutable_messages(0);
     int worldSize = 6;
     msgA.set_mpiworldsize(worldSize);
     msgA.set_recordexecgraph(true);
+    msgA.set_executedhost(expectedHost);
 
     // Call the request before creating the MPI world
     plannerCli.callFunctions(reqA);

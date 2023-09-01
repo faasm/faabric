@@ -127,9 +127,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
     */
 
-    // TODO(remote-threads): we always run single-host when executing threads
-    /*
-    bool isSingleHost = true;
+    bool isSingleHost = req->singlehost();
     // Do snapshotting if not on a single host
     faabric::Message& msg = req->mutable_messages()->at(0);
     std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
@@ -150,7 +148,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
           snap->diffWithDirtyRegions(memView, dirtyRegions);
 
         if (updates.empty()) {
-            SPDLOG_TRACE(
+            SPDLOG_DEBUG(
               "No updates to main thread snapshot for {} over {} pages",
               faabric::util::funcToString(msg, false),
               dirtyRegions.size());
@@ -171,16 +169,12 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
               mr.offset, mr.length, mr.dataType, mr.operation);
         }
     }
-    */
 
     // Invoke threads and await
     auto decision = faabric::planner::getPlannerClient().callFunctions(req);
-    // If we await immediately after we call the functions, it may happen that
-    // the threads are not registered yet
     std::vector<std::pair<uint32_t, int32_t>> results =
       sch.awaitThreadResults(req);
 
-    /* TODO(remote-threads): currently threads are always single-host
     // Perform snapshot updates if not on single host
     if (!isSingleHost) {
         // Write queued changes to snapshot
@@ -198,10 +192,6 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker->startTracking(memView);
         tracker->startThreadLocalTracking(memView);
     }
-    */
-
-    // Deregister the threads
-    // sch.deregisterThreads(req);
 
     return results;
 }
@@ -231,16 +221,13 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     bool isMaster = firstMsg.mainhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    // TODO: isSingleHost should always be true for threads now
-    // bool isSingleHost = req->singlehost();
+    bool isSingleHost = req->singlehost();
     std::string snapshotKey = firstMsg.snapshotkey();
 
     // Threads on a single host don't need to do anything with snapshots, as
     // they all share a single executor. Threads not on a single host need to
     // restore from the main thread snapshot. Non-threads need to restore from
     // a snapshot if they are given a snapshot key.
-    /*
-     * TODO: remove?
     if (isThreads && !isSingleHost) {
         // Check we get a valid memory view
         std::span<uint8_t> memView = getMemoryView();
@@ -262,8 +249,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
         // Prepare list of lists for dirty pages from each thread
         threadLocalDirtyRegions.resize(req->messages_size());
-    */
-    if (!isThreads && !firstMsg.snapshotkey().empty()) {
+    } else if (!isThreads && !firstMsg.snapshotkey().empty()) {
         // Restore from snapshot if provided
         std::string snapshotKey = firstMsg.snapshotkey();
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
@@ -377,6 +363,7 @@ std::shared_ptr<faabric::util::SnapshotData> Executor::getMainThreadSnapshot(
     return reg.getSnapshot(snapshotKey);
 }
 
+/*
 void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
 {
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
@@ -392,6 +379,7 @@ void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
         reg.deleteSnapshot(snapshotKey);
     }
 }
+*/
 
 void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 {
@@ -433,8 +421,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // bool isSingleHost = task.req->singlehost();
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
-        // TODO: do we never need to do dirty tracking now?
-        bool doDirtyTracking = false; // isThreads && !isSingleHost;
+        bool doDirtyTracking = isThreads && !task.req->singlehost();
         if (doDirtyTracking) {
             // If tracking is thread local, start here as it will happen for
             // each thread
@@ -600,7 +587,8 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 
                 // Delete the main thread snapshot (implicitly does nothing if
                 // doesn't exist)
-                deleteMainThreadSnapshot(msg);
+                // TODO: cleanup snapshots (from planner maybe?)
+                // deleteMainThreadSnapshot(msg);
             }
         }
 

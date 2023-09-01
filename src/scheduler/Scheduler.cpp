@@ -166,8 +166,6 @@ void Scheduler::reset()
     // Reset scheduler state
     threadResultMessages.clear();
 
-    pushedSnapshotsMap.clear();
-
     // Records
     recordedMessages.clear();
 
@@ -288,88 +286,20 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     // -------------------------------------------
     // THREADS TODO FIXME
     // -------------------------------------------
+
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-
-    // Register thread results if necessary
-    /*
-    if (isThreads) {
-        for (const auto& m : req->messages()) {
-            registerThread(m.id());
-        }
-    }
-    */
+    auto funcStr = faabric::util::funcToString(req);
 
     // -------------------------------------------
-    // SNAPSHOTS
+    // SNAPSHOTS FIXME: we need to distribute the snapshots _before_ we
+    // triggere execution, not when we are calling executeBatch!
     // -------------------------------------------
-
-    // Push out snapshot diffs to registered hosts. We have to do this to
-    // *all* hosts, regardless of whether they will be executing functions.
-    // This greatly simplifies the reasoning about which hosts hold which
-    // diffs.
-
-    std::string snapshotKey;
-    if (isThreads) {
-        /* TODO (threads): snapshots
-        if (!firstMsg.snapshotkey().empty()) {
-            SPDLOG_ERROR("{} should not provide snapshot key for {} threads",
-                         funcStr,
-                         req->messages().size());
-
-            std::runtime_error("Should not provide snapshot key for threads");
-        }
-
-        if (!isSingleHost) {
-            snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
-        }
-        */
-    } else {
-        // TODO: can we get the snapshot key from req?
-        snapshotKey = req->messages(0).snapshotkey();
-    }
-
-    if (!snapshotKey.empty()) {
-        auto snap = reg.getSnapshot(snapshotKey);
-
-        /* TODO(remote-threads): fixme
-        for (const auto& host :
-             getFunctionRegisteredHosts(req->user(), req->function(), false)) {
-            std::shared_ptr<SnapshotClient> c = getSnapshotClient(host);
-
-            // See if we've already pushed this snapshot to the given host,
-            // if so, just push the diffs that have occurred in this main thread
-            if (pushedSnapshotsMap[snapshotKey].contains(host)) {
-                std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
-                  snap->getTrackedChanges();
-
-                c->pushSnapshotUpdate(snapshotKey, snap, snapshotDiffs);
-            } else {
-                c->pushSnapshot(snapshotKey, snap);
-                pushedSnapshotsMap[snapshotKey].insert(host);
-            }
-        }
-        */
-
-        // Now reset the tracking on the snapshot before we start executing
-        snap->clearTrackedChanges();
-        /* TODO: fix this elseif
-    } else if (!snapshotKey.empty() && isMigration && isForceLocal) {
-        // If we are executing a migrated function, we don't need to distribute
-        // the snapshot to other hosts, as this snapshot is specific to the
-        // to-be-restored function
-        auto snap = reg.getSnapshot(snapshotKey);
-
-        // Now reset the tracking on the snapshot before we start executing
-        snap->clearTrackedChanges();
-        */
-    }
 
     // -------------------------------------------
     // LOCAL EXECTUION
     // -------------------------------------------
 
     int nMessages = req->messages_size();
-    auto funcStr = faabric::util::funcToString(req);
 
     // Records for tests - copy messages before execution to avoid racing on msg
     if (faabric::util::isTestMode()) {
@@ -404,7 +334,6 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
         assert(e != nullptr);
 
         // Execute the tasks
-        // TODO: make the default of executeTasks take all messages in req?
         std::vector<int> thisHostIdxs(req->messages_size());
         std::iota(thisHostIdxs.begin(), thisHostIdxs.end(), 0);
         e->executeTasks(thisHostIdxs, req);
@@ -417,19 +346,6 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
             e->executeTasks({ i }, req);
         }
     }
-}
-
-void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
-                                        const std::string& snapshotKey)
-{
-    /* TODO(snaps): FIXME
-    const std::set<std::string>& thisRegisteredHosts =
-      getFunctionRegisteredHosts(msg.user(), msg.function(), false);
-
-    for (auto host : thisRegisteredHosts) {
-        getSnapshotClient(host)->deleteSnapshot(snapshotKey);
-    }
-    */
 }
 
 void Scheduler::clearRecordedMessages()
@@ -509,9 +425,6 @@ void Scheduler::flushLocally()
 // TODO(scheduler-cleanup): move this to the planner completely
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
-    // Record which host did the execution
-    msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
-
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
 
@@ -522,7 +435,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 }
 
 void Scheduler::setThreadResult(
-  const faabric::Message& msg,
+  faabric::Message& msg,
   int32_t returnValue,
   const std::string& key,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
@@ -545,16 +458,20 @@ void Scheduler::setThreadResult(
             // merging operation.
             snap->queueDiffs(diffs);
         }
-
-        // Set thread result locally
-        setThreadResultLocally(msg.appid(), msg.id(), returnValue);
     } else {
         // Push thread result and diffs together
         getSnapshotClient(msg.mainhost())
           ->pushThreadResult(msg.appid(), msg.id(), returnValue, key, diffs);
     }
+
+    // Finally, set the message result in the planner
+    SPDLOG_WARN("Setting thread result for msg {} executed at {}",
+                msg.id(),
+                msg.executedhost());
+    setFunctionResult(msg);
 }
 
+/*
 void Scheduler::setThreadResultLocally(uint32_t appId,
                                        uint32_t msgId,
                                        int32_t returnValue)
@@ -566,19 +483,20 @@ void Scheduler::setThreadResultLocally(uint32_t appId,
 
     setFunctionResult(msg);
 }
+*/
 
+// TODO: can we remove this method?
 void Scheduler::setThreadResultLocally(uint32_t appId,
                                        uint32_t msgId,
                                        int32_t returnValue,
                                        faabric::transport::Message& message)
 {
-    setThreadResultLocally(appId, msgId, returnValue);
-
     // Keep the message
     faabric::util::FullLock lock(mx);
     threadResultMessages.insert(std::make_pair(msgId, std::move(message)));
 }
 
+// TODO(scheduler-cleanup): move method elsewhere
 std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {

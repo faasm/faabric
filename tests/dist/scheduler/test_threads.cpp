@@ -17,16 +17,24 @@
 
 namespace tests {
 
-/* TODO(remote-threads): this test now runs on one single host
 TEST_CASE_METHOD(DistTestsFixture,
                  "Test executing threads on multiple hosts",
                  "[snapshots][threads]")
 {
     // Set up this host's resources
+    int nLocalSlots = 2;
     int nThreads = 4;
     faabric::HostResources res;
+
+    // TODO add section for single-host case
+
+    // Set the resources so that the "main" threads are on the main worker
+    res.set_usedslots(nLocalSlots);
     res.set_slots(nThreads);
     sch.setThisHostResources(res);
+    res.set_usedslots(0);
+    res.set_slots(nLocalSlots);
+    sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
 
     // Set up the message
     std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -52,18 +60,9 @@ TEST_CASE_METHOD(DistTestsFixture,
     plannerCli.callFunctions(req);
 
     // Check threads executed on this host
-    for (int i = 0; i < nThreads; i++) {
-        faabric::Message& m = req->mutable_messages()->at(i);
-        int res = sch.awaitThreadResult(m.id());
-        REQUIRE(res == m.id() / 2);
-    }
-
-    // Check threads executed on the other host
-    for (int i = nLocalSlots; i < nThreads; i++) {
-        faabric::Message& m = req->mutable_messages()->at(i);
-        int res = sch.awaitThreadResult(m.id());
-        REQUIRE(res == m.id() / 2);
+    auto results = sch.awaitThreadResults(req);
+    for (const auto& [mid, res] : results) {
+        REQUIRE(res == mid / 2);
     }
 }
-*/
 }

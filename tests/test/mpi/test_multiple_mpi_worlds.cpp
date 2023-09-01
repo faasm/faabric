@@ -23,9 +23,7 @@ class MultiWorldMpiTestFixture : public MpiBaseTestFixture
 
         // Call the requests once to keep track of the first MPI message
         plannerCli.callFunctions(reqA);
-        SPDLOG_WARN("App A: {}", reqA->appid());
         plannerCli.callFunctions(reqB);
-        SPDLOG_WARN("App B: {}", reqA->appid());
 
         worldA.create(msgA, worldIdA, worldSizeA);
         worldB.create(msgB, worldIdB, worldSizeB);
