@@ -307,7 +307,11 @@ faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
             snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
         }
     } else {
-        snapshotKey = req->messages(0).snapshotkey();
+        // In a single-host setting we can skip sending the snapshots to the
+        // planner
+        if (!req->singlehost()) {
+            snapshotKey = req->messages(0).snapshotkey();
+        }
     }
 
     if (!snapshotKey.empty()) {

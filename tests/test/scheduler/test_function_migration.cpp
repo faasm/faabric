@@ -72,7 +72,6 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 {
     // First set resources before calling the functions: one will be allocated
     // locally, another one in the remote host
-    // TODO: proper mocking of a second host
     std::vector<std::string> hosts = { mainHost, LOCALHOST };
     std::vector<int> slots = { 1, 1 };
     std::vector<int> usedSlots = { 0, 0 };
@@ -127,6 +126,15 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
         auto migration1 = sch.checkForMigrationOpportunities(
           *req->mutable_messages(1), decision.groupId);
         REQUIRE(migration1 == nullptr);
+    }
+
+    // Set the executed host for correct accounting in the planner when
+    // setting the function result
+    req->mutable_messages(0)->set_executedhost(mainHost);
+    if (mustMigrate) {
+        req->mutable_messages(1)->set_executedhost(mainHost);
+    } else {
+        req->mutable_messages(1)->set_executedhost(LOCALHOST);
     }
 
     sch.setFunctionResult(*req->mutable_messages(0));

@@ -240,6 +240,9 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     reqOne->set_subtype(expectedSubType);
     reqOne->set_contextdata(expectedContextData);
 
+    // Set the singlehost flag to avoid sending snapshots to the planner
+    reqOne->set_singlehost(true);
+
     auto actualDecisionOne = plannerCli.callFunctions(reqOne);
 
     // Check decision is as expected
@@ -292,6 +295,9 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 
     // Create the batch request
     reqTwo->set_type(execMode);
+
+    // Set the singlehost flag to avoid sending snapshots to the planner
+    reqTwo->set_singlehost(true);
 
     // Schedule the functions
     auto actualDecisionTwo = plannerCli.callFunctions(reqTwo);
@@ -369,6 +375,14 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     auto req = faabric::util::batchExecFactory(userName, funcName, 1);
     auto& firstMsg = *req->mutable_messages(0);
     firstMsg.set_inputdata(inputData);
+    firstMsg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
+
+    // If we want to set a function result, the planner must see at least one
+    // slot, and at least one used slot in this host
+    faabric::HostResources res;
+    res.set_slots(1);
+    res.set_usedslots(1);
+    sch.setThisHostResources(res);
 
     sch.setFunctionResult(firstMsg);
 
@@ -429,6 +443,13 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     faabric::Message_MessageType expectedType;
     std::string expectedHost = faabric::util::getSystemConfig().endpointHost;
 
+    // If we want to set a function result, the planner must see at least one
+    // slot, and at least one used slot in this host
+    faabric::HostResources res;
+    res.set_slots(1);
+    res.set_usedslots(1);
+    sch.setThisHostResources(res);
+
     faabric::Message msg;
     SECTION("Running")
     {
@@ -445,6 +466,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         expectedOutput = "I have failed";
         msg.set_outputdata(expectedOutput);
         msg.set_returnvalue(1);
+        msg.set_executedhost(expectedHost);
         sch.setFunctionResult(msg);
 
         expectedReturnValue = 1;
@@ -458,6 +480,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         expectedOutput = "I have succeeded";
         msg.set_outputdata(expectedOutput);
         msg.set_returnvalue(0);
+        msg.set_executedhost(expectedHost);
         sch.setFunctionResult(msg);
 
         expectedReturnValue = 0;
@@ -483,8 +506,16 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     faabric::Message& chainedMsgB = *ber->mutable_messages(2);
     faabric::Message& chainedMsgC = *ber->mutable_messages(3);
 
+    // If we want to set a function result, the planner must see at least one
+    // slot, and at least one used slot in this host
+    faabric::HostResources res;
+    res.set_slots(8);
+    res.set_usedslots(4);
+    sch.setThisHostResources(res);
+
     // We need to set the function result in order to get the chained
     // functions. We can do so multiple times
+    msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
     sch.setFunctionResult(msg);
 
     // Check empty initially
@@ -513,31 +544,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     REQUIRE(faabric::util::getChainedFunctions(msg) == expected);
 }
 
-/* TODO(remote-threads): we disable remote threads temporarily
-TEST_CASE_METHOD(SlowExecutorTestFixture,
-                 "Test non-main batch request returned to main",
-                 "[scheduler]")
-{
-    faabric::util::setMockMode(true);
-
-    std::string otherHost = "other";
-
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("blah", "foo", 1);
-    req->mutable_messages()->at(0).set_mainhost(otherHost);
-
-    faabric::batch_scheduler::SchedulingDecision decision =
-      plannerCli.callFunctions(req);
-    REQUIRE(decision.hosts.empty());
-    REQUIRE(decision.returnHost == otherHost);
-
-    // Check forwarded to main
-    auto actualReqs = faabric::scheduler::getBatchRequests();
-    REQUIRE(actualReqs.size() == 1);
-    REQUIRE(actualReqs.at(0).first == otherHost);
-    REQUIRE(actualReqs.at(0).second->appid() == req->appid());
-}
-
+/* TODO(thread-opt): we don't delete snapshots yet
 TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Test broadcast snapshot deletion",
                  "[scheduler]")
@@ -591,6 +598,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 
     REQUIRE(actualDeleteRequests == expectedDeleteRequests);
 }
+*/
 
 TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Test set thread results on remote host",
@@ -600,6 +608,14 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     msg.set_mainhost("otherHost");
+    msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
+
+    // If we want to set a function result, the planner must see at least one
+    // slot, and at least one used slot in this host
+    faabric::HostResources res;
+    res.set_slots(1);
+    res.set_usedslots(1);
+    sch.setThisHostResources(res);
 
     // Set the thread result
     int returnValue = 123;
@@ -633,7 +649,6 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     REQUIRE(actualRes.key == snapKey);
     REQUIRE(actualRes.diffs.size() == diffs.size());
 }
-*/
 
 TEST_CASE_METHOD(DummyExecutorTestFixture, "Test executor reuse", "[scheduler]")
 {
@@ -705,24 +720,6 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     int appId = firstMsg.appid();
 
-    /*
-    SECTION("No group ID")
-    {
-        groupId = 0;
-    }
-
-    SECTION("With group ID")
-    {
-        groupId = 123;
-    }
-
-    // Set up the group
-    if (groupId > 0) {
-        faabric::transport::PointToPointGroup::addGroup(
-          appId, groupId, groupSize);
-    }
-    */
-
     // Schedule and check decision
     auto actualDecision = plannerCli.callFunctions(req);
     int groupId = actualDecision.groupId;
@@ -757,31 +754,6 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
     REQUIRE(sentMappings.size() == 1);
     REQUIRE(sentMappings.at(0).first == otherHost);
 }
-
-/* TODO(scheduler-cleanup): remove me!
-TEST_CASE_METHOD(DummyExecutorTestFixture,
-                 "Test scheduler register and deregister threads",
-                 "[scheduler]")
-{
-    uint32_t msgIdA = 123;
-    uint32_t msgIdB = 124;
-
-    // Check empty initially
-    REQUIRE(sch.getRegisteredThreads().empty());
-
-    // Register a couple and check they're listed
-    sch.registerThread(msgIdA);
-    sch.registerThread(msgIdB);
-
-    std::vector<uint32_t> expected = { msgIdA, msgIdB };
-    REQUIRE(sch.getRegisteredThreads() == expected);
-
-    // Deregister and check
-    sch.deregisterThread(msgIdB);
-    expected = { msgIdA };
-    REQUIRE(sch.getRegisteredThreads() == expected);
-}
-*/
 
 TEST_CASE_METHOD(DummyExecutorTestFixture,
                  "Test caching message data when setting thread result",

@@ -112,6 +112,16 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
     int nCalls = 30;
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("foo", "bar", nCalls);
+    for (int i = 0; i < req->messages_size(); i++) {
+        req->mutable_messages(i)->set_executedhost(
+          faabric::util::getSystemConfig().endpointHost);
+    }
+
+    // Set resources (used and normal, as we bypass the planner for scheduling)
+    HostResources localHost;
+    localHost.set_slots(nCalls);
+    localHost.set_usedslots(nCalls);
+    sch.setThisHostResources(localHost);
 
     // Make the request
     functionCallClient.executeFunctions(req);
