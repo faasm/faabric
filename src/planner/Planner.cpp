@@ -34,6 +34,23 @@ static void releaseHostSlots(std::shared_ptr<Host> host, int slotsToRelease = 1)
     assert(host->usedslots() >= 0);
 }
 
+static void printHostState(std::map<std::string, std::shared_ptr<Host>> hostMap)
+{
+    std::string printedText;
+    std::string header = "\n-------------- Host Map --------------";
+    std::string subhead = "Ip\t\tSlots";
+    std::string footer = "--------------------------------------";
+
+    printedText += header + "\n" + subhead + "\n";
+    for (const auto& [ip, hostState] : hostMap) {
+        printedText += fmt::format(
+          "{}\t\t{}/{}\n", ip, hostState->usedslots(), hostState->slots());
+    }
+    printedText += footer;
+
+    SPDLOG_DEBUG(printedText);
+}
+
 // ----------------------
 // Planner
 // ----------------------
@@ -383,7 +400,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         }
     }
 
-    printHostMap(hostMapCopy);
+    printHostState(state.hostMap);
     auto decision = batchScheduler->makeSchedulingDecision(
       hostMapCopy, state.inFlightReqs, req);
 
@@ -393,7 +410,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
           "Not enough free slots to schedule app: {} (requested: {})",
           appId,
           req->messages_size());
-        printHostMap(hostMapCopy);
+        printHostState(state.hostMap);
         return decision;
     }
 
@@ -538,6 +555,9 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     if (decisionType != faabric::batch_scheduler::DecisionType::DIST_CHANGE) {
         dispatchSchedulingDecision(req, decision);
     }
+
+    // TODO: remove me (probably)
+    printHostState(state.hostMap);
 
     return decision;
 }

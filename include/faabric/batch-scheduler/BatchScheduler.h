@@ -37,8 +37,6 @@ struct HostState
 typedef std::shared_ptr<HostState> Host;
 typedef std::map<std::string, Host> HostMap;
 
-void printHostMap(HostMap hostMap, const std::string& logLevel = "debug");
-
 /*
  * The batch scheduler makes three different types of scheduling decisions.
  * 1) A `NEW` scheduling decision happens when we are scheduling a BER for the

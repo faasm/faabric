@@ -171,7 +171,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     plannerCli.callFunctions(req1);
 
     // Sleep for a tiny bit for all MPI ranks to begin doing work
-    SLEEP_MS(200);
+    SLEEP_MS(100);
 
     // Update the slots to make space for another app. Same scheduling as
     // the first one: two slots locally, two remotely
@@ -180,16 +180,18 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     plannerCli.callFunctions(req2);
 
     // Sleep for a tiny bit for all MPI ranks to begin doing work
-    SLEEP_MS(200);
+    SLEEP_MS(100);
 
     // Update the slots to create two migration opportunities. For each app, we
     // migrate two ranks from one host to the other. The first app will
-    // migrate towards the local host, and the second one towards the remote
-    // one (we set the used slots to a high value, because if we set it to 0
-    // the planner will find an inconsistent state: we are migrating from
-    // somewhere that has 0 used slots)
-    updateLocalSlots(3 * worldSize, 2 * worldSize);
-    updateRemoteSlots(2 * worldSize, worldSize);
+    // see that there are two free slots in the local host (given the update
+    // below), it will then migrate two ranks, freeing two other ranks in the
+    // remote world. The second app will see those newly freed slots, and use
+    // them to migrate to.
+    // NOTE: if the first app finishes before the second one has checked
+    // for migrations, this would change the direction in which we migrate
+    // (and make the test fail)
+    updateLocalSlots(2 * worldSize, 2 * worldSize - 2);
 
     std::vector<std::string> hostsBeforeMigration1 = {
         getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
