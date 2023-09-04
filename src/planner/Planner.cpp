@@ -34,7 +34,8 @@ static void releaseHostSlots(std::shared_ptr<Host> host, int slotsToRelease = 1)
     assert(host->usedslots() >= 0);
 }
 
-static void printHostState(std::map<std::string, std::shared_ptr<Host>> hostMap)
+static void printHostState(std::map<std::string, std::shared_ptr<Host>> hostMap,
+                           const std::string& logLevel = "debug")
 {
     std::string printedText;
     std::string header = "\n-------------- Host Map --------------";
@@ -48,7 +49,17 @@ static void printHostState(std::map<std::string, std::shared_ptr<Host>> hostMap)
     }
     printedText += footer;
 
-    SPDLOG_DEBUG(printedText);
+    if (logLevel == "debug") {
+        SPDLOG_DEBUG(printedText);
+    } else if (logLevel == "info") {
+        SPDLOG_INFO(printedText);
+    } else if (logLevel == "warn") {
+        SPDLOG_WARN(printedText);
+    } else if (logLevel == "error") {
+        SPDLOG_ERROR(printedText);
+    } else {
+        SPDLOG_ERROR("Unrecognised log level: {}", logLevel);
+    }
 }
 
 // ----------------------
@@ -409,7 +420,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
           "Not enough free slots to schedule app: {} (requested: {})",
           appId,
           req->messages_size());
-        printHostState(state.hostMap);
+        printHostState(state.hostMap, "error");
         return decision;
     }
 
