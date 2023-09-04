@@ -354,15 +354,6 @@ faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
     return decision;
 }
 
-faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::batch_scheduler::SchedulingDecision& hint)
-{
-    // TODO(remote-threads): FIXME
-    SPDLOG_ERROR("Ignoring hints just for the minute...");
-    return callFunctions(req);
-}
-
 faabric::batch_scheduler::SchedulingDecision
 PlannerClient::getSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req)

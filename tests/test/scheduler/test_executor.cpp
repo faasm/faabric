@@ -316,19 +316,6 @@ class TestExecutorFixture
 
     MemoryRegion dummyMemory;
 
-    // TODO: should probably remove this one
-    std::vector<std::string> executeWithTestExecutorHint(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::batch_scheduler::SchedulingDecision hint)
-    {
-        initThreadSnapshot(req);
-
-        conf.overrideCpuCount = 10;
-        conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
-
-        return plannerCli.callFunctions(req, hint).hosts;
-    }
-
     std::vector<std::string> executeWithTestExecutor(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       bool forceLocal)

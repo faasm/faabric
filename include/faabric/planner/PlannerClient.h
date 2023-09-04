@@ -83,14 +83,8 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
     faabric::Message getMessageResult(const faabric::Message& msg,
                                       int timeoutMs);
 
-    // TODO: consider re-factoring to callBatch eventually (and unifying to
-    // one single entrypoint)
     faabric::batch_scheduler::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-    faabric::batch_scheduler::SchedulingDecision callFunctions(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::batch_scheduler::SchedulingDecision& hint);
 
     faabric::batch_scheduler::SchedulingDecision getSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
