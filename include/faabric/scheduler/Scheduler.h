@@ -204,8 +204,6 @@ class Scheduler
 
     size_t getCachedMessageCount();
 
-    void vacateSlot();
-
     std::string getThisHost();
 
     void addHostToGlobalSet();
@@ -250,12 +248,6 @@ class Scheduler
 
     std::unordered_map<uint32_t, faabric::transport::Message>
       threadResultMessages;
-
-    // ---- Host resources and hosts ----
-    faabric::HostResources thisHostResources;
-    std::atomic<int32_t> thisHostUsedSlots = 0;
-
-    void updateHostResources();
 
     // ---- Planner----
     faabric::planner::KeepAliveThread keepAliveThread;

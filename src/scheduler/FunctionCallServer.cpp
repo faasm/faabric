@@ -75,8 +75,6 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
           faabric::util::getSystemConfig().endpointHost);
     }
 
-    // TODO(scheduler-cleanup): consider moving executeBatch from Scheduler to
-    // Executor
     scheduler.executeBatch(
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 }

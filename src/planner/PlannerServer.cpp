@@ -167,7 +167,6 @@ PlannerServer::recvGetSchedulingDecision(std::span<const uint8_t> buffer)
     }
 
     // Build PointToPointMappings from scheduling decision
-    // TODO: should we make this a constructor for PTP mappings?
     faabric::PointToPointMappings mappings;
     mappings.set_appid(decision->appId);
     mappings.set_groupid(decision->groupId);
@@ -191,7 +190,6 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvCallBatch(
     auto decision = planner.callBatch(req);
 
     // Build PointToPointMappings from scheduling decision
-    // TODO: should we make this a constructor for PTP mappings?
     faabric::PointToPointMappings mappings;
     mappings.set_appid(decision->appId);
     mappings.set_groupid(decision->groupId);

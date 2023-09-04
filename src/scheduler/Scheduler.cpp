@@ -36,10 +36,6 @@ Scheduler::Scheduler()
   , reg(faabric::snapshot::getSnapshotRegistry())
   , broker(faabric::transport::getPointToPointBroker())
 {
-    // Set up the initial resources
-    int cores = faabric::util::getUsableCores();
-    thisHostResources.set_slots(cores);
-
     // Start the reaper thread
     reaperThread.start(conf.reaperIntervalSeconds);
 }
@@ -142,12 +138,6 @@ void Scheduler::reset()
 
     // Ensure host is set correctly
     thisHost = faabric::util::getSystemConfig().endpointHost;
-
-    // Reset resources
-    thisHostResources = faabric::HostResources();
-    thisHostResources.set_slots(faabric::util::getUsableCores());
-    thisHostResources.set_usedslots(0);
-    thisHostUsedSlots.store(0, std::memory_order_release);
 
     // Reset scheduler state
     threadResultMessages.clear();
@@ -258,36 +248,15 @@ long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
     return executors[funcStr].size();
 }
 
-void Scheduler::vacateSlot()
-{
-    thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
-}
-
 void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    // TODO: can we do this without a lock, or can we put the lock
-    // elsewhere?
     faabric::util::FullLock lock(mx);
-
-    // -------------------------------------------
-    // THREADS TODO FIXME
-    // -------------------------------------------
 
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     auto funcStr = faabric::util::funcToString(req);
-
-    // -------------------------------------------
-    // SNAPSHOTS FIXME: we need to distribute the snapshots _before_ we
-    // triggere execution, not when we are calling executeBatch!
-    // -------------------------------------------
-
-    // -------------------------------------------
-    // LOCAL EXECTUION
-    // -------------------------------------------
-
     int nMessages = req->messages_size();
 
-    // Records for tests - copy messages before execution to avoid racing on msg
+    // Records for tests - copy messages before execution to avoid races
     if (faabric::util::isTestMode()) {
         for (int i = 0; i < nMessages; i++) {
             recordedMessages.emplace_back(req->messages().at(i));
@@ -488,12 +457,7 @@ size_t Scheduler::getCachedMessageCount()
 
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
-    // Update the planner (no lock required)
     addHostToGlobalSet(thisHost, std::make_shared<faabric::HostResources>(res));
-
-    faabric::util::FullLock lock(mx);
-    thisHostResources = res;
-    this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
 }
 
 // --------------------------------------------

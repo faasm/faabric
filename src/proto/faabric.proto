@@ -138,9 +138,6 @@ message Message {
     repeated int32 chainedMsgIds = 36;
     map<string, int32> intExecGraphDetails = 37;
     map<string, string> execGraphDetails = 38;
-
-    // Scheduling
-    string topologyHint = 40 [json_name = "topology_hint"];
 }
 
 // ---------------------------------------------

@@ -606,12 +606,6 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             availablePoolThreads.insert(threadPoolIdx);
         }
 
-        // Vacate the slot occupied by this task. This must be done after
-        // releasing the claim on this executor, otherwise the scheduler may
-        // try to schedule another function and be unable to reuse this
-        // executor.
-        sch.vacateSlot();
-
         // Finally set the result of the task, this will allow anything
         // waiting on its result to continue execution, therefore must be
         // done once the executor has been reset, otherwise the executor may

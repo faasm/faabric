@@ -400,7 +400,6 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         }
     }
 
-    printHostState(state.hostMap);
     auto decision = batchScheduler->makeSchedulingDecision(
       hostMapCopy, state.inFlightReqs, req);
 
