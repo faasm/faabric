@@ -1,12 +1,7 @@
-// TODO: re-visit includes after re-factor
 #include <faabric/batch-scheduler/BatchScheduler.h>
-#include <faabric/batch-scheduler/DecisionCache.h>
-#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/redis/Redis.h>
-#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -14,24 +9,15 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/batch.h>
+#include <faabric/util/config.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/func.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
-#include <faabric/util/memory.h>
-#include <faabric/util/network.h>
-#include <faabric/util/random.h>
 #include <faabric/util/snapshot.h>
-#include <faabric/util/string_tools.h>
 #include <faabric/util/testing.h>
-#include <faabric/util/timing.h>
-
-#include <sys/eventfd.h>
-#include <sys/file.h>
-#include <sys/syscall.h>
 
 #include <unordered_set>
-
-#define FLUSH_TIMEOUT_MS 10000
 
 using namespace faabric::util;
 using namespace faabric::snapshot;
@@ -422,7 +408,6 @@ void Scheduler::flushLocally()
     getExecutorFactory()->flushHost();
 }
 
-// TODO(scheduler-cleanup): move this to the planner completely
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
     // Set finish timestamp
@@ -468,21 +453,6 @@ void Scheduler::setThreadResult(
     setFunctionResult(msg);
 }
 
-/*
-void Scheduler::setThreadResultLocally(uint32_t appId,
-                                       uint32_t msgId,
-                                       int32_t returnValue)
-{
-    faabric::Message msg;
-    msg.set_id(msgId);
-    msg.set_appid(appId);
-    msg.set_returnvalue(returnValue);
-
-    setFunctionResult(msg);
-}
-*/
-
-// TODO: can we remove this method?
 void Scheduler::setThreadResultLocally(uint32_t appId,
                                        uint32_t msgId,
                                        int32_t returnValue,

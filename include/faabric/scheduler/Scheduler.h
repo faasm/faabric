@@ -1,27 +1,15 @@
 #pragma once
 
-// TODO: re-visit includes after re-factor
-#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/FunctionCallClient.h>
-#include <faabric/scheduler/InMemoryMessageQueue.h>
-#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/PeriodicBackgroundThread.h>
-#include <faabric/util/asio.h>
 #include <faabric/util/clock.h>
-#include <faabric/util/config.h>
-#include <faabric/util/dirty.h>
-#include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/snapshot.h>
-#include <faabric/util/timing.h>
 
 #include <shared_mutex>
-
-#define AVAILABLE_HOST_SET "available_hosts"
 
 namespace faabric::scheduler {
 
@@ -194,20 +182,12 @@ class Scheduler
     // Message results
     // ----------------------------------
 
-    // TODO(planner-scheduler): move this method to the planner client once
-    // the planner controls scheduling
     void setFunctionResult(faabric::Message& msg);
 
     void setThreadResult(faabric::Message& msg,
                          int32_t returnValue,
                          const std::string& key,
                          const std::vector<faabric::util::SnapshotDiff>& diffs);
-
-    /*
-    void setThreadResultLocally(uint32_t appId,
-                                uint32_t msgId,
-                                int32_t returnValue);
-    */
 
     /**
      * Caches a message along with the thread result, to allow the thread result
