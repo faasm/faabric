@@ -464,6 +464,7 @@ class MpiBaseTestFixture
             SLEEP_MS(200);
 
             numRetries += 1;
+            decision = plannerCli.getSchedulingDecision(reqIn);
         }
 
         for (auto mid : decision.messageIds) {

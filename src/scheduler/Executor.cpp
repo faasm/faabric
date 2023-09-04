@@ -354,7 +354,7 @@ std::shared_ptr<faabric::util::SnapshotData> Executor::getMainThreadSnapshot(
     return reg.getSnapshot(snapshotKey);
 }
 
-/*
+/* TODO(thread-opt): currently we never delete snapshots
 void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
 {
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
@@ -409,7 +409,6 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
           task.req->mutable_messages()->at(task.messageIndex);
 
         // Start dirty tracking if executing threads across hosts
-        // bool isSingleHost = task.req->singlehost();
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
         bool doDirtyTracking = isThreads && !task.req->singlehost();
