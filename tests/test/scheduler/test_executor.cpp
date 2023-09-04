@@ -1337,4 +1337,39 @@ TEST_CASE_METHOD(TestExecutorFixture,
     exec->reset(firstMsg);
     REQUIRE(exec->getChainedMessageIds().empty());
 }
+
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test execute threads using top-level function in executor",
+                 "[executor]")
+{
+    int nThreads = 5;
+
+    // Set resources
+    HostResources localHost;
+    localHost.set_slots(2 * nThreads);
+    localHost.set_usedslots(nThreads);
+    sch.setThisHostResources(localHost);
+
+    // Prepare request
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "blah", nThreads);
+    req->set_type(faabric::BatchExecuteRequest::THREADS);
+    // Set single-host to avoid any snapshot sending
+    req->set_singlehost(true);
+
+    // Prepare executor
+    auto exec = std::make_shared<TestExecutor>(*req->mutable_messages(0));
+
+    // Execute directly calling the executor
+    auto results = exec->executeThreads(req, {});
+
+    // Check results
+    REQUIRE(results.size() == req->messages_size());
+    for (const auto& [mid, res] : results) {
+        REQUIRE(res == (mid / 100));
+    }
+
+    // Shut down executor
+    exec->shutdown();
+}
 }

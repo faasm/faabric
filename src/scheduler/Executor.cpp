@@ -117,17 +117,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
 
     std::string funcStr = faabric::util::funcToString(req);
-
-    // Set group ID, this will get overridden in there's a cached decision
-    /*
-    int groupId = faabric::util::generateGid();
-    for (auto& m : *req->mutable_messages()) {
-        m.set_groupid(groupId);
-        m.set_groupsize(req->messages_size());
-    }
-    */
-
     bool isSingleHost = req->singlehost();
+
     // Do snapshotting if not on a single host
     faabric::Message& msg = req->mutable_messages()->at(0);
     std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
