@@ -164,7 +164,8 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
 
     // Update the slots so that a migration opportunity appears. We update
     // either the local or remote worlds to force the migration of one
-    // half of the ranks or the other one
+    // half of the ranks or the other one (we also want to keep some used slots
+    // to prevent the planner reaching an inconsistent state)
     bool migratingMainRank;
 
     SECTION("Migrate main rank")
@@ -172,14 +173,14 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
         // Make more space remotely, so we migrate the first half of ranks
         // (including the main rank)
         migratingMainRank = true;
-        updateRemoteSlots(worldSize);
+        updateRemoteSlots(2 * worldSize, worldSize);
     }
 
     SECTION("Don't migrate main rank")
     {
         // Make more space locally, so we migrate the second half of ranks
         migratingMainRank = false;
-        updateLocalSlots(worldSize);
+        updateLocalSlots(2 * worldSize, worldSize);
     }
 
     // The current function migration approach breaks the execution graph, as

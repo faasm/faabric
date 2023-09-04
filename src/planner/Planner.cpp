@@ -237,7 +237,12 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
     // Release the slot only once
     assert(state.hostMap.contains(msg->executedhost()));
     if (!state.appResults[appId].contains(msgId)) {
-        releaseHostSlots(state.hostMap.at(msg->executedhost()));
+
+        // If the message has been migrated, we have already release the slot
+        // so we don't have to do it here again
+        if (msg->returnvalue() != MIGRATED_FUNCTION_RETURN_VALUE) {
+            releaseHostSlots(state.hostMap.at(msg->executedhost()));
+        }
     }
 
     // Set the result

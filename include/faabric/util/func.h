@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#define MIGRATED_FUNCTION_RETURN_VALUE -99
+
 namespace faabric::util {
 
 class FunctionMigratedException : public faabric::util::FaabricException

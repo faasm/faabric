@@ -1,5 +1,6 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/ExecGraph.h>
+#include <faabric/util/func.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
 
@@ -7,8 +8,6 @@
 #include <sstream>
 
 #define EXEC_GRAPH_TIMEOUT_MS 1000
-// TODO: avoid this duplication
-#define MIGRATED_FUNCTION_RETURN_VALUE -99
 
 namespace faabric::util {
 
