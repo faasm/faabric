@@ -122,14 +122,14 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
         // Make more space remotely, so we migrate the first half of ranks
         // (including the main rank)
         migratingMainRank = true;
-        updateRemoteSlots(worldSize);
+        updateRemoteSlots(2 * worldSize, worldSize);
     }
 
     SECTION("Don't migrate main rank")
     {
         // Make more space locally, so we migrate the second half of ranks
         migratingMainRank = false;
-        updateLocalSlots(worldSize);
+        updateLocalSlots(2 * worldSize, worldSize);
     }
 
     checkAllocationAndResult(req1, 15000);
