@@ -578,7 +578,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 
                 // Delete the main thread snapshot (implicitly does nothing if
                 // doesn't exist)
-                // TODO: cleanup snapshots (from planner maybe?)
+                // TODO(thread-opt): cleanup snapshots (from planner maybe?)
                 // deleteMainThreadSnapshot(msg);
             }
         }

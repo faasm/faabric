@@ -170,25 +170,6 @@ void SnapshotClient::pushSnapshotUpdate(
     }
 }
 
-void SnapshotClient::deleteSnapshot(const std::string& key)
-{
-    if (faabric::util::isMockMode()) {
-        faabric::util::UniqueLock lock(mockMutex);
-        snapshotDeletes.emplace_back(host, key);
-
-    } else {
-        SPDLOG_DEBUG("Deleting snapshot {} from {}", key, host);
-
-        // TODO - avoid copying data here
-        flatbuffers::FlatBufferBuilder mb;
-        auto keyOffset = mb.CreateString(key);
-        auto requestOffset = CreateSnapshotDeleteRequest(mb, keyOffset);
-        mb.Finish(requestOffset);
-
-        SEND_FB_MSG_ASYNC(SnapshotCalls::DeleteSnapshot, mb);
-    }
-}
-
 void SnapshotClient::pushThreadResult(
   uint32_t appId,
   uint32_t messageId,
@@ -239,7 +220,26 @@ void SnapshotClient::pushThreadResult(
     }
 }
 
-/*
+/* TODO(thread-opt): currently we don't delete snapshots in threads
+void SnapshotClient::deleteSnapshot(const std::string& key)
+{
+    if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
+        snapshotDeletes.emplace_back(host, key);
+
+    } else {
+        SPDLOG_DEBUG("Deleting snapshot {} from {}", key, host);
+
+        // TODO - avoid copying data here
+        flatbuffers::FlatBufferBuilder mb;
+        auto keyOffset = mb.CreateString(key);
+        auto requestOffset = CreateSnapshotDeleteRequest(mb, keyOffset);
+        mb.Finish(requestOffset);
+
+        SEND_FB_MSG_ASYNC(SnapshotCalls::DeleteSnapshot, mb);
+    }
+}
+
 void SnapshotClient::broadcastSnapshotDelete(const std::string& snapshotKey)
 {
     std::set<std::string> hostsToSendDelete;

@@ -5,6 +5,7 @@
 #include <faabric/mpi/mpi.h>
 #include <faabric/mpi/mpi.pb.h>
 #include <faabric/scheduler/ExecutorContext.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>

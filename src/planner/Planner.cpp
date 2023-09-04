@@ -556,9 +556,6 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         dispatchSchedulingDecision(req, decision);
     }
 
-    // TODO: remove me (probably)
-    printHostState(state.hostMap);
-
     return decision;
 }
 
@@ -590,7 +587,6 @@ void Planner::dispatchSchedulingDecision(
             hostRequests[thisHost]->set_subtype(req->subtype());
             hostRequests[thisHost]->set_contextdata(req->contextdata());
 
-            // TODO: request is ALWAYS single host
             if (decision->isSingleHost()) {
                 hostRequests[thisHost]->set_singlehost(true);
             }
@@ -620,7 +616,7 @@ void Planner::dispatchSchedulingDecision(
             try {
                 auto snap = snapshotRegistry.getSnapshot(snapshotKey);
 
-                // TODO: push only diffs
+                // TODO(thread-opt): push only diffs
                 if (hostIp != req->messages(0).mainhost()) {
                     faabric::snapshot::getSnapshotClient(hostIp)->pushSnapshot(
                       snapshotKey, snap);
