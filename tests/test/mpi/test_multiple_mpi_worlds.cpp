@@ -100,23 +100,34 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     int expectedMsgCount = worldSizeA + worldSizeB;
     REQUIRE(actual.size() == expectedMsgCount);
 
-    for (int i = 0; i < expectedMsgCount; i++) {
-        faabric::Message actualCall = actual.at(i);
-        if (i < worldSizeA) {
-            REQUIRE(actualCall.user() == userA);
-            REQUIRE(actualCall.function() == funcA);
-            REQUIRE(actualCall.ismpi());
-            REQUIRE(actualCall.mpiworldid() == worldIdA);
-            REQUIRE(actualCall.mpirank() == i);
-            REQUIRE(actualCall.mpiworldsize() == worldSizeA);
+    // Sort the messages by world and by rank so that we don't have races
+    // between messages from different ranks
+    std::vector<Message> worldAMsg(worldSizeA);
+    std::vector<Message> worldBMsg(worldSizeB);
+    for (const auto& msg : actual) {
+        if (msg.mpiworldid() == worldIdA) {
+            worldAMsg.at(msg.mpirank()) = msg;
         } else {
-            REQUIRE(actualCall.user() == userB);
-            REQUIRE(actualCall.function() == funcB);
-            REQUIRE(actualCall.ismpi());
-            REQUIRE(actualCall.mpiworldid() == worldIdB);
-            REQUIRE(actualCall.mpirank() == i - worldSizeA);
-            REQUIRE(actualCall.mpiworldsize() == worldSizeB);
+            worldBMsg.at(msg.mpirank()) = msg;
         }
+    }
+
+    for (int i = 0; i < worldSizeA; i++) {
+        REQUIRE(worldAMsg.at(i).user() == userA);
+        REQUIRE(worldAMsg.at(i).function() == funcA);
+        REQUIRE(worldAMsg.at(i).ismpi());
+        REQUIRE(worldAMsg.at(i).mpiworldid() == worldIdA);
+        REQUIRE(worldAMsg.at(i).mpirank() == i);
+        REQUIRE(worldAMsg.at(i).mpiworldsize() == worldSizeA);
+    }
+
+    for (int i = 0; i < worldSizeB; i++) {
+        REQUIRE(worldBMsg.at(i).user() == userB);
+        REQUIRE(worldBMsg.at(i).function() == funcB);
+        REQUIRE(worldBMsg.at(i).ismpi());
+        REQUIRE(worldBMsg.at(i).mpiworldid() == worldIdB);
+        REQUIRE(worldBMsg.at(i).mpirank() == i);
+        REQUIRE(worldBMsg.at(i).mpiworldsize() == worldSizeB);
     }
 
     // Check that this host is registered as the main
