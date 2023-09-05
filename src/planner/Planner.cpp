@@ -404,6 +404,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     // on the old decision (we don't care the one we send), so we make sure
     // we are scheduling the same messages from the old request
     if (decisionType == faabric::batch_scheduler::DecisionType::DIST_CHANGE) {
+        SPDLOG_INFO("App {} asked for migration opportunities");
         auto oldReq = state.inFlightReqs.at(appId).first;
         req->clear_messages();
         for (const auto& msg : oldReq->messages()) {
@@ -425,7 +426,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     }
 
     if (*decision == DO_NOT_MIGRATE_DECISION) {
-        SPDLOG_DEBUG("Decided to not migrate app: {}", appId);
+        SPDLOG_INFO("Decided to not migrate app: {}", appId);
         return decision;
     }
 
@@ -493,13 +494,16 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             break;
         }
         case faabric::batch_scheduler::DecisionType::DIST_CHANGE: {
-            // 0. Log the decision in debug mode
-#ifndef NDEBUG
-            decision->print();
-#endif
-
             auto oldReq = state.inFlightReqs.at(appId).first;
             auto oldDec = state.inFlightReqs.at(appId).second;
+
+            // 0. For the time being, when migrating we always print both
+            // decisions (old and new)
+            SPDLOG_INFO("Decided to migrate app {}!", appId);
+            SPDLOG_INFO("Old decision:");
+            oldDec->print("info");
+            SPDLOG_INFO("New decision:");
+            decision->print("info");
 
             // We want to let all hosts involved in the migration (not only
             // those in the new decision) that we are gonna migrate. For the
