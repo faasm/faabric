@@ -433,9 +433,9 @@ void Scheduler::setThreadResultLocally(uint32_t appId,
 }
 
 // TODO(scheduler-cleanup): move method elsewhere
-// TODO: set timeout to constant (or argument)
 std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  int timeoutMs)
 {
     std::vector<std::pair<uint32_t, int32_t>> results;
     results.reserve(req->messages_size());
@@ -443,7 +443,7 @@ std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
         uint32_t messageId = req->messages().at(i).id();
 
         auto msgResult = faabric::planner::getPlannerClient().getMessageResult(
-          req->appid(), messageId, 500);
+          req->appid(), messageId, timeoutMs);
         results.emplace_back(messageId, msgResult.returnvalue());
     }
 

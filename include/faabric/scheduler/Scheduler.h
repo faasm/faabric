@@ -11,6 +11,8 @@
 
 #include <shared_mutex>
 
+#define DEFAULT_THREAD_RESULT_TIMEOUT_MS 1000
+
 namespace faabric::scheduler {
 
 class Scheduler;
@@ -200,7 +202,8 @@ class Scheduler
                                 faabric::transport::Message& message);
 
     std::vector<std::pair<uint32_t, int32_t>> awaitThreadResults(
-      std::shared_ptr<faabric::BatchExecuteRequest> req);
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      int timeoutMs = DEFAULT_THREAD_RESULT_TIMEOUT_MS);
 
     size_t getCachedMessageCount();
 

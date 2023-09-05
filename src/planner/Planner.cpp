@@ -45,7 +45,7 @@ static void printHostState(std::map<std::string, std::shared_ptr<Host>> hostMap,
     printedText += header + "\n" + subhead + "\n";
     for (const auto& [ip, hostState] : hostMap) {
         printedText += fmt::format(
-          "{}\t\t{}/{}\n", ip, hostState->usedslots(), hostState->slots());
+          "{}\t{}/{}\n", ip, hostState->usedslots(), hostState->slots());
     }
     printedText += footer;
 

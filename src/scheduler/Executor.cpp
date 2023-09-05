@@ -163,8 +163,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
     // Invoke threads and await
     auto decision = faabric::planner::getPlannerClient().callFunctions(req);
-    std::vector<std::pair<uint32_t, int32_t>> results =
-      sch.awaitThreadResults(req);
+    std::vector<std::pair<uint32_t, int32_t>> results = sch.awaitThreadResults(
+      req, faabric::util::getSystemConfig().boundTimeout);
 
     // Perform snapshot updates if not on single host
     if (!isSingleHost) {
