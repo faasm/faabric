@@ -54,6 +54,26 @@ SchedulingDecision SchedulingDecision::fromPointToPointMappings(
     return decision;
 }
 
+void SchedulingDecision::removeMessage(int32_t messageId)
+{
+    nFunctions--;
+
+    // Work out the index for the to-be-deleted message
+    auto idxItr = std::find(messageIds.begin(), messageIds.end(), messageId);
+    if (idxItr == messageIds.end()) {
+        SPDLOG_ERROR("Attempting to remove a message id ({}) that is not in "
+                     "the scheduling decision!",
+                     messageId);
+        throw std::runtime_error("Removing non-existant message!");
+    }
+    int idx = std::distance(messageIds.begin(), idxItr);
+
+    hosts.erase(hosts.begin() + idx);
+    messageIds.erase(messageIds.begin() + idx);
+    appIdxs.erase(appIdxs.begin() + idx);
+    groupIdxs.erase(groupIdxs.begin() + idx);
+}
+
 std::set<std::string> SchedulingDecision::uniqueHosts()
 {
     return std::set<std::string>(hosts.begin(), hosts.end());

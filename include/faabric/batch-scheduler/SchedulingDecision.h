@@ -99,6 +99,8 @@ class SchedulingDecision
                     int32_t appIdx,
                     int32_t groupIdx);
 
+    void removeMessage(int32_t messageId);
+
     std::set<std::string> uniqueHosts();
 
     void print(const std::string& logLevel = "debug");
