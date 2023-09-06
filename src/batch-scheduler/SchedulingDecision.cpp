@@ -80,9 +80,9 @@ std::set<std::string> SchedulingDecision::uniqueHosts()
 
 void SchedulingDecision::print(const std::string& logLevel)
 {
-    std::string printedText;
+    std::string printedText = "Printing scheduling decision:";
     printedText += fmt::format(
-      "-------------- Decision for App: {} ----------------\n", appId);
+      "\n-------------- Decision for App: {} ----------------\n", appId);
     printedText += "MsgId\tAppId\tGroupId\tGrIdx\tHostIp\n";
     // Modulo a big number so that we can get the UUIDs to fit within one tab
     int formatBase = 1e6;

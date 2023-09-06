@@ -18,8 +18,10 @@ using namespace faabric::scheduler;
 namespace tests {
 TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
 {
-    // Create the world
+    // Create the world (call the request first to make sure the planner has
+    // the message stored)
     MpiWorld world;
+    plannerCli.callFunctions(req);
     world.create(msg, worldId, worldSize);
     msg.set_ismpi(true);
     msg.set_mpiworldid(worldId);
@@ -61,6 +63,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating world of size 1", "[mpi]")
     // Create a world of size 1
     MpiWorld world;
     int worldSize = 1;
+    plannerCli.callFunctions(req);
     REQUIRE_NOTHROW(world.create(msg, worldId, worldSize));
 
     REQUIRE(world.getSize() == worldSize);
@@ -99,8 +102,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test cartesian communicator", "[mpi]")
             { 4, 1, 0, 0, 0, 0 }, { 0, 2, 1, 1, 1, 1 }, { 1, 3, 2, 2, 2, 2 },
             { 2, 4, 3, 3, 3, 3 }, { 3, 0, 4, 4, 4, 4 },
         };
-        world.create(msg, worldId, worldSize);
     }
+
     SECTION("2 x 2 grid")
     {
         // 4 processes create a 2x2 grid
@@ -120,8 +123,10 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test cartesian communicator", "[mpi]")
             { 0, 0, 3, 3, 2, 2 },
             { 1, 1, 2, 2, 3, 3 },
         };
-        world.create(msg, worldId, worldSize);
     }
+
+    plannerCli.callFunctions(req);
+    world.create(msg, worldId, worldSize);
 
     // Get coordinates from rank
     for (int i = 0; i < worldSize; i++) {
@@ -175,6 +180,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test local barrier", "[mpi]")
     // Create the world
     int worldSize = 2;
     MpiWorld world;
+    plannerCli.callFunctions(req);
     world.create(msg, worldId, worldSize);
 
     int rankA1 = 0;
@@ -1227,10 +1233,11 @@ TEST_CASE_METHOD(MpiTestFixture, "Test scan", "[mpi]")
 TEST_CASE_METHOD(MpiBaseTestFixture, "Test all-to-all", "[mpi]")
 {
     // For this test we need a fixed world size of 4, otherwise the built
-    // expectation won't match
+    // expectation won't match. Thus, we use the base test fixture
     int worldSize = 4;
     msg.set_mpiworldsize(worldSize);
     MpiWorld world;
+    plannerCli.callFunctions(req);
     world.create(msg, worldId, worldSize);
 
     // Build inputs and expected

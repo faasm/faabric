@@ -413,7 +413,7 @@ class MpiBaseTestFixture
 
         // Call the request, so that we have the original message recorded
         // in the planner
-        plannerCli.callFunctions(req);
+        // plannerCli.callFunctions(req);
     }
 
     ~MpiBaseTestFixture()
@@ -458,13 +458,21 @@ class MpiBaseTestFixture
                 throw std::runtime_error("Timed-out waiting for MPI messges");
             }
 
-            SPDLOG_DEBUG("Waiting for MPI messages to be scheduled ({}/{})",
-                         decision.messageIds.size(),
-                         expectedWorldSize);
+            SPDLOG_DEBUG(
+              "Waiting for MPI messages to be scheduled (app: {} - {}/{})",
+              reqIn->appid(),
+              decision.messageIds.size(),
+              expectedWorldSize);
             SLEEP_MS(200);
 
             numRetries += 1;
             decision = plannerCli.getSchedulingDecision(reqIn);
+
+            // If the decision has no app ID, it means that the app has
+            // already finished, so we don't even have to wait for the messages
+            if (decision.appId == 0) {
+                return;
+            }
         }
 
         for (auto mid : decision.messageIds) {
@@ -476,7 +484,11 @@ class MpiBaseTestFixture
 class MpiTestFixture : public MpiBaseTestFixture
 {
   public:
-    MpiTestFixture() { world.create(msg, worldId, worldSize); }
+    MpiTestFixture()
+    {
+        plannerCli.callFunctions(req);
+        world.create(msg, worldId, worldSize);
+    }
 
     ~MpiTestFixture() { world.destroy(); }
 
@@ -512,6 +524,7 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     {
         // Update message
         msg.set_mpiworldsize(worldSize);
+        plannerCli.callFunctions(req);
 
         // Set up the first world, holding the main rank (which already takes
         // one slot).

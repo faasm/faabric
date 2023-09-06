@@ -94,9 +94,6 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
 
     // Check that chained function calls are made as expected
     auto actual = sch.getRecordedMessages();
-    // The first recorded message is sent as part of the test fixture, so we
-    // remove it
-    actual.erase(actual.begin());
     int expectedMsgCount = worldSizeA + worldSizeB;
     REQUIRE(actual.size() == expectedMsgCount);
 

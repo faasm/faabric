@@ -281,19 +281,23 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
         // We don't want to error if any client uses `setMessageResult`
         // liberally. This means that it may happen that when we set a message
         // result a second time, the app is already not in-flight
-        SPDLOG_DEBUG("Setting result for non-existant (or finished) app: {}", appId);
+        SPDLOG_DEBUG("Setting result for non-existant (or finished) app: {}",
+                     appId);
     } else {
         auto req = state.inFlightReqs.at(appId).first;
         auto decision = state.inFlightReqs.at(appId).second;
 
         // Work out the message position in the BER
-        auto it = std::find_if(req->messages().begin(),
-                               req->messages().end(),
-                               [&](auto innerMsg) { return innerMsg.id() == msg->id(); });
+        auto it = std::find_if(
+          req->messages().begin(), req->messages().end(), [&](auto innerMsg) {
+              return innerMsg.id() == msg->id();
+          });
         if (it == req->messages().end()) {
             // Ditto as before. We want to allow setting the message result
             // more than once without breaking
-            SPDLOG_DEBUG("Setting result for non-existant (or finished) message: {}", appId);
+            SPDLOG_DEBUG(
+              "Setting result for non-existant (or finished) message: {}",
+              appId);
         } else {
             SPDLOG_DEBUG("Removing message {} from app {}", msg->id(), appId);
 
@@ -419,8 +423,9 @@ faabric::batch_scheduler::InFlightReqs Planner::getInFlightReqs()
     faabric::batch_scheduler::InFlightReqs inFlightReqsCopy;
     for (const auto& [appId, inFlightPair] : state.inFlightReqs) {
         inFlightReqsCopy[appId] = std::make_pair(
-            std::make_shared<BatchExecuteRequest>(*inFlightPair.first),
-            std::make_shared<faabric::batch_scheduler::SchedulingDecision>(*inFlightPair.second));
+          std::make_shared<BatchExecuteRequest>(*inFlightPair.first),
+          std::make_shared<faabric::batch_scheduler::SchedulingDecision>(
+            *inFlightPair.second));
     }
 
     return inFlightReqsCopy;

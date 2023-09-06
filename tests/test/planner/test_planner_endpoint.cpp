@@ -528,18 +528,99 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
                  "[planner]")
 {
     // First, prepare an HTTP request to execute a batch
-    int numMessages = 1;
+    int numMessages = 5;
     HttpMessage msg;
     msg.set_type(HttpMessage_Type_EXECUTE_BATCH);
     auto ber = faabric::util::batchExecFactory("foo", "bar", numMessages);
     int appId = ber->appid();
-    int msgId = ber->messages(0).id();
     msg.set_payloadjson(faabric::util::messageToJson(*ber));
+
+    // At the begining, there should be no in-flight apps
+    HttpMessage inFlightMsg;
+    inFlightMsg.set_type(HttpMessage_Type_GET_IN_FLIGHT_APPS);
+    GetInFlightAppsResponse expectedResponse;
+    msgJsonStr = faabric::util::messageToJson(inFlightMsg);
+    expectedResponseBody = faabric::util::messageToJson(expectedResponse);
+    expectedReturnCode = beast::http::status::ok;
+
+    // Post the first in-flight request
+    std::pair<int, std::string> result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+    REQUIRE(result.second == expectedResponseBody);
+
+    // Now prepare the expected in-flight response once we schedule one batch
+    auto* inFlightApp = expectedResponse.add_apps();
+    inFlightApp->set_appid(appId);
+    for (int i = 0; i < ber->messages_size(); i++) {
+        inFlightApp->add_hostips(conf.endpointHost);
+    }
+    expectedResponseBody = faabric::util::messageToJson(expectedResponse);
+    expectedReturnCode = beast::http::status::ok;
 
     // Execute the batch
     msgJsonStr = faabric::util::messageToJson(msg);
-    std::pair<int, std::string> result = doPost(msgJsonStr);
+    result = doPost(msgJsonStr);
     REQUIRE(boost::beast::http::int_to_status(result.first) ==
             beast::http::status::ok);
+
+    // Get the in-flight app another time, now there should be one app
+    msg.set_type(HttpMessage_Type_GET_IN_FLIGHT_APPS);
+    msgJsonStr = faabric::util::messageToJson(msg);
+    result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+    REQUIRE(result.second == expectedResponseBody);
+
+    // After the batch has finished executing, there should be no more
+    // in-flight apps (we poll the planner until all messages have finished)
+    HttpMessage statusMsg;
+    statusMsg.set_type(HttpMessage_Type_EXECUTE_BATCH_STATUS);
+    auto berStatus = faabric::util::batchExecStatusFactory(appId);
+    berStatus->set_expectednummessages(numMessages);
+    statusMsg.set_payloadjson(faabric::util::messageToJson(*berStatus));
+    std::string statusMsgStr = faabric::util::messageToJson(statusMsg);
+
+    // Poll the planner a number of times (it may be that the app is not
+    // registered in the results yet, so we consider that case too)
+    bool hasFinished = false;
+    for (int i = 0; i < 5; i++) {
+        int timeoutMs = 200;
+        result = doPost(statusMsgStr);
+
+        if (boost::beast::http::int_to_status(result.first) ==
+            beast::http::status::internal_server_error) {
+            // Such an error could be because the app is not registered in the
+            // results yet, we are fine with that
+            SLEEP_MS(timeoutMs);
+            continue;
+        }
+
+        REQUIRE(boost::beast::http::int_to_status(result.first) ==
+                beast::http::status::ok);
+        BatchExecuteRequestStatus actualBerStatus;
+        faabric::util::jsonToMessage(result.second, &actualBerStatus);
+
+        if (actualBerStatus.finished()) {
+            hasFinished = true;
+        }
+
+        SLEEP_MS(timeoutMs);
+    }
+
+    if (!hasFinished) {
+        SPDLOG_ERROR("Timed-out waiting for app {} to finish!", appId);
+        throw std::runtime_error("Timed-out waiting for app to finish");
+    }
+
+    // Once we are sure the batch has finished, check again that there are
+    // zero apps in-flight
+    GetInFlightAppsResponse emptyExpectedResponse;
+    msgJsonStr = faabric::util::messageToJson(inFlightMsg);
+    expectedResponseBody = faabric::util::messageToJson(emptyExpectedResponse);
+    result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            beast::http::status::ok);
+    REQUIRE(result.second == expectedResponseBody);
 }
 }

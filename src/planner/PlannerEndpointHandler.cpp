@@ -157,7 +157,8 @@ void PlannerEndpointHandler::onRequest(
             SPDLOG_DEBUG("Planner received GET_IN_FLIGHT_APPS request");
 
             // Get in-flight apps
-            auto inFlightApps = faabric::planner::getPlanner().getInFlightReqs();
+            auto inFlightApps =
+              faabric::planner::getPlanner().getInFlightReqs();
 
             // Prepare response
             faabric::planner::GetInFlightAppsResponse inFlightAppsResponse;
@@ -171,7 +172,8 @@ void PlannerEndpointHandler::onRequest(
             }
 
             response.result(beast::http::status::ok);
-            response.body() = faabric::util::messageToJson(inFlightAppsResponse);
+            response.body() =
+              faabric::util::messageToJson(inFlightAppsResponse);
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_EXECUTE_BATCH: {
