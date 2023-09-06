@@ -404,7 +404,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     // on the old decision (we don't care the one we send), so we make sure
     // we are scheduling the same messages from the old request
     if (decisionType == faabric::batch_scheduler::DecisionType::DIST_CHANGE) {
-        SPDLOG_INFO("App {} asked for migration opportunities");
+        SPDLOG_INFO("App {} asked for migration opportunities", appId);
         auto oldReq = state.inFlightReqs.at(appId).first;
         req->clear_messages();
         for (const auto& msg : oldReq->messages()) {

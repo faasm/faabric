@@ -184,26 +184,24 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
 
     // Update the slots to create two migration opportunities. For each app, we
     // migrate two ranks from one host to the other. The first app will
-    // see that there are two free slots in the local host (given the update
+    // see that there are two free slots in the remote host (given the update
     // below), it will then migrate two ranks, freeing two other ranks in the
-    // remote world. The second app will see those newly freed slots, and use
+    // local world. The second app will see those newly freed slots, and use
     // them to migrate to.
-    // NOTE: if the first app finishes before the second one has checked
-    // for migrations, this would change the direction in which we migrate
-    // (and make the test fail)
-    updateLocalSlots(2 * worldSize, 2 * worldSize - 2);
+    updateLocalSlots(3 * worldSize, 3 * worldSize);
+    updateRemoteSlots(2 * worldSize, 2 * worldSize - 2);
 
     std::vector<std::string> hostsBeforeMigration1 = {
         getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
     };
-    std::vector<std::string> hostsAfterMigration1(worldSize, getMasterIP());
+    std::vector<std::string> hostsAfterMigration1(worldSize, getWorkerIP());
     checkAllocationAndResultMigration(
       req1, hostsBeforeMigration1, hostsAfterMigration1, 15000);
 
     std::vector<std::string> hostsBeforeMigration2 = {
         getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
     };
-    std::vector<std::string> hostsAfterMigration2(worldSize, getWorkerIP());
+    std::vector<std::string> hostsAfterMigration2(worldSize, getMasterIP());
     checkAllocationAndResultMigration(
       req2, hostsBeforeMigration2, hostsAfterMigration2, 15000);
 }
