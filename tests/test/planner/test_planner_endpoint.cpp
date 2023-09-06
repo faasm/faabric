@@ -522,4 +522,24 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
             expectedReturnCode);
     REQUIRE(result.second == expectedResponseBody);
 }
+
+TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
+                 "Check getting all in-flight apps through endpoint",
+                 "[planner]")
+{
+    // First, prepare an HTTP request to execute a batch
+    int numMessages = 1;
+    HttpMessage msg;
+    msg.set_type(HttpMessage_Type_EXECUTE_BATCH);
+    auto ber = faabric::util::batchExecFactory("foo", "bar", numMessages);
+    int appId = ber->appid();
+    int msgId = ber->messages(0).id();
+    msg.set_payloadjson(faabric::util::messageToJson(*ber));
+
+    // Execute the batch
+    msgJsonStr = faabric::util::messageToJson(msg);
+    std::pair<int, std::string> result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            beast::http::status::ok);
+}
 }

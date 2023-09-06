@@ -69,6 +69,9 @@ class Planner
     std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>
     getSchedulingDecision(std::shared_ptr<BatchExecuteRequest> req);
 
+    faabric::batch_scheduler::InFlightReqs getInFlightReqs();
+
+    // Main entrypoint to request the execution of batches
     std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> callBatch(
       std::shared_ptr<BatchExecuteRequest> req);
 

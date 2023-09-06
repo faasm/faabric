@@ -153,6 +153,27 @@ void PlannerEndpointHandler::onRequest(
             }
             return ctx.sendFunction(std::move(response));
         }
+        case faabric::planner::HttpMessage_Type_GET_IN_FLIGHT_APPS: {
+            SPDLOG_DEBUG("Planner received GET_IN_FLIGHT_APPS request");
+
+            // Get in-flight apps
+            auto inFlightApps = faabric::planner::getPlanner().getInFlightReqs();
+
+            // Prepare response
+            faabric::planner::GetInFlightAppsResponse inFlightAppsResponse;
+            for (const auto& [appId, inFlightPair] : inFlightApps) {
+                auto decision = inFlightPair.second;
+                auto* inFlightAppResp = inFlightAppsResponse.add_apps();
+                inFlightAppResp->set_appid(appId);
+                for (const auto& hostIp : decision->hosts) {
+                    inFlightAppResp->add_hostips(hostIp);
+                }
+            }
+
+            response.result(beast::http::status::ok);
+            response.body() = faabric::util::messageToJson(inFlightAppsResponse);
+            return ctx.sendFunction(std::move(response));
+        }
         case faabric::planner::HttpMessage_Type_EXECUTE_BATCH: {
             // in: BatchExecuteRequest
             // out: BatchExecuteRequestStatus

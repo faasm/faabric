@@ -276,7 +276,48 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
     // Set the result
     state.appResults[appId][msgId] = msg;
 
-    // Dispatch an async message to all hosts that are waiting
+    // Remove the message from the in-flight requests
+    if (!state.inFlightReqs.contains(appId)) {
+        // We don't want to error if any client uses `setMessageResult`
+        // liberally. This means that it may happen that when we set a message
+        // result a second time, the app is already not in-flight
+        SPDLOG_DEBUG("Setting result for non-existant (or finished) app: {}", appId);
+    } else {
+        auto req = state.inFlightReqs.at(appId).first;
+        auto decision = state.inFlightReqs.at(appId).second;
+
+        // Work out the message position in the BER
+        auto it = std::find_if(req->messages().begin(),
+                               req->messages().end(),
+                               [&](auto innerMsg) { return innerMsg.id() == msg->id(); });
+        if (it == req->messages().end()) {
+            // Ditto as before. We want to allow setting the message result
+            // more than once without breaking
+            SPDLOG_DEBUG("Setting result for non-existant (or finished) message: {}", appId);
+        } else {
+            SPDLOG_DEBUG("Removing message {} from app {}", msg->id(), appId);
+
+            // Remove message from in-flight requests
+            req->mutable_messages()->erase(it);
+
+            // Remove message from decision
+            decision->removeMessage(msg->id());
+
+            // Remove pair altogether if no more messages left
+            if (req->messages_size() == 0) {
+                SPDLOG_INFO("Planner removing app {} from in-flight", appId);
+                assert(decision->nFunctions == 0);
+                assert(decision->hosts.empty());
+                assert(decision->messageIds.empty());
+                assert(decision->appIdxs.empty());
+                assert(decision->groupIdxs.empty());
+                state.inFlightReqs.erase(appId);
+            }
+        }
+    }
+
+    // Finally, dispatch an async message to all hosts that are waiting once
+    // all planner accounting is updated
     if (state.appResultWaiters.find(msgId) != state.appResultWaiters.end()) {
         for (const auto& host : state.appResultWaiters[msgId]) {
             SPDLOG_DEBUG("Sending result to waiting host: {}", host);
@@ -368,6 +409,21 @@ Planner::getSchedulingDecision(std::shared_ptr<BatchExecuteRequest> req)
     }
 
     return state.inFlightReqs.at(appId).second;
+}
+
+faabric::batch_scheduler::InFlightReqs Planner::getInFlightReqs()
+{
+    faabric::util::SharedLock lock(plannerMx);
+
+    // Deliberately deep copy here
+    faabric::batch_scheduler::InFlightReqs inFlightReqsCopy;
+    for (const auto& [appId, inFlightPair] : state.inFlightReqs) {
+        inFlightReqsCopy[appId] = std::make_pair(
+            std::make_shared<BatchExecuteRequest>(*inFlightPair.first),
+            std::make_shared<faabric::batch_scheduler::SchedulingDecision>(*inFlightPair.second));
+    }
+
+    return inFlightReqsCopy;
 }
 
 static faabric::batch_scheduler::HostMap convertToBatchSchedHostMap(
