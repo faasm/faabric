@@ -37,12 +37,13 @@ message HttpMessage {
         RESET = 1;
         FLUSH_AVAILABLE_HOSTS = 2;
         FLUSH_EXECUTORS = 3;
-        GET_AVAILABLE_HOSTS = 4;
-        GET_CONFIG = 5;
-        GET_EXEC_GRAPH = 6;
-        GET_IN_FLIGHT_APPS = 7;
-        EXECUTE_BATCH = 8;
-        EXECUTE_BATCH_STATUS = 9;
+        FLUSH_SCHEDULING_STATE = 4;
+        GET_AVAILABLE_HOSTS = 5;
+        GET_CONFIG = 6;
+        GET_EXEC_GRAPH = 7;
+        GET_IN_FLIGHT_APPS = 8;
+        EXECUTE_BATCH = 9;
+        EXECUTE_BATCH_STATUS = 10;
     }
 
     Type type = 1 [json_name = "http_type"];

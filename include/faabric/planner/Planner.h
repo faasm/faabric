@@ -14,6 +14,7 @@ enum FlushType
     NoFlushType = 0,
     Hosts = 1,
     Executors = 2,
+    SchedulingState = 3,
 };
 
 /* The planner is a standalone component that has a global view of the state
@@ -93,6 +94,8 @@ class Planner
     void flushHosts();
 
     void flushExecutors();
+
+    void flushSchedulingState();
 
     // ----------
     // Host membership private API

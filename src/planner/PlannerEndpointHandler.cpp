@@ -65,8 +65,10 @@ void PlannerEndpointHandler::onRequest(
         }
         case faabric::planner::HttpMessage_Type_FLUSH_AVAILABLE_HOSTS: {
             SPDLOG_DEBUG("Planner received FLUSH_AVAILABLE_HOSTS request");
+
             bool success = faabric::planner::getPlanner().flush(
               faabric::planner::FlushType::Hosts);
+
             if (success) {
                 response.result(beast::http::status::ok);
                 response.body() = std::string("Flushed available hosts!");
@@ -75,6 +77,7 @@ void PlannerEndpointHandler::onRequest(
                 response.body() =
                   std::string("Failed flushing available hosts!");
             }
+
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_FLUSH_EXECUTORS: {
@@ -88,6 +91,17 @@ void PlannerEndpointHandler::onRequest(
                 response.result(beast::http::status::internal_server_error);
                 response.body() = std::string("Failed flushing executors!");
             }
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_FLUSH_SCHEDULING_STATE: {
+            SPDLOG_DEBUG("Planner received FLUSH_SCHEDULING_STATE request");
+
+            faabric::planner::getPlanner().flush(
+              faabric::planner::FlushType::SchedulingState);
+
+            response.result(beast::http::status::ok);
+            response.body() = std::string("Flushed scheduling state!");
+
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_GET_AVAILABLE_HOSTS: {
