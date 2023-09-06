@@ -56,8 +56,6 @@ SchedulingDecision SchedulingDecision::fromPointToPointMappings(
 
 void SchedulingDecision::removeMessage(int32_t messageId)
 {
-    nFunctions--;
-
     // Work out the index for the to-be-deleted message
     auto idxItr = std::find(messageIds.begin(), messageIds.end(), messageId);
     if (idxItr == messageIds.end()) {
@@ -68,6 +66,7 @@ void SchedulingDecision::removeMessage(int32_t messageId)
     }
     int idx = std::distance(messageIds.begin(), idxItr);
 
+    nFunctions--;
     hosts.erase(hosts.begin() + idx);
     messageIds.erase(messageIds.begin() + idx);
     appIdxs.erase(appIdxs.begin() + idx);
