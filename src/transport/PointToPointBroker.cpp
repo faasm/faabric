@@ -442,7 +442,14 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
       setUpLocalMappingsFromSchedulingDecision(decision);
 
     // Send out to other hosts
-    for (const auto& host : otherHosts) {
+    sendMappingsFromSchedulingDecision(decision, otherHosts);
+}
+
+void PointToPointBroker::sendMappingsFromSchedulingDecision(
+  const faabric::batch_scheduler::SchedulingDecision& decision,
+  const std::set<std::string>& hostList)
+{
+    for (const auto& host : hostList) {
         faabric::PointToPointMappings msg;
         msg.set_appid(decision.appId);
         msg.set_groupid(decision.groupId);
@@ -849,6 +856,40 @@ void PointToPointBroker::resetThreadLocalCache()
         }
     }
     threadEndpoints.clear();
+}
+
+void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
+{
+    int postMigrationOkCode = 1337;
+    int recvCode = 0;
+
+    // TODO: implement this as a broadcast in the PTP broker
+    int mainIdx = 0;
+    if (groupIdx == mainIdx) {
+        auto groupIdxs = getIdxsRegisteredForGroup(groupId);
+        groupIdxs.erase(mainIdx);
+        for (const auto& recvIdx : groupIdxs) {
+            sendMessage(groupId,
+                        mainIdx,
+                        recvIdx,
+                        BYTES_CONST(&postMigrationOkCode),
+                        sizeof(int));
+        }
+        recvCode = postMigrationOkCode;
+    } else {
+        std::vector<uint8_t> bytes = recvMessage(groupId, 0, groupIdx);
+        recvCode = faabric::util::bytesToInt(bytes);
+    }
+
+    if (recvCode != postMigrationOkCode) {
+        SPDLOG_ERROR("Error in post-migration hook. {}:{} received code {}",
+                     groupId,
+                     groupIdx,
+                     recvCode);
+        throw std::runtime_error("Error in post-migration hook");
+    }
+
+    SPDLOG_DEBUG("{}:{} exiting post-migration hook", groupId, groupIdx);
 }
 
 PointToPointBroker& getPointToPointBroker()

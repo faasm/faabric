@@ -59,21 +59,35 @@ std::set<std::string> SchedulingDecision::uniqueHosts()
     return std::set<std::string>(hosts.begin(), hosts.end());
 }
 
-void SchedulingDecision::print()
+void SchedulingDecision::print(const std::string& logLevel)
 {
-    SPDLOG_DEBUG("-------------- Decision for App: {} ----------------", appId);
-    SPDLOG_DEBUG("MsgId\tAppId\tGroupId\tGrIdx\tHostIp");
+    std::string printedText;
+    printedText += fmt::format(
+      "-------------- Decision for App: {} ----------------\n", appId);
+    printedText += "MsgId\tAppId\tGroupId\tGrIdx\tHostIp\n";
     // Modulo a big number so that we can get the UUIDs to fit within one tab
     int formatBase = 1e6;
     for (int i = 0; i < hosts.size(); i++) {
-        SPDLOG_DEBUG("{}\t{}\t{}\t{}\t{}",
-                     messageIds.at(i) % formatBase,
-                     appId % formatBase,
-                     groupId % formatBase,
-                     groupIdxs.at(i),
-                     hosts.at(i));
+        printedText += fmt::format("{}\t{}\t{}\t{}\t{}\n",
+                                   messageIds.at(i) % formatBase,
+                                   appId % formatBase,
+                                   groupId % formatBase,
+                                   groupIdxs.at(i),
+                                   hosts.at(i));
     }
-    SPDLOG_DEBUG("------------- End Decision for App {} ---------------",
-                 appId);
+    printedText += fmt::format(
+      "------------- End Decision for App {} ---------------", appId);
+
+    if (logLevel == "debug") {
+        SPDLOG_DEBUG(printedText);
+    } else if (logLevel == "info") {
+        SPDLOG_INFO(printedText);
+    } else if (logLevel == "warn") {
+        SPDLOG_WARN(printedText);
+    } else if (logLevel == "error") {
+        SPDLOG_ERROR(printedText);
+    } else {
+        SPDLOG_ERROR("Unrecognised log level: {}", logLevel);
+    }
 }
 }

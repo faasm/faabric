@@ -135,7 +135,8 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
     // Because we don't take ownership of the data in the diffs, we must also
     // ensure that the underlying message is cached
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.setThreadResultLocally(r->message_id(), r->return_value(), message);
+    sch.setThreadResultLocally(
+      r->app_id(), r->message_id(), r->return_value(), message);
 
     return std::make_unique<faabric::EmptyResponse>();
 }

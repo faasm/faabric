@@ -7,10 +7,11 @@
 
 #define DO_NOT_MIGRATE -98
 #define DO_NOT_MIGRATE_DECISION                                                \
-    SchedulingDecision(DO_NOT_MIGRATE, DO_NOT_MIGRATE)
+    faabric::batch_scheduler::SchedulingDecision(DO_NOT_MIGRATE, DO_NOT_MIGRATE)
 #define NOT_ENOUGH_SLOTS -99
 #define NOT_ENOUGH_SLOTS_DECISION                                              \
-    SchedulingDecision(NOT_ENOUGH_SLOTS, NOT_ENOUGH_SLOTS)
+    faabric::batch_scheduler::SchedulingDecision(NOT_ENOUGH_SLOTS,             \
+                                                 NOT_ENOUGH_SLOTS)
 
 namespace faabric::batch_scheduler {
 
@@ -70,7 +71,7 @@ class BatchScheduler
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     virtual std::shared_ptr<SchedulingDecision> makeSchedulingDecision(
-      const HostMap& hostMap,
+      HostMap& hostMap,
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req) = 0;
 
@@ -111,7 +112,7 @@ class BatchScheduler
       std::shared_ptr<SchedulingDecision> decisionB) = 0;
 
     virtual std::vector<Host> getSortedHosts(
-      const HostMap& hostMap,
+      HostMap& hostMap,
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       const DecisionType& decisionType) = 0;

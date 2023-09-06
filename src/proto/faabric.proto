@@ -50,12 +50,6 @@ message BatchExecuteRequest {
     // Flag set by the scheduler when this batch is all executing on a single
     // host
     bool singleHost = 10;
-
-    // TODO(planner-schedule): remove me
-    // Temporary flag to indicate the workers that the BER comes from the
-    // planner (i.e. proxy-ed through planner) and so it has not been scheduled
-    // yet. Whenever the planner does scheduling we will be able to remove this
-    bool comesFromPlanner = 11;
 }
 
 message BatchExecuteRequestStatus {
@@ -75,12 +69,6 @@ message BatchExecuteRequestStatus {
 message HostResources {
     int32 slots = 1;
     int32 usedSlots = 2;
-}
-
-message UnregisterRequest {
-    string host = 1;
-    string user = 2;
-    string function = 3;
 }
 
 message FunctionStatusResponse {
@@ -150,12 +138,6 @@ message Message {
     repeated int32 chainedMsgIds = 36;
     map<string, int32> intExecGraphDetails = 37;
     map<string, string> execGraphDetails = 38;
-
-    // Function migration
-    int32 migrationCheckPeriod = 39 [json_name = "migration_check_period"];
-
-    // Scheduling
-    string topologyHint = 40 [json_name = "topology_hint"];
 }
 
 // ---------------------------------------------
@@ -239,15 +221,10 @@ message PointToPointMappings {
 // FUNCTION MIGRATIONS
 // ---------------------------------------------
 
-message PendingMigrations {
+message PendingMigration {
     int32 appId = 1;
     int32 groupId = 2;
-
-    message PendingMigration {
-        Message msg = 1;
-        string srcHost = 2;
-        string dstHost = 3;
-    }
-
-    repeated PendingMigration migrations = 3;
+    int32 groupIdx = 3;
+    string srcHost = 4;
+    string dstHost = 5;
 }

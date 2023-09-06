@@ -117,19 +117,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
 
     std::string funcStr = faabric::util::funcToString(req);
-
-    // Set group ID, this will get overridden in there's a cached decision
-    int groupId = faabric::util::generateGid();
-    for (auto& m : *req->mutable_messages()) {
-        m.set_groupid(groupId);
-        m.set_groupsize(req->messages_size());
-    }
-
-    // Get the scheduling decision
-    faabric::batch_scheduler::SchedulingDecision decision =
-      sch.makeSchedulingDecision(
-        req, faabric::batch_scheduler::SchedulingTopologyHint::CACHED);
-    bool isSingleHost = decision.isSingleHost();
+    bool isSingleHost = req->singlehost();
 
     // Do snapshotting if not on a single host
     faabric::Message& msg = req->mutable_messages()->at(0);
@@ -151,7 +139,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
           snap->diffWithDirtyRegions(memView, dirtyRegions);
 
         if (updates.empty()) {
-            SPDLOG_TRACE(
+            SPDLOG_DEBUG(
               "No updates to main thread snapshot for {} over {} pages",
               faabric::util::funcToString(msg, false),
               dirtyRegions.size());
@@ -174,9 +162,9 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // Invoke threads and await
-    sch.callFunctions(req, decision);
-    std::vector<std::pair<uint32_t, int32_t>> results =
-      sch.awaitThreadResults(req);
+    auto decision = faabric::planner::getPlannerClient().callFunctions(req);
+    std::vector<std::pair<uint32_t, int32_t>> results = sch.awaitThreadResults(
+      req, faabric::util::getSystemConfig().boundTimeout);
 
     // Perform snapshot updates if not on single host
     if (!isSingleHost) {
@@ -196,9 +184,6 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker->startThreadLocalTracking(memView);
     }
 
-    // Deregister the threads
-    sch.deregisterThreads(req);
-
     return results;
 }
 
@@ -206,12 +191,11 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     const std::string funcStr = faabric::util::funcToString(req);
-    SPDLOG_TRACE("{} executing {}/{} tasks of {} (single-host={})",
+    SPDLOG_TRACE("{} executing {}/{} tasks of {}",
                  id,
                  msgIdxs.size(),
                  req->messages_size(),
-                 funcStr,
-                 req->singlehost());
+                 funcStr);
 
     // Note that this lock is specific to this executor, so will only block
     // when multiple threads are trying to schedule tasks. This will only
@@ -262,11 +246,10 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
         restore(snapshotKey);
     } else {
-        SPDLOG_TRACE("Not restoring {}. threads={}, key={}, single={}",
+        SPDLOG_TRACE("Not restoring {}. threads={}, key={}",
                      funcStr,
                      isThreads,
-                     snapshotKey,
-                     isSingleHost);
+                     snapshotKey);
     }
 
     // Initialise batch counter
@@ -371,6 +354,7 @@ std::shared_ptr<faabric::util::SnapshotData> Executor::getMainThreadSnapshot(
     return reg.getSnapshot(snapshotKey);
 }
 
+/* TODO(thread-opt): currently we never delete snapshots
 void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
 {
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
@@ -386,6 +370,7 @@ void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
         reg.deleteSnapshot(snapshotKey);
     }
 }
+*/
 
 void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 {
@@ -424,10 +409,9 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
           task.req->mutable_messages()->at(task.messageIndex);
 
         // Start dirty tracking if executing threads across hosts
-        bool isSingleHost = task.req->singlehost();
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
-        bool doDirtyTracking = isThreads && !isSingleHost;
+        bool doDirtyTracking = isThreads && !task.req->singlehost();
         if (doDirtyTracking) {
             // If tracking is thread local, start here as it will happen for
             // each thread
@@ -439,6 +423,16 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         if (msg.groupid() > 0) {
             group =
               faabric::transport::PointToPointGroup::getGroup(msg.groupid());
+        }
+
+        // If the to-be-executed message is a migrated message, we need to
+        // execute the post-migration hook to sync with non-migrated messages
+        // in the same group
+        bool isMigration =
+          task.req->type() == faabric::BatchExecuteRequest::MIGRATION;
+        if (isMigration) {
+            faabric::transport::getPointToPointBroker().postMigrationHook(
+              msg.groupid(), msg.groupidx());
         }
 
         SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
@@ -583,7 +577,8 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 
                 // Delete the main thread snapshot (implicitly does nothing if
                 // doesn't exist)
-                deleteMainThreadSnapshot(msg);
+                // TODO(thread-opt): cleanup snapshots (from planner maybe?)
+                // deleteMainThreadSnapshot(msg);
             }
         }
 
@@ -609,12 +604,6 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             faabric::util::UniqueLock lock(threadsMutex);
             availablePoolThreads.insert(threadPoolIdx);
         }
-
-        // Vacate the slot occupied by this task. This must be done after
-        // releasing the claim on this executor, otherwise the scheduler may
-        // try to schedule another function and be unable to reuse this
-        // executor.
-        sch.vacateSlot();
 
         // Finally set the result of the task, this will allow anything
         // waiting on its result to continue execution, therefore must be

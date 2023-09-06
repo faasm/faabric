@@ -38,10 +38,6 @@ class JsonTestFixture
         auto& intMap = *msg.mutable_intexecgraphdetails();
         intMap["foo"] = 0;
 
-        msg.set_migrationcheckperiod(33);
-
-        msg.set_topologyhint("TEST_TOPOLOGY_HINT");
-
         msg.set_inputdata("foo bar");
 
         faabric::util::setMessageId(msg);
@@ -77,17 +73,11 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
     // We consume the generated JSON files from a variety of places, so this
     // test ensures that the keywords we use elsewhere are generated as part
     // of the serialisation process
-    std::vector<std::string> requiredKeys = { "input_data",
-                                              "python",
-                                              "py_user",
-                                              "py_func",
-                                              "mpi",
-                                              "mpi_world_size",
-                                              "record_exec_graph",
-                                              "migration_check_period",
-                                              "start_ts",
-                                              "finish_ts",
-                                              "topology_hint" };
+    std::vector<std::string> requiredKeys = {
+        "input_data",        "python",   "py_user",
+        "py_func",           "mpi",      "mpi_world_size",
+        "record_exec_graph", "start_ts", "finish_ts",
+    };
     std::string jsonString = faabric::util::messageToJson(msg);
 
     for (const auto& key : requiredKeys) {

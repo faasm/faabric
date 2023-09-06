@@ -98,6 +98,10 @@ class PointToPointBroker
     void setAndSendMappingsFromSchedulingDecision(
       const faabric::batch_scheduler::SchedulingDecision& decision);
 
+    void sendMappingsFromSchedulingDecision(
+      const faabric::batch_scheduler::SchedulingDecision& decision,
+      const std::set<std::string>& hostList);
+
     void waitForMappingsOnThisHost(int groupId);
 
     std::set<int> getIdxsRegisteredForGroup(int groupId);
@@ -131,6 +135,8 @@ class PointToPointBroker
     void clear();
 
     void resetThreadLocalCache();
+
+    void postMigrationHook(int groupId, int groupIdx);
 
   private:
     faabric::util::SystemConfig& conf;

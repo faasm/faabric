@@ -130,31 +130,33 @@ int handleDistributedLock(tests::DistTestExecutor* exec,
 
     if (msg.function() == "lock") {
         int initialValue = 0;
-        int groupId = faabric::util::generateGid();
 
         stateKv->set(BYTES(&initialValue));
 
+        // Create a nested request child of the parent request (parent-child
+        // indicated by same app id)
         std::shared_ptr<faabric::BatchExecuteRequest> nestedReq =
           faabric::util::batchExecFactory("ptp", "lock-worker", nWorkers);
+        faabric::util::updateBatchExecAppId(nestedReq, req->appid());
         for (int i = 0; i < nWorkers; i++) {
             faabric::Message& m = nestedReq->mutable_messages()->at(i);
-            m.set_groupid(groupId);
             m.set_groupidx(i);
         }
 
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        auto decision = sch.callFunctions(nestedReq);
+        auto& plannerCli = faabric::planner::getPlannerClient();
+        auto decision = plannerCli.callFunctions(nestedReq);
 
         // Await results
         bool success = true;
         for (const auto& msg : nestedReq->messages()) {
-            faabric::Message res =
-              faabric::planner::getPlannerClient().getMessageResult(msg, 30000);
+            faabric::Message res = plannerCli.getMessageResult(msg, 30000);
             if (res.returnvalue() != 0) {
                 success = false;
             }
         }
 
+        // Pull to make sure we have the latest version
+        stateKv->pull();
         int finalValue = *(int*)stateKv->get();
         int expectedValue = nWorkers * nLoops;
         if (finalValue != expectedValue) {
@@ -256,23 +258,19 @@ class DistributedCoordinationTestRunner
             auto& m = chainReq->mutable_messages()->at(i);
 
             // Set app index and group data
-            m.set_appid(msg.appid());
             m.set_appidx(i);
-
-            m.set_groupid(groupId);
             m.set_groupidx(i);
             m.set_groupsize(nChained);
 
             m.set_inputdata(msg.inputdata());
         }
 
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        sch.callFunctions(chainReq);
+        auto& plannerCli = faabric::planner::getPlannerClient();
+        plannerCli.callFunctions(chainReq);
 
         bool success = true;
         for (const auto& m : chainReq->messages()) {
-            faabric::Message result =
-              faabric::planner::getPlannerClient().getMessageResult(m, 10000);
+            faabric::Message result = plannerCli.getMessageResult(m, 10000);
             if (result.returnvalue() != 0) {
                 SPDLOG_ERROR("Distributed coordination check call failed: {}",
                              m.id());
@@ -326,8 +324,6 @@ class DistributedCoordinationTestRunner
     faabric::state::State& state;
 
     std::vector<std::string> stateKeys;
-
-    int groupId = 123;
 };
 
 int handleDistributedBarrier(tests::DistTestExecutor* exec,

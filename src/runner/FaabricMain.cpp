@@ -5,6 +5,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/crash.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/timing.h>
 
 namespace faabric::runner {
 FaabricMain::FaabricMain(

@@ -21,20 +21,6 @@ static std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
   batchMessages;
 
-static std::vector<std::pair<std::string, faabric::EmptyRequest>>
-  resourceRequests;
-
-static std::unordered_map<std::string,
-                          faabric::util::Queue<faabric::HostResources>>
-  queuedResourceResponses;
-
-static std::vector<
-  std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
-  pendingMigrationsRequests;
-
-static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
-  unregisterRequests;
-
 static std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>>
   messageResults;
 
@@ -58,26 +44,6 @@ getBatchRequests()
     return batchMessages;
 }
 
-std::vector<std::pair<std::string, faabric::EmptyRequest>> getResourceRequests()
-{
-    faabric::util::UniqueLock lock(mockMutex);
-    return resourceRequests;
-}
-
-std::vector<std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
-getPendingMigrationsRequests()
-{
-    faabric::util::UniqueLock lock(mockMutex);
-    return pendingMigrationsRequests;
-}
-
-std::vector<std::pair<std::string, faabric::UnregisterRequest>>
-getUnregisterRequests()
-{
-    faabric::util::UniqueLock lock(mockMutex);
-    return unregisterRequests;
-}
-
 std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>>
 getMessageResults()
 {
@@ -85,25 +51,11 @@ getMessageResults()
     return messageResults;
 }
 
-void queueResourceResponse(const std::string& host, faabric::HostResources& res)
-{
-    faabric::util::UniqueLock lock(mockMutex);
-    queuedResourceResponses[host].enqueue(res);
-}
-
 void clearMockRequests()
 {
     faabric::util::UniqueLock lock(mockMutex);
     functionCalls.clear();
     batchMessages.clear();
-    resourceRequests.clear();
-    pendingMigrationsRequests.clear();
-    unregisterRequests.clear();
-
-    for (auto& p : queuedResourceResponses) {
-        p.second.reset();
-    }
-    queuedResourceResponses.clear();
     messageResults.clear();
 }
 
@@ -129,48 +81,6 @@ void FunctionCallClient::sendFlush()
     }
 }
 
-faabric::HostResources FunctionCallClient::getResources()
-{
-    faabric::EmptyRequest request;
-    faabric::HostResources response;
-
-    if (faabric::util::isMockMode()) {
-        faabric::util::UniqueLock lock(mockMutex);
-
-        // Register the request
-        resourceRequests.emplace_back(host, request);
-
-        // See if we have a queued response
-        if (queuedResourceResponses[host].size() > 0) {
-            response = queuedResourceResponses[host].dequeue();
-        }
-    } else {
-        syncSend(
-          faabric::scheduler::FunctionCalls::GetResources, &request, &response);
-    }
-
-    return response;
-}
-
-// This function call is used by the main host of an application to let know
-// other hosts running functions of the same application that a migration
-// opportunity has been found.
-void FunctionCallClient::sendPendingMigrations(
-  std::shared_ptr<faabric::PendingMigrations> req)
-{
-    faabric::PendingMigrations request;
-    faabric::EmptyResponse response;
-
-    if (faabric::util::isMockMode()) {
-        faabric::util::UniqueLock lock(mockMutex);
-        pendingMigrationsRequests.emplace_back(host, req);
-    } else {
-        syncSend(faabric::scheduler::FunctionCalls::PendingMigrations,
-                 req.get(),
-                 &response);
-    }
-}
-
 void FunctionCallClient::executeFunctions(
   const std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -180,16 +90,6 @@ void FunctionCallClient::executeFunctions(
     } else {
         asyncSend(faabric::scheduler::FunctionCalls::ExecuteFunctions,
                   req.get());
-    }
-}
-
-void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
-{
-    if (faabric::util::isMockMode()) {
-        faabric::util::UniqueLock lock(mockMutex);
-        unregisterRequests.emplace_back(host, req);
-    } else {
-        asyncSend(faabric::scheduler::FunctionCalls::Unregister, &req);
     }
 }
 

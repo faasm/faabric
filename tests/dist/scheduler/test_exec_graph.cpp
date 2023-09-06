@@ -10,17 +10,19 @@ TEST_CASE_METHOD(DistTestsFixture,
                  "Test generating the execution graph",
                  "[funcs]")
 {
-    // Set up this host's resources
-    int nLocalSlots = 2;
-    int nFuncs = 4;
-    faabric::HostResources res;
-    res.set_slots(nLocalSlots);
-    sch.setThisHostResources(res);
-
     // Retry the test a number of times to catch the race-condition where
     // we get the execution graph before all results have been published
     int numRetries = 10;
     for (int r = 0; r < numRetries; r++) {
+        // Set up both host's resources
+        int nLocalSlots = 2;
+        int nFuncs = 4;
+        faabric::HostResources res;
+        res.set_slots(nLocalSlots);
+        sch.setThisHostResources(res);
+        sch.addHostToGlobalSet(getWorkerIP(),
+                               std::make_shared<HostResources>(res));
+
         // Set up the messages
         std::shared_ptr<faabric::BatchExecuteRequest> req =
           faabric::util::batchExecFactory("funcs", "simple", nFuncs);
@@ -35,7 +37,7 @@ TEST_CASE_METHOD(DistTestsFixture,
         }
 
         // Call the functions
-        sch.callFunctions(req);
+        plannerCli.callFunctions(req);
 
         faabric::Message& m = req->mutable_messages()->at(0);
 

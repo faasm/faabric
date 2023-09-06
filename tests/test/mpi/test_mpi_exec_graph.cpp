@@ -13,7 +13,7 @@ using namespace faabric::mpi;
 namespace tests {
 /* 03/05/2022 - Disable MPI execution graph tests as Protobuf is giving
  * spurious errors in the distributed tests. See issue #262
- */
+ *
 TEST_CASE_METHOD(MpiTestFixture,
                  "Test tracing the number of MPI messages",
                  "[.]")
@@ -215,4 +215,5 @@ TEST_CASE_METHOD(MpiTestFixture,
     REQUIRE(msg.intexecgraphdetails().count(expectedKey) == 1);
     REQUIRE(msg.intexecgraphdetails().at(expectedKey) == msgCount);
 }
+*/
 }

@@ -201,9 +201,7 @@ class MpiWorld
 
     /* Function Migration */
 
-    void prepareMigration(
-      int thisRank,
-      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+    void prepareMigration(int thisRank);
 
   private:
     int id = -1;
@@ -267,8 +265,5 @@ class MpiWorld
                 int count,
                 MPI_Status* status,
                 MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
-
-    /* Function migration */
-    bool hasBeenMigrated = false;
 };
 }

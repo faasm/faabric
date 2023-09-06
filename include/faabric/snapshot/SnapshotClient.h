@@ -50,9 +50,11 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
       const std::shared_ptr<faabric::util::SnapshotData>& data,
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 
-    void deleteSnapshot(const std::string& key);
+    // TODO(thread-opt):
+    // void deleteSnapshot(const std::string& key);
 
     void pushThreadResult(
+      uint32_t appId,
       uint32_t messageId,
       int returnValue,
       const std::string& key,

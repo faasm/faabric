@@ -137,7 +137,7 @@ bool BinPackScheduler::isFirstDecisionBetter(
 }
 
 std::vector<Host> BinPackScheduler::getSortedHosts(
-  const HostMap& hostMap,
+  HostMap& hostMap,
   const InFlightReqs& inFlightReqs,
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   const DecisionType& decisionType)
@@ -252,7 +252,7 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
 // and then starts filling bins from begining to end, until it runs out of
 // messages to schedule
 std::shared_ptr<SchedulingDecision> BinPackScheduler::makeSchedulingDecision(
-  const HostMap& hostMap,
+  HostMap& hostMap,
   const InFlightReqs& inFlightReqs,
   std::shared_ptr<BatchExecuteRequest> req)
 {

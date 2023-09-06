@@ -1,6 +1,7 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/planner/PlannerEndpointHandler.h>
 #include <faabric/planner/PlannerServer.h>
+#include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/util/config.h>
 #include <faabric/util/crash.h>
 #include <faabric/util/logging.h>
@@ -19,6 +20,11 @@ int main()
     // The RPC server starts in the background
     plannerServer.start();
 
+    // Start also a snapshot server to synchronise snapshots
+    SPDLOG_INFO("Starting planner snapshot server");
+    faabric::snapshot::SnapshotServer snapshotServer;
+    snapshotServer.start();
+
     // The faabric endpoint starts in the foreground
     SPDLOG_INFO("Starting planner endpoint");
     // We get the port from the global config, but the number of threads from
@@ -29,5 +35,9 @@ int main()
       std::make_shared<faabric::planner::PlannerEndpointHandler>());
     endpoint.start(faabric::endpoint::EndpointMode::SIGNAL);
 
+    SPDLOG_INFO("Planner snapshot server shutting down");
+    snapshotServer.stop();
+
     SPDLOG_INFO("Planner server shutting down");
+    plannerServer.stop();
 }

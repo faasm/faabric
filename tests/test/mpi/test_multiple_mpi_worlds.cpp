@@ -12,12 +12,18 @@ class MultiWorldMpiTestFixture : public MpiBaseTestFixture
   public:
     MultiWorldMpiTestFixture()
     {
-        faabric::Message msgA = faabric::util::messageFactory(userA, funcA);
-        faabric::Message msgB = faabric::util::messageFactory(userB, funcB);
+        auto reqA = faabric::util::batchExecFactory(userA, funcA, 1);
+        auto reqB = faabric::util::batchExecFactory(userB, funcB, 1);
+        auto& msgA = *reqA->mutable_messages(0);
+        auto& msgB = *reqB->mutable_messages(0);
         msgA.set_mpiworldsize(worldSizeA);
         msgA.set_mpiworldid(worldIdA);
         msgB.set_mpiworldsize(worldSizeB);
         msgB.set_mpiworldid(worldIdB);
+
+        // Call the requests once to keep track of the first MPI message
+        plannerCli.callFunctions(reqA);
+        plannerCli.callFunctions(reqB);
 
         worldA.create(msgA, worldIdA, worldSizeA);
         worldB.create(msgB, worldIdB, worldSizeB);
@@ -51,9 +57,12 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     std::string funcA = "funcA";
     int worldIdA = 123;
     int worldSizeA = 3;
-    auto msgA = faabric::util::messageFactory(userA, funcA);
+    auto reqA = faabric::util::batchExecFactory(userA, funcA, 1);
+    auto& msgA = *reqA->mutable_messages(0);
+    msgA.set_ismpi(true);
     msgA.set_mpiworldid(worldIdA);
     msgA.set_mpiworldsize(worldSizeA);
+    plannerCli.callFunctions(reqA);
     worldA.create(msgA, worldIdA, worldSizeA);
 
     MpiWorld worldB;
@@ -61,10 +70,17 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     std::string funcB = "funcB";
     int worldIdB = 245;
     int worldSizeB = 6;
-    auto msgB = faabric::util::messageFactory(userB, funcB);
+    auto reqB = faabric::util::batchExecFactory(userB, funcB, 1);
+    auto& msgB = *reqB->mutable_messages(0);
+    msgB.set_ismpi(true);
     msgB.set_mpiworldid(worldIdB);
     msgB.set_mpiworldsize(worldSizeB);
+    plannerCli.callFunctions(reqB);
     worldB.create(msgB, worldIdB, worldSizeB);
+
+    // Wait to make sure all messages are delivered
+    waitForMpiMessages(reqA, worldSizeA);
+    waitForMpiMessages(reqB, worldSizeB);
 
     // Check getters on worlds
     REQUIRE(worldA.getSize() == worldSizeA);
@@ -77,27 +93,41 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     REQUIRE(worldB.getFunction() == funcB);
 
     // Check that chained function calls are made as expected
-    std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
-    int expectedMsgCount = worldSizeA + worldSizeB - 2;
+    auto actual = sch.getRecordedMessages();
+    // The first recorded message is sent as part of the test fixture, so we
+    // remove it
+    actual.erase(actual.begin());
+    int expectedMsgCount = worldSizeA + worldSizeB;
     REQUIRE(actual.size() == expectedMsgCount);
 
-    for (int i = 0; i < expectedMsgCount; i++) {
-        faabric::Message actualCall = actual.at(i);
-        if (i < worldSizeA - 1) {
-            REQUIRE(actualCall.user() == userA);
-            REQUIRE(actualCall.function() == funcA);
-            REQUIRE(actualCall.ismpi());
-            REQUIRE(actualCall.mpiworldid() == worldIdA);
-            REQUIRE(actualCall.mpirank() == i + 1);
-            REQUIRE(actualCall.mpiworldsize() == worldSizeA);
+    // Sort the messages by world and by rank so that we don't have races
+    // between messages from different ranks
+    std::vector<Message> worldAMsg(worldSizeA);
+    std::vector<Message> worldBMsg(worldSizeB);
+    for (const auto& msg : actual) {
+        if (msg.mpiworldid() == worldIdA) {
+            worldAMsg.at(msg.mpirank()) = msg;
         } else {
-            REQUIRE(actualCall.user() == userB);
-            REQUIRE(actualCall.function() == funcB);
-            REQUIRE(actualCall.ismpi());
-            REQUIRE(actualCall.mpiworldid() == worldIdB);
-            REQUIRE(actualCall.mpirank() == i + 2 - worldSizeA);
-            REQUIRE(actualCall.mpiworldsize() == worldSizeB);
+            worldBMsg.at(msg.mpirank()) = msg;
         }
+    }
+
+    for (int i = 0; i < worldSizeA; i++) {
+        REQUIRE(worldAMsg.at(i).user() == userA);
+        REQUIRE(worldAMsg.at(i).function() == funcA);
+        REQUIRE(worldAMsg.at(i).ismpi());
+        REQUIRE(worldAMsg.at(i).mpiworldid() == worldIdA);
+        REQUIRE(worldAMsg.at(i).mpirank() == i);
+        REQUIRE(worldAMsg.at(i).mpiworldsize() == worldSizeA);
+    }
+
+    for (int i = 0; i < worldSizeB; i++) {
+        REQUIRE(worldBMsg.at(i).user() == userB);
+        REQUIRE(worldBMsg.at(i).function() == funcB);
+        REQUIRE(worldBMsg.at(i).ismpi());
+        REQUIRE(worldBMsg.at(i).mpiworldid() == worldIdB);
+        REQUIRE(worldBMsg.at(i).mpirank() == i);
+        REQUIRE(worldBMsg.at(i).mpiworldsize() == worldSizeB);
     }
 
     // Check that this host is registered as the main

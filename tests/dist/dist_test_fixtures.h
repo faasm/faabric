@@ -45,7 +45,7 @@ class DistTestsFixture
 
     std::string getMasterIP() { return conf.endpointHost; }
 
-  private:
+  protected:
     std::string workerIP;
     std::string mainIP;
 };
@@ -53,7 +53,7 @@ class DistTestsFixture
 class MpiDistTestsFixture : public DistTestsFixture
 {
   public:
-    MpiDistTestsFixture() { SLEEP_MS(INTER_MPI_TEST_SLEEP); }
+    MpiDistTestsFixture() {}
 
     ~MpiDistTestsFixture() = default;
 
@@ -62,16 +62,42 @@ class MpiDistTestsFixture : public DistTestsFixture
     int worldSize = 4;
     bool origIsMsgOrderingOn;
 
-    // The server has four slots, therefore by setting the number of local slots
-    // and the world size we are able to infer the expected scheduling decision
-    void setLocalSlots(int numSlots, int worldSizeIn = 0)
+    void updateLocalSlots(int newLocalSlots, int newUsedLocalSlots = 0)
     {
-        faabric::HostResources res;
-        res.set_slots(numSlots);
-        sch.setThisHostResources(res);
+        faabric::HostResources localRes;
+        localRes.set_slots(newLocalSlots);
+        localRes.set_usedslots(newUsedLocalSlots);
+        sch.setThisHostResources(localRes);
+    }
 
+    void updateRemoteSlots(int newRemoteSlots, int newRemoteUsedSlots = 0)
+    {
+        faabric::HostResources remoteRes;
+        remoteRes.set_slots(newRemoteSlots);
+        remoteRes.set_usedslots(newRemoteUsedSlots);
+        sch.addHostToGlobalSet(workerIP,
+                               std::make_shared<HostResources>(remoteRes));
+    }
+
+    void setLocalSlots(int numLocalSlots, int worldSizeIn = 0)
+    {
         if (worldSizeIn > 0) {
             worldSize = worldSizeIn;
+        }
+        int numRemoteSlots = worldSize - numLocalSlots;
+
+        if (numLocalSlots == numRemoteSlots) {
+            updateLocalSlots(2 * numLocalSlots, numLocalSlots);
+            updateRemoteSlots(numRemoteSlots);
+        } else if (numLocalSlots > numRemoteSlots) {
+            updateLocalSlots(numLocalSlots);
+            updateRemoteSlots(numRemoteSlots);
+        } else {
+            SPDLOG_ERROR(
+              "Unfeasible MPI world slots config (local: {} - remote: {})",
+              numLocalSlots,
+              numRemoteSlots);
+            throw std::runtime_error("Unfeasible slots configuration");
         }
     }
 
@@ -153,7 +179,10 @@ class MpiDistTestsFixture : public DistTestsFixture
     {
         faabric::Message& msg = req->mutable_messages()->at(0);
         faabric::Message result = plannerCli.getMessageResult(msg, timeoutMs);
-        REQUIRE(result.returnvalue() == 0);
+
+        if (result.returnvalue() != MIGRATED_FUNCTION_RETURN_VALUE) {
+            REQUIRE(result.returnvalue() == 0);
+        }
         SLEEP_MS(1000);
         auto execGraph = faabric::util::getFunctionExecGraph(msg);
         checkSchedulingFromExecGraph(

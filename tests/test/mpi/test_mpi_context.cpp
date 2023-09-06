@@ -55,8 +55,15 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
     // Set a new world size
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     int origSize = conf.defaultMpiWorldSize;
-    int defaultWorldSize = 12;
+    int defaultWorldSize = 3;
     conf.defaultMpiWorldSize = defaultWorldSize;
+
+    faabric::HostResources res;
+    res.set_usedslots(1);
+    res.set_slots(defaultWorldSize * 2);
+    sch.setThisHostResources(res);
+
+    SLEEP_MS(200);
 
     // Request different sizes
     int requestedWorldSize;
@@ -79,6 +86,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
     conf.defaultMpiWorldSize = origSize;
 
     world.destroy();
+
+    waitForMpiMessages(req, defaultWorldSize);
 }
 
 TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
@@ -86,18 +95,30 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
     const std::string expectedHost =
       faabric::util::getSystemConfig().endpointHost;
 
-    faabric::Message msgA = faabric::util::messageFactory("mpi", "hellompi");
+    auto reqA = faabric::util::batchExecFactory("mpi", "hellompi", 1);
+    auto& msgA = *reqA->mutable_messages(0);
     int worldSize = 6;
     msgA.set_mpiworldsize(worldSize);
+    msgA.set_recordexecgraph(true);
+    msgA.set_executedhost(expectedHost);
+
+    // Call the request before creating the MPI world
+    plannerCli.callFunctions(reqA);
 
     // Use one context to create the world
     MpiContext cA;
     cA.createWorld(msgA);
     int worldId = cA.getWorldId();
 
-    // Get one message formed by world creation
+    waitForMpiMessages(reqA, worldSize);
     Scheduler& sch = getScheduler();
-    faabric::Message msgB = sch.getRecordedMessagesAll().at(0);
+    // Set the function result to have access to the chained messages
+    sch.setFunctionResult(msgA);
+
+    auto chainedMsgs = faabric::util::getChainedFunctions(msgA);
+    REQUIRE(chainedMsgs.size() == worldSize - 1);
+    auto msgB =
+      plannerCli.getMessageResult(msgA.appid(), *chainedMsgs.begin(), 500);
 
     // Create another context and make sure it's not initialised
     MpiContext cB;

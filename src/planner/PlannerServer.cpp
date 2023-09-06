@@ -54,6 +54,12 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::GetMessageResult: {
             return recvGetMessageResult(message.udata());
         }
+        case PlannerCalls::GetSchedulingDecision: {
+            return recvGetSchedulingDecision(message.udata());
+        }
+        case PlannerCalls::CallBatch: {
+            return recvCallBatch(message.udata());
+        }
         default: {
             // If we don't recognise the header, let the client fail, but don't
             // crash the planner
@@ -145,5 +151,56 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetMessageResult(
     }
 
     return std::make_unique<faabric::Message>(*resultMsg);
+}
+
+std::unique_ptr<google::protobuf::Message>
+PlannerServer::recvGetSchedulingDecision(std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(BatchExecuteRequest, buffer.data(), buffer.size());
+    auto req = std::make_shared<faabric::BatchExecuteRequest>(parsedMsg);
+
+    auto decision = planner.getSchedulingDecision(req);
+
+    // If the app is not registered in-flight, return an empty mapping
+    if (decision == nullptr) {
+        return std::make_unique<faabric::PointToPointMappings>();
+    }
+
+    // Build PointToPointMappings from scheduling decision
+    faabric::PointToPointMappings mappings;
+    mappings.set_appid(decision->appId);
+    mappings.set_groupid(decision->groupId);
+    for (int i = 0; i < decision->hosts.size(); i++) {
+        auto* mapping = mappings.add_mappings();
+        mapping->set_host(decision->hosts.at(i));
+        mapping->set_messageid(decision->messageIds.at(i));
+        mapping->set_appidx(decision->appIdxs.at(i));
+        mapping->set_groupidx(decision->groupIdxs.at(i));
+    }
+
+    return std::make_unique<faabric::PointToPointMappings>(mappings);
+}
+
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvCallBatch(
+  std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(BatchExecuteRequest, buffer.data(), buffer.size());
+    auto req = std::make_shared<faabric::BatchExecuteRequest>(parsedMsg);
+
+    auto decision = planner.callBatch(req);
+
+    // Build PointToPointMappings from scheduling decision
+    faabric::PointToPointMappings mappings;
+    mappings.set_appid(decision->appId);
+    mappings.set_groupid(decision->groupId);
+    for (int i = 0; i < decision->hosts.size(); i++) {
+        auto* mapping = mappings.add_mappings();
+        mapping->set_host(decision->hosts.at(i));
+        mapping->set_messageid(decision->messageIds.at(i));
+        mapping->set_appidx(decision->appIdxs.at(i));
+        mapping->set_groupidx(decision->groupIdxs.at(i));
+    }
+
+    return std::make_unique<faabric::PointToPointMappings>(mappings);
 }
 }

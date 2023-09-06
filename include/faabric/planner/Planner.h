@@ -1,8 +1,10 @@
 #pragma once
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/PlannerState.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 
 #include <shared_mutex>
 
@@ -31,7 +33,7 @@ class Planner
     void printConfig() const;
 
     // ----------
-    // Util
+    // Util public API
     // ----------
 
     bool reset();
@@ -64,6 +66,12 @@ class Planner
     std::shared_ptr<faabric::BatchExecuteRequestStatus> getBatchResults(
       int32_t appId);
 
+    std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>
+    getSchedulingDecision(std::shared_ptr<BatchExecuteRequest> req);
+
+    std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> callBatch(
+      std::shared_ptr<BatchExecuteRequest> req);
+
   private:
     // There's a singleton instance of the planner running, but it must allow
     // concurrent requests
@@ -72,12 +80,31 @@ class Planner
     PlannerState state;
     PlannerConfig config;
 
+    // Snapshot registry to distribute snapshots in THREADS requests
+    faabric::snapshot::SnapshotRegistry& snapshotRegistry;
+
+    // ----------
+    // Util private API
+    // ----------
+
     void flushHosts();
 
     void flushExecutors();
 
+    // ----------
+    // Host membership private API
+    // ----------
+
     // Check if a host's registration timestamp has expired
     bool isHostExpired(std::shared_ptr<Host> host, long epochTimeMs = 0);
+
+    // ----------
+    // Request scheduling private API
+    // ----------
+
+    void dispatchSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> decision);
 };
 
 Planner& getPlanner();

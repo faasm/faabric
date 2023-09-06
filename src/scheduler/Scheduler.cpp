@@ -1,10 +1,7 @@
-#include <faabric/batch-scheduler/DecisionCache.h>
-#include <faabric/batch-scheduler/SchedulingDecision.h>
+#include <faabric/batch-scheduler/BatchScheduler.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/redis/Redis.h>
-#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -12,24 +9,15 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/batch.h>
+#include <faabric/util/config.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/func.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
-#include <faabric/util/memory.h>
-#include <faabric/util/network.h>
-#include <faabric/util/random.h>
 #include <faabric/util/snapshot.h>
-#include <faabric/util/string_tools.h>
 #include <faabric/util/testing.h>
-#include <faabric/util/timing.h>
-
-#include <sys/eventfd.h>
-#include <sys/file.h>
-#include <sys/syscall.h>
 
 #include <unordered_set>
-
-#define FLUSH_TIMEOUT_MS 10000
 
 using namespace faabric::util;
 using namespace faabric::snapshot;
@@ -48,10 +36,6 @@ Scheduler::Scheduler()
   , reg(faabric::snapshot::getSnapshotRegistry())
   , broker(faabric::transport::getPointToPointBroker())
 {
-    // Set up the initial resources
-    int cores = faabric::util::getUsableCores();
-    thisHostResources.set_slots(cores);
-
     // Start the reaper thread
     reaperThread.start(conf.reaperIntervalSeconds);
 }
@@ -61,18 +45,6 @@ Scheduler::~Scheduler()
     if (!_isShutdown) {
         SPDLOG_ERROR("Destructing scheduler without shutting down first");
     }
-}
-
-std::set<std::string> Scheduler::getAvailableHosts()
-{
-    auto availableHosts =
-      faabric::planner::getPlannerClient().getAvailableHosts();
-    std::set<std::string> availableHostsIps;
-    for (const auto& host : availableHosts) {
-        availableHostsIps.insert(host.ip());
-    }
-
-    return availableHostsIps;
 }
 
 void Scheduler::addHostToGlobalSet(
@@ -143,9 +115,6 @@ void Scheduler::reset()
     SPDLOG_DEBUG("Resetting scheduler");
     resetThreadLocalCache();
 
-    // Stop the function migration thread
-    functionMigrationThread.stop();
-
     // Stop the reaper thread
     reaperThread.stop();
 
@@ -170,28 +139,11 @@ void Scheduler::reset()
     // Ensure host is set correctly
     thisHost = faabric::util::getSystemConfig().endpointHost;
 
-    // Reset resources
-    thisHostResources = faabric::HostResources();
-    thisHostResources.set_slots(faabric::util::getUsableCores());
-    thisHostResources.set_usedslots(0);
-    thisHostUsedSlots.store(0, std::memory_order_release);
-
     // Reset scheduler state
-    availableHostsCache.clear();
-    registeredHosts.clear();
-    threadResults.clear();
     threadResultMessages.clear();
 
-    pushedSnapshotsMap.clear();
-
-    // Reset function migration tracking
-    inFlightRequests.clear();
-    pendingMigrations.clear();
-
     // Records
-    recordedMessagesAll.clear();
-    recordedMessagesLocal.clear();
-    recordedMessagesShared.clear();
+    recordedMessages.clear();
 
     // Restart reaper thread
     reaperThread.start(conf.reaperIntervalSeconds);
@@ -277,24 +229,6 @@ int Scheduler::reapStaleExecutors()
             auto removed = std::remove(execs.begin(), execs.end(), exec);
             execs.erase(removed, execs.end());
         }
-
-        // Unregister this host if no more executors remain on this host, and
-        // it's not the main
-        if (execs.empty()) {
-            SPDLOG_TRACE("No remaining executors for {}", key);
-
-            bool isMaster = thisHost == mainHost;
-            if (!isMaster) {
-                faabric::UnregisterRequest req;
-                req.set_host(thisHost);
-                req.set_user(user);
-                req.set_function(function);
-
-                getFunctionCallClient(mainHost)->unregister(req);
-            }
-
-            keysToRemove.emplace_back(key);
-        }
     }
 
     // Remove and erase
@@ -314,695 +248,71 @@ long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
     return executors[funcStr].size();
 }
 
-int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
-{
-    faabric::util::SharedLock lock(mx);
-    return getFunctionRegisteredHosts(msg.user(), msg.function(), false).size();
-}
-
-const std::set<std::string>& Scheduler::getFunctionRegisteredHosts(
-  const std::string& user,
-  const std::string& func,
-  bool acquireLock)
-{
-    faabric::util::SharedLock lock;
-    if (acquireLock) {
-        lock = faabric::util::SharedLock(mx);
-    }
-    std::string key = user + "/" + func;
-    return registeredHosts[key];
-}
-
-void Scheduler::removeRegisteredHost(const std::string& host,
-                                     const std::string& user,
-                                     const std::string& function)
-{
-    faabric::util::FullLock lock(mx);
-    std::string key = user + "/" + function;
-    registeredHosts[key].erase(host);
-}
-
-void Scheduler::addRegisteredHost(const std::string& host,
-                                  const std::string& user,
-                                  const std::string& function)
-{
-    std::string key = user + "/" + function;
-    registeredHosts[key].insert(host);
-}
-
-void Scheduler::vacateSlot()
-{
-    thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
-}
-
-faabric::batch_scheduler::SchedulingDecision Scheduler::callFunctions(
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    // We assume all the messages are for the same function and have the
-    // same main host
-    faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    std::string mainHost = firstMsg.mainhost();
-
-    // Get topology hint from message
-    faabric::batch_scheduler::SchedulingTopologyHint topologyHint =
-      firstMsg.topologyhint().empty()
-        ? faabric::batch_scheduler::SchedulingTopologyHint::NONE
-        : faabric::batch_scheduler::strToTopologyHint.at(
-            firstMsg.topologyhint());
-
-    bool isForceLocal =
-      topologyHint ==
-      faabric::batch_scheduler::SchedulingTopologyHint::FORCE_LOCAL;
-
-    // If we're not the main host, we need to forward the request back to the
-    // main host. This will only happen if a nested batch execution happens.
-    if (!isForceLocal && mainHost != thisHost) {
-        std::string funcStr = faabric::util::funcToString(firstMsg, false);
-        SPDLOG_DEBUG("Forwarding {} back to main {}", funcStr, mainHost);
-
-        getFunctionCallClient(mainHost)->executeFunctions(req);
-        faabric::batch_scheduler::SchedulingDecision decision(
-          firstMsg.appid(), firstMsg.groupid());
-        decision.returnHost = mainHost;
-        return decision;
-    }
-
-    faabric::util::FullLock lock(mx);
-
-    faabric::batch_scheduler::SchedulingDecision decision =
-      doSchedulingDecision(req, topologyHint);
-
-    // Pass decision as hint
-    return doCallFunctions(req, decision, lock, topologyHint);
-}
-
-faabric::batch_scheduler::SchedulingDecision Scheduler::makeSchedulingDecision(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::batch_scheduler::SchedulingTopologyHint topologyHint)
+void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     faabric::util::FullLock lock(mx);
 
-    return doSchedulingDecision(req, topologyHint);
-}
-
-faabric::batch_scheduler::SchedulingDecision Scheduler::doSchedulingDecision(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::batch_scheduler::SchedulingTopologyHint topologyHint)
-{
-    int nMessages = req->messages_size();
-    faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    std::string funcStr = faabric::util::funcToString(firstMsg, false);
-
-    // If topology hints are disabled, unset the provided topology hint
-    if (conf.noTopologyHints == "on" &&
-        topologyHint !=
-          faabric::batch_scheduler::SchedulingTopologyHint::NONE) {
-        SPDLOG_WARN("Ignoring topology hint passed to scheduler as hints are "
-                    "disabled in the config");
-        topologyHint = faabric::batch_scheduler::SchedulingTopologyHint::NONE;
-    }
-
-    // If requesting a cached decision, look for it now
-    faabric::batch_scheduler::DecisionCache& decisionCache =
-      faabric::batch_scheduler::getSchedulingDecisionCache();
-    if (topologyHint ==
-        faabric::batch_scheduler::SchedulingTopologyHint::CACHED) {
-        std::shared_ptr<faabric::batch_scheduler::CachedDecision>
-          cachedDecision = decisionCache.getCachedDecision(req);
-
-        if (cachedDecision != nullptr) {
-            int groupId = cachedDecision->getGroupId();
-            SPDLOG_DEBUG("Using cached decision for {} {}, group {}",
-                         funcStr,
-                         firstMsg.appid(),
-                         groupId);
-
-            // Get the cached hosts
-            std::vector<std::string> hosts = cachedDecision->getHosts();
-
-            // Create the scheduling decision
-            faabric::batch_scheduler::SchedulingDecision decision(
-              firstMsg.appid(), groupId);
-            for (int i = 0; i < hosts.size(); i++) {
-                // Reuse the group id
-                faabric::Message& m = req->mutable_messages()->at(i);
-                m.set_groupid(groupId);
-                m.set_groupsize(req->messages_size());
-
-                // Add to the decision
-                decision.addMessage(hosts.at(i), m);
-            }
-
-            return decision;
-        }
-
-        SPDLOG_DEBUG("No cached decision found for {} x {} in app {}",
-                     req->messages_size(),
-                     funcStr,
-                     firstMsg.appid());
-    }
-
-    std::vector<std::string> hosts;
-    hosts.reserve(nMessages);
-
-    if (topologyHint ==
-        faabric::batch_scheduler::SchedulingTopologyHint::FORCE_LOCAL) {
-        // We're forced to execute locally here so we do all the messages
-        SPDLOG_TRACE("Scheduling {}/{} of {} locally (force local)",
-                     nMessages,
-                     nMessages,
-                     funcStr);
-
-        for (int i = 0; i < nMessages; i++) {
-            hosts.push_back(thisHost);
-        }
-    } else {
-        // At this point we know we're the main host, and we've not been
-        // asked to force full local execution.
-
-        // Work out how many we can handle locally
-        int slots = thisHostResources.slots();
-        if (topologyHint ==
-            faabric::batch_scheduler::SchedulingTopologyHint::UNDERFULL) {
-            slots = slots / 2;
-        }
-
-        // Work out available cores, flooring at zero
-        int available =
-          slots - this->thisHostUsedSlots.load(std::memory_order_acquire);
-        available = std::max<int>(available, 0);
-
-        // Claim as many as we can
-        int nLocally = std::min<int>(available, nMessages);
-
-        // Add those that can be executed locally
-        SPDLOG_TRACE(
-          "Scheduling {}/{} of {} locally", nLocally, nMessages, funcStr);
-        for (int i = 0; i < nLocally; i++) {
-            hosts.push_back(thisHost);
-        }
-
-        // If some are left, we need to distribute.
-        // First try and do so on already registered hosts.
-        int remainder = nMessages - nLocally;
-        if (remainder > 0) {
-            const std::set<std::string>& thisRegisteredHosts =
-              getFunctionRegisteredHosts(
-                firstMsg.user(), firstMsg.function(), false);
-
-            for (const auto& h : thisRegisteredHosts) {
-                // Work out resources on the remote host
-                faabric::HostResources r = getHostResources(h);
-                int available = r.slots() - r.usedslots();
-
-                // We need to floor at zero here in case the remote host is
-                // overloaded, in which case its used slots will be greater than
-                // its available slots.
-                available = std::max<int>(0, available);
-                int nOnThisHost = std::min<int>(available, remainder);
-
-                // Under the NEVER_ALONE topology hint, we never choose a host
-                // unless we can schedule at least two requests in it.
-                if (topologyHint == faabric::batch_scheduler::
-                                      SchedulingTopologyHint::NEVER_ALONE &&
-                    nOnThisHost < 2) {
-                    continue;
-                }
-
-                SPDLOG_TRACE("Scheduling {}/{} of {} on {} (registered)",
-                             nOnThisHost,
-                             nMessages,
-                             funcStr,
-                             h);
-
-                for (int i = 0; i < nOnThisHost; i++) {
-                    hosts.push_back(h);
-                }
-
-                remainder -= nOnThisHost;
-                if (remainder <= 0) {
-                    break;
-                }
-            }
-        }
-
-        // Now schedule to unregistered hosts if there are messages left
-        if (remainder > 0) {
-            std::vector<std::string> unregisteredHosts =
-              getUnregisteredHosts(firstMsg.user(), firstMsg.function());
-
-            for (const auto& h : unregisteredHosts) {
-                // Skip if this host
-                if (h == thisHost) {
-                    continue;
-                }
-
-                // Work out resources on the remote host
-                faabric::HostResources r = getHostResources(h);
-                int available = r.slots() - r.usedslots();
-
-                // We need to floor at zero here in case the remote host is
-                // overloaded, in which case its used slots will be greater than
-                // its available slots.
-                available = std::max<int>(0, available);
-                int nOnThisHost = std::min(available, remainder);
-
-                if (topologyHint == faabric::batch_scheduler::
-                                      SchedulingTopologyHint::NEVER_ALONE &&
-                    nOnThisHost < 2) {
-                    continue;
-                }
-
-                SPDLOG_TRACE("Scheduling {}/{} of {} on {} (unregistered)",
-                             nOnThisHost,
-                             nMessages,
-                             funcStr,
-                             h);
-
-                // Register the host if it's exected a function
-                if (nOnThisHost > 0) {
-                    addRegisteredHost(h, firstMsg.user(), firstMsg.function());
-                }
-
-                for (int i = 0; i < nOnThisHost; i++) {
-                    hosts.push_back(h);
-                }
-
-                remainder -= nOnThisHost;
-                if (remainder <= 0) {
-                    break;
-                }
-            }
-        }
-
-        // At this point there's no more capacity in the system, so we
-        // just need to overload locally
-        if (remainder > 0) {
-            std::string overloadedHost = thisHost;
-
-            // Under the NEVER_ALONE scheduling topology hint we want to
-            // overload the last host we assigned requests to.
-            if (topologyHint == faabric::batch_scheduler::
-                                  SchedulingTopologyHint::NEVER_ALONE &&
-                !hosts.empty()) {
-                overloadedHost = hosts.back();
-            }
-
-            SPDLOG_DEBUG("Overloading {}/{} {} {}",
-                         remainder,
-                         nMessages,
-                         funcStr,
-                         overloadedHost == thisHost
-                           ? "locally"
-                           : "to host " + overloadedHost);
-
-            for (int i = 0; i < remainder; i++) {
-                hosts.push_back(overloadedHost);
-            }
-        }
-    }
-
-    // Sanity check
-    if (hosts.size() != nMessages) {
-        SPDLOG_ERROR(
-          "Serious scheduling error: {} != {}", hosts.size(), nMessages);
-
-        throw std::runtime_error("Not enough scheduled hosts for messages");
-    }
-
-    // Set up decision
-    faabric::batch_scheduler::SchedulingDecision decision(firstMsg.appid(),
-                                                          firstMsg.groupid());
-    for (int i = 0; i < hosts.size(); i++) {
-        decision.addMessage(hosts.at(i), req->messages().at(i));
-    }
-
-    // Cache decision for next time if necessary
-    if (topologyHint ==
-        faabric::batch_scheduler::SchedulingTopologyHint::CACHED) {
-        decisionCache.addCachedDecision(req, decision);
-    }
-
-    return decision;
-}
-
-faabric::batch_scheduler::SchedulingDecision Scheduler::callFunctions(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::batch_scheduler::SchedulingDecision& hint)
-{
-    faabric::util::FullLock lock(mx);
-    return doCallFunctions(
-      req, hint, lock, faabric::batch_scheduler::SchedulingTopologyHint::NONE);
-}
-
-faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::batch_scheduler::SchedulingDecision& decision,
-  faabric::util::FullLock& lock,
-  faabric::batch_scheduler::SchedulingTopologyHint topologyHint)
-{
-    faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    std::string funcStr = faabric::util::funcToString(firstMsg, false);
-    int nMessages = req->messages_size();
-    bool isMaster = thisHost == firstMsg.mainhost();
-    bool isMigration = req->type() == faabric::BatchExecuteRequest::MIGRATION;
-
-    if (decision.hosts.size() != nMessages) {
-        SPDLOG_ERROR(
-          "Passed decision for {} with {} messages, but request has {}",
-          funcStr,
-          decision.hosts.size(),
-          nMessages);
-        throw std::runtime_error("Invalid scheduler hint for messages");
-    }
-
-    if (firstMsg.mainhost().empty()) {
-        SPDLOG_ERROR("Request {} has no main host", funcStr);
-        throw std::runtime_error("Message with no main host");
-    }
-
-    // Send out point-to-point mappings if necessary (unless being forced to
-    // execute locally, in which case they will be transmitted from the
-    // main)
-    bool isForceLocal =
-      topologyHint ==
-      faabric::batch_scheduler::SchedulingTopologyHint::FORCE_LOCAL;
-    if (!isForceLocal && !isMigration && (firstMsg.groupid() > 0)) {
-        if (firstMsg.ismpi()) {
-            // If we are scheduling an MPI message, we want rank 0 to be in the
-            // group. However, rank 0 is the one calling this method to schedule
-            // the remaining worldSize - 1 functions. We can not change the
-            // scheduling decision, as this would affect the downstream method,
-            // but we can make a special copy just for the broker
-            auto decisionCopy = decision;
-            auto msgCopy = firstMsg;
-            msgCopy.set_groupidx(0);
-            decisionCopy.addMessage(thisHost, msgCopy);
-            broker.setAndSendMappingsFromSchedulingDecision(decisionCopy);
-        } else {
-            broker.setAndSendMappingsFromSchedulingDecision(decision);
-        }
-    }
-
-    // Record in-flight request if function desires to be migrated
-    if (!isMigration && firstMsg.migrationcheckperiod() > 0) {
-        doStartFunctionMigrationThread(req, decision);
-    }
-
-    // We want to schedule things on this host _last_, otherwise functions may
-    // start executing before all messages have been dispatched, thus slowing
-    // the remaining scheduling. Therefore we want to create a list of unique
-    // hosts, with this host last.
-    std::vector<std::string> orderedHosts;
-    bool isSingleHost = false;
-    {
-        std::set<std::string> uniqueHosts(decision.hosts.begin(),
-                                          decision.hosts.end());
-        bool hasFunctionsOnThisHost = uniqueHosts.contains(thisHost);
-
-        // Mark the request as being single-host if necessary
-        if (conf.noSingleHostOptimisations == 0) {
-            std::set<std::string> thisHostUniset = { thisHost };
-            isSingleHost = (uniqueHosts == thisHostUniset) && isMaster;
-            req->set_singlehost(isSingleHost);
-        }
-
-        if (hasFunctionsOnThisHost) {
-            uniqueHosts.erase(thisHost);
-        }
-
-        orderedHosts = std::vector(uniqueHosts.begin(), uniqueHosts.end());
-
-        if (hasFunctionsOnThisHost) {
-            orderedHosts.push_back(thisHost);
-        }
-    }
-
-    // -------------------------------------------
-    // THREADS
-    // -------------------------------------------
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
+    auto funcStr = faabric::util::funcToString(req);
+    int nMessages = req->messages_size();
 
-    // Register thread results if necessary
-    if (isThreads) {
-        for (const auto& m : req->messages()) {
-            registerThread(m.id());
-        }
-    }
-
-    // -------------------------------------------
-    // SNAPSHOTS
-    // -------------------------------------------
-
-    // Push out snapshot diffs to registered hosts. We have to do this to
-    // *all* hosts, regardless of whether they will be executing functions.
-    // This greatly simplifies the reasoning about which hosts hold which
-    // diffs.
-
-    std::string snapshotKey;
-    if (isThreads) {
-        if (!firstMsg.snapshotkey().empty()) {
-            SPDLOG_ERROR("{} should not provide snapshot key for {} threads",
-                         funcStr,
-                         req->messages().size());
-
-            std::runtime_error("Should not provide snapshot key for threads");
-        }
-
-        if (!isSingleHost) {
-            snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
-        }
-    } else {
-        snapshotKey = firstMsg.snapshotkey();
-    }
-
-    if (!snapshotKey.empty()) {
-        auto snap = reg.getSnapshot(snapshotKey);
-
-        for (const auto& host : getFunctionRegisteredHosts(
-               firstMsg.user(), firstMsg.function(), false)) {
-            std::shared_ptr<SnapshotClient> c = getSnapshotClient(host);
-
-            // See if we've already pushed this snapshot to the given host,
-            // if so, just push the diffs that have occurred in this main thread
-            if (pushedSnapshotsMap[snapshotKey].contains(host)) {
-                std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
-                  snap->getTrackedChanges();
-
-                c->pushSnapshotUpdate(snapshotKey, snap, snapshotDiffs);
-            } else {
-                c->pushSnapshot(snapshotKey, snap);
-                pushedSnapshotsMap[snapshotKey].insert(host);
-            }
-        }
-
-        // Now reset the tracking on the snapshot before we start executing
-        snap->clearTrackedChanges();
-    } else if (!snapshotKey.empty() && isMigration && isForceLocal) {
-        // If we are executing a migrated function, we don't need to distribute
-        // the snapshot to other hosts, as this snapshot is specific to the
-        // to-be-restored function
-        auto snap = reg.getSnapshot(snapshotKey);
-
-        // Now reset the tracking on the snapshot before we start executing
-        snap->clearTrackedChanges();
-    }
-
-    // -------------------------------------------
-    // EXECUTION
-    // -------------------------------------------
-
-    // Records for tests - copy messages before execution to avoid racing on msg
-    size_t recordedMessagesOffset = recordedMessagesAll.size();
+    // Records for tests - copy messages before execution to avoid races
     if (faabric::util::isTestMode()) {
         for (int i = 0; i < nMessages; i++) {
-            recordedMessagesAll.emplace_back(req->messages().at(i));
+            recordedMessages.emplace_back(req->messages().at(i));
         }
     }
 
-    // Iterate through unique hosts and dispatch messages
-    for (const std::string& host : orderedHosts) {
-        // Work out which indexes are scheduled on this host
-        std::vector<int> thisHostIdxs;
-        for (int i = 0; i < decision.hosts.size(); i++) {
-            if (decision.hosts.at(i) == host) {
-                thisHostIdxs.push_back(i);
-            }
-        }
+    // For threads we only need one executor, for anything else we want
+    // one Executor per function in flight.
+    if (isThreads) {
+        // Threads use the existing executor. We assume there's only
+        // one running at a time.
+        std::vector<std::shared_ptr<Executor>>& thisExecutors =
+          executors[funcStr];
 
-        if (host == thisHost) {
-            // -------------------------------------------
-            // LOCAL EXECTUION
-            // -------------------------------------------
-            // For threads we only need one executor, for anything else we want
-            // one Executor per function in flight.
-
-            if (thisHostIdxs.empty()) {
-                SPDLOG_DEBUG("Not scheduling any calls to {} out of {} locally",
-                             funcStr,
-                             nMessages);
-                continue;
-            }
-
-            SPDLOG_DEBUG("Scheduling {}/{} calls to {} locally",
-                         thisHostIdxs.size(),
-                         nMessages,
-                         funcStr);
-
-            // Update slots
-            this->thisHostUsedSlots.fetch_add(thisHostIdxs.size(),
-                                              std::memory_order_acquire);
-
-            if (isThreads) {
-                // Threads use the existing executor. We assume there's only
-                // one running at a time.
-                std::vector<std::shared_ptr<Executor>>& thisExecutors =
-                  executors[funcStr];
-
-                std::shared_ptr<Executor> e = nullptr;
-                if (thisExecutors.empty()) {
-                    // Create executor if not exists
-                    e = claimExecutor(firstMsg, lock);
-                } else if (thisExecutors.size() == 1) {
-                    // Use existing executor if exists
-                    e = thisExecutors.back();
-                } else {
-                    SPDLOG_ERROR("Found {} executors for threaded function {}",
-                                 thisExecutors.size(),
-                                 funcStr);
-                    throw std::runtime_error(
-                      "Expected only one executor for threaded function");
-                }
-
-                assert(e != nullptr);
-
-                // Execute the tasks
-                e->executeTasks(thisHostIdxs, req);
-            } else {
-                // Non-threads require one executor per task
-                for (auto i : thisHostIdxs) {
-                    faabric::Message& localMsg = req->mutable_messages()->at(i);
-
-                    std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
-                    e->executeTasks({ i }, req);
-                }
-            }
+        std::shared_ptr<Executor> e = nullptr;
+        if (thisExecutors.empty()) {
+            // Create executor if not exists
+            e = claimExecutor(*req->mutable_messages(0), lock);
+        } else if (thisExecutors.size() == 1) {
+            // Use existing executor if exists
+            e = thisExecutors.back();
         } else {
-            // -------------------------------------------
-            // REMOTE EXECTUION
-            // -------------------------------------------
-            SPDLOG_DEBUG("Scheduling {}/{} calls to {} on {}",
-                         thisHostIdxs.size(),
-                         nMessages,
-                         funcStr,
-                         host);
-
-            // Set up new request
-            std::shared_ptr<faabric::BatchExecuteRequest> hostRequest =
-              faabric::util::batchExecFactory();
-            hostRequest->set_snapshotkey(req->snapshotkey());
-            hostRequest->set_type(req->type());
-            hostRequest->set_subtype(req->subtype());
-            hostRequest->set_contextdata(req->contextdata());
-
-            // Add messages
-            for (auto msgIdx : thisHostIdxs) {
-                auto* newMsg = hostRequest->add_messages();
-                *newMsg = req->messages().at(msgIdx);
-                newMsg->set_executeslocally(false);
-            }
-
-            // Dispatch the calls
-            getFunctionCallClient(host)->executeFunctions(hostRequest);
+            SPDLOG_ERROR("Found {} executors for threaded function {}",
+                         thisExecutors.size(),
+                         funcStr);
+            throw std::runtime_error(
+              "Expected only one executor for threaded function");
         }
-    }
 
-    // Records for tests
-    if (faabric::util::isTestMode()) {
+        assert(e != nullptr);
+
+        // Execute the tasks
+        std::vector<int> thisHostIdxs(req->messages_size());
+        std::iota(thisHostIdxs.begin(), thisHostIdxs.end(), 0);
+        e->executeTasks(thisHostIdxs, req);
+    } else {
+        // Non-threads require one executor per task
         for (int i = 0; i < nMessages; i++) {
-            std::string executedHost = decision.hosts.at(i);
-            const faabric::Message& msg =
-              recordedMessagesAll.at(recordedMessagesOffset + i);
+            faabric::Message& localMsg = req->mutable_messages()->at(i);
 
-            // Log results if in test mode
-            if (executedHost.empty() || executedHost == thisHost) {
-                recordedMessagesLocal.emplace_back(msg);
-            } else {
-                recordedMessagesShared.emplace_back(executedHost, msg);
-            }
+            std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
+            e->executeTasks({ i }, req);
         }
-    }
-
-    return decision;
-}
-
-std::vector<std::string> Scheduler::getUnregisteredHosts(
-  const std::string& user,
-  const std::string& function,
-  bool noCache)
-{
-    // Load the list of available hosts
-    if (availableHostsCache.empty() || noCache) {
-        availableHostsCache = getAvailableHosts();
-    }
-
-    // At this point we know we need to enlist unregistered hosts
-    const std::set<std::string>& thisRegisteredHosts =
-      getFunctionRegisteredHosts(user, function, false);
-
-    std::vector<std::string> unregisteredHosts;
-
-    std::set_difference(
-      availableHostsCache.begin(),
-      availableHostsCache.end(),
-      thisRegisteredHosts.begin(),
-      thisRegisteredHosts.end(),
-      std::inserter(unregisteredHosts, unregisteredHosts.begin()));
-
-    // If we've not got any, try again without caching
-    if (unregisteredHosts.empty() && !noCache) {
-        return getUnregisteredHosts(user, function, true);
-    }
-
-    return unregisteredHosts;
-}
-
-void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
-                                        const std::string& snapshotKey)
-{
-    const std::set<std::string>& thisRegisteredHosts =
-      getFunctionRegisteredHosts(msg.user(), msg.function(), false);
-
-    for (auto host : thisRegisteredHosts) {
-        getSnapshotClient(host)->deleteSnapshot(snapshotKey);
     }
 }
 
 void Scheduler::clearRecordedMessages()
 {
     faabric::util::FullLock lock(mx);
-    recordedMessagesAll.clear();
-    recordedMessagesLocal.clear();
-    recordedMessagesShared.clear();
+    recordedMessages.clear();
 }
 
-std::vector<faabric::Message> Scheduler::getRecordedMessagesAll()
+std::vector<faabric::Message> Scheduler::getRecordedMessages()
 {
     faabric::util::SharedLock lock(mx);
-    return recordedMessagesAll;
-}
-
-std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
-{
-    faabric::util::SharedLock lock(mx);
-    return recordedMessagesLocal;
-}
-
-std::vector<std::pair<std::string, faabric::Message>>
-Scheduler::getRecordedMessagesShared()
-{
-    faabric::util::SharedLock lock(mx);
-    return recordedMessagesShared;
+    return recordedMessages;
 }
 
 std::shared_ptr<Executor> Scheduler::claimExecutor(
@@ -1069,17 +379,8 @@ void Scheduler::flushLocally()
 
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
-    // Record which host did the execution
-    msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
-
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
-
-    // Remove the app from in-flight map if still there, and this host is the
-    // main host for the message
-    if (msg.mainhost() == thisHost) {
-        removePendingMigration(msg.appid());
-    }
 
     // Let the planner know this function has finished execution. This will
     // wake any thread waiting on this result
@@ -1087,15 +388,8 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
       std::make_shared<faabric::Message>(msg));
 }
 
-void Scheduler::registerThread(uint32_t msgId)
-{
-    // Here we need to ensure the promise is registered locally so
-    // callers can start waiting
-    threadResults[msgId];
-}
-
 void Scheduler::setThreadResult(
-  const faabric::Message& msg,
+  faabric::Message& msg,
   int32_t returnValue,
   const std::string& key,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
@@ -1118,92 +412,42 @@ void Scheduler::setThreadResult(
             // merging operation.
             snap->queueDiffs(diffs);
         }
-
-        // Set thread result locally
-        setThreadResultLocally(msg.id(), returnValue);
     } else {
         // Push thread result and diffs together
         getSnapshotClient(msg.mainhost())
-          ->pushThreadResult(msg.id(), returnValue, key, diffs);
+          ->pushThreadResult(msg.appid(), msg.id(), returnValue, key, diffs);
     }
+
+    // Finally, set the message result in the planner
+    setFunctionResult(msg);
 }
 
-void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
-{
-    faabric::util::FullLock lock(mx);
-    SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
-    threadResults.at(msgId).set_value(returnValue);
-}
-
-void Scheduler::setThreadResultLocally(uint32_t msgId,
+void Scheduler::setThreadResultLocally(uint32_t appId,
+                                       uint32_t msgId,
                                        int32_t returnValue,
                                        faabric::transport::Message& message)
 {
-    setThreadResultLocally(msgId, returnValue);
-
     // Keep the message
     faabric::util::FullLock lock(mx);
     threadResultMessages.insert(std::make_pair(msgId, std::move(message)));
 }
 
+// TODO(scheduler-cleanup): move method elsewhere
 std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  int timeoutMs)
 {
     std::vector<std::pair<uint32_t, int32_t>> results;
     results.reserve(req->messages_size());
     for (int i = 0; i < req->messages_size(); i++) {
         uint32_t messageId = req->messages().at(i).id();
 
-        int result = awaitThreadResult(messageId);
-        results.emplace_back(messageId, result);
+        auto msgResult = faabric::planner::getPlannerClient().getMessageResult(
+          req->appid(), messageId, timeoutMs);
+        results.emplace_back(messageId, msgResult.returnvalue());
     }
 
     return results;
-}
-
-int32_t Scheduler::awaitThreadResult(uint32_t messageId)
-{
-    faabric::util::SharedLock lock(mx);
-    auto it = threadResults.find(messageId);
-    if (it == threadResults.end()) {
-        SPDLOG_ERROR("Thread {} not registered on this host", messageId);
-        throw std::runtime_error("Awaiting unregistered thread");
-    }
-    lock.unlock();
-
-    return it->second.get_future().get();
-}
-
-void Scheduler::deregisterThreads(
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    faabric::util::FullLock eraseLock(mx);
-    for (auto m : req->messages()) {
-        threadResults.erase(m.id());
-        threadResultMessages.erase(m.id());
-    }
-}
-
-void Scheduler::deregisterThread(uint32_t msgId)
-{
-    // Erase the cached message and thread result
-    faabric::util::FullLock eraseLock(mx);
-    threadResults.erase(msgId);
-    threadResultMessages.erase(msgId);
-}
-
-std::vector<uint32_t> Scheduler::getRegisteredThreads()
-{
-    faabric::util::SharedLock lock(mx);
-
-    std::vector<uint32_t> registeredIds;
-    for (auto const& p : threadResults) {
-        registeredIds.push_back(p.first);
-    }
-
-    std::sort(registeredIds.begin(), registeredIds.end());
-
-    return registeredIds;
 }
 
 size_t Scheduler::getCachedMessageCount()
@@ -1211,29 +455,9 @@ size_t Scheduler::getCachedMessageCount()
     return threadResultMessages.size();
 }
 
-faabric::HostResources Scheduler::getThisHostResources()
-{
-    faabric::util::SharedLock lock(mx);
-    faabric::HostResources hostResources = thisHostResources;
-    hostResources.set_usedslots(
-      this->thisHostUsedSlots.load(std::memory_order_acquire));
-    return hostResources;
-}
-
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
-    // Update the planner (no lock required)
     addHostToGlobalSet(thisHost, std::make_shared<faabric::HostResources>(res));
-
-    faabric::util::FullLock lock(mx);
-    thisHostResources = res;
-    this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
-}
-
-faabric::HostResources Scheduler::getHostResources(const std::string& host)
-{
-    SPDLOG_TRACE("Requesting resources from {}", host);
-    return getFunctionCallClient(host)->getResources();
 }
 
 // --------------------------------------------
@@ -1250,256 +474,71 @@ std::string getChainedKey(unsigned int msgId)
 // MIGRATION
 // ----------------------------------------
 
-void FunctionMigrationThread::doWork()
+std::shared_ptr<faabric::PendingMigration>
+Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
+                                          int overwriteNewGroupId)
 {
-    getScheduler().checkForMigrationOpportunities();
-}
+    int appId = msg.appid();
+    int groupId = msg.groupid();
+    int groupIdx = msg.groupidx();
+    SPDLOG_DEBUG("Message {}:{}:{} checking for migration opportunities",
+                 appId,
+                 groupId,
+                 groupIdx);
 
-void Scheduler::checkForMigrationOpportunities()
-{
-    std::vector<std::shared_ptr<faabric::PendingMigrations>>
-      tmpPendingMigrations;
+    // TODO: maybe we could move this into a broker-specific function?
+    int newGroupId = 0;
+    if (groupIdx == 0) {
+        // To check for migration opportunities, we request a scheduling
+        // decision for the same batch execute request, but setting the
+        // migration flag
+        auto req =
+          faabric::util::batchExecFactory(msg.user(), msg.function(), 1);
+        faabric::util::updateBatchExecAppId(req, msg.appid());
+        faabric::util::updateBatchExecGroupId(req, msg.groupid());
+        req->set_type(faabric::BatchExecuteRequest::MIGRATION);
+        auto decision = planner::getPlannerClient().callFunctions(req);
 
-    {
-        // Acquire a shared lock to read from the in-flight requests map
-        faabric::util::SharedLock lock(mx);
-
-        tmpPendingMigrations = doCheckForMigrationOpportunities();
-    }
-
-    // If we find migration opportunites
-    if (tmpPendingMigrations.size() > 0) {
-        // Acquire full lock to write to the pending migrations map
-        faabric::util::FullLock lock(mx);
-
-        for (auto msgPtr : tmpPendingMigrations) {
-            // First, broadcast the pending migrations to other hosts
-            broadcastPendingMigrations(msgPtr);
-            // Second, update our local records
-            pendingMigrations[msgPtr->appid()] = std::move(msgPtr);
+        // Update the group ID if we want to migrate
+        if (decision == DO_NOT_MIGRATE_DECISION) {
+            newGroupId = groupId;
+        } else {
+            newGroupId = decision.groupId;
         }
+
+        // Send the new group id to all the members of the group
+        auto groupIdxs = broker.getIdxsRegisteredForGroup(groupId);
+        groupIdxs.erase(0);
+        for (const auto& recvIdx : groupIdxs) {
+            broker.sendMessage(
+              groupId, 0, recvIdx, BYTES_CONST(&newGroupId), sizeof(int));
+        }
+    } else if (overwriteNewGroupId == 0) {
+        std::vector<uint8_t> bytes = broker.recvMessage(groupId, 0, groupIdx);
+        newGroupId = faabric::util::bytesToInt(bytes);
+    } else {
+        // In some settings, like tests, we already know the new group id, so
+        // we can set it here (and in fact, we need to do so when faking two
+        // hosts)
+        newGroupId = overwriteNewGroupId;
     }
-}
 
-void Scheduler::broadcastPendingMigrations(
-  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
-{
-    // Get all hosts for the to-be migrated app
-    auto msg = pendingMigrations->migrations().at(0).msg();
-    const std::set<std::string>& thisRegisteredHosts =
-      getFunctionRegisteredHosts(msg.user(), msg.function(), false);
-
-    // Remove this host from the set
-    registeredHosts.erase(thisHost);
-
-    // Send pending migrations to all involved hosts
-    for (auto& otherHost : thisRegisteredHosts) {
-        getFunctionCallClient(otherHost)->sendPendingMigrations(
-          pendingMigrations);
-    }
-}
-
-std::shared_ptr<faabric::PendingMigrations> Scheduler::getPendingAppMigrations(
-  uint32_t appId)
-{
-    faabric::util::SharedLock lock(mx);
-
-    if (pendingMigrations.find(appId) == pendingMigrations.end()) {
+    bool appMustMigrate = newGroupId != groupId;
+    if (!appMustMigrate) {
         return nullptr;
     }
 
-    return pendingMigrations[appId];
-}
+    msg.set_groupid(newGroupId);
+    broker.waitForMappingsOnThisHost(newGroupId);
+    std::string newHost = broker.getHostForReceiver(newGroupId, groupIdx);
 
-void Scheduler::addPendingMigration(
-  std::shared_ptr<faabric::PendingMigrations> pMigration)
-{
-    faabric::util::FullLock lock(mx);
+    auto migration = std::make_shared<faabric::PendingMigration>();
+    migration->set_appid(appId);
+    migration->set_groupid(newGroupId);
+    migration->set_groupidx(groupIdx);
+    migration->set_srchost(thisHost);
+    migration->set_dsthost(newHost);
 
-    auto msg = pMigration->migrations().at(0).msg();
-    if (pendingMigrations.find(msg.appid()) != pendingMigrations.end()) {
-        SPDLOG_ERROR("Received remote request to add a pending migration for "
-                     "app {}, but already recorded another migration request"
-                     " for the same app.",
-                     msg.appid());
-        throw std::runtime_error("Remote request for app already there");
-    }
-
-    pendingMigrations[msg.appid()] = pMigration;
-}
-
-void Scheduler::removePendingMigration(uint32_t appId)
-{
-    faabric::util::FullLock lock(mx);
-
-    inFlightRequests.erase(appId);
-    pendingMigrations.erase(appId);
-}
-
-std::vector<std::shared_ptr<faabric::PendingMigrations>>
-Scheduler::doCheckForMigrationOpportunities(
-  faabric::batch_scheduler::MigrationStrategy migrationStrategy)
-{
-    std::vector<std::shared_ptr<faabric::PendingMigrations>>
-      pendingMigrationsVec;
-
-    // For each in-flight request that has opted in to be migrated,
-    // check if there is an opportunity to migrate
-    for (const auto& app : inFlightRequests) {
-        auto req = app.second.first;
-        auto originalDecision = *app.second.second;
-
-        // If we have already recorded a pending migration for this req,
-        // skip
-        if (getPendingAppMigrations(originalDecision.appId) != nullptr) {
-            SPDLOG_TRACE("Skipping app {} as migration opportunity has "
-                         "already been recorded",
-                         originalDecision.appId);
-            continue;
-        }
-
-        faabric::PendingMigrations msg;
-        msg.set_appid(originalDecision.appId);
-
-        if (migrationStrategy ==
-            faabric::batch_scheduler::MigrationStrategy::BIN_PACK) {
-            // We assume the batch was originally scheduled using
-            // bin-packing, thus the scheduling decision has at the begining
-            // (left) the hosts with the most allocated requests, and at the
-            // end (right) the hosts with the fewest. To check for migration
-            // oportunities, we compare a pointer to the possible
-            // destination of the migration (left), with one to the possible
-            // source of the migration (right). NOTE - this is a slight
-            // simplification, but makes the code simpler.
-            auto left = originalDecision.hosts.begin();
-            auto right = originalDecision.hosts.end() - 1;
-            faabric::HostResources r = (*left == thisHost)
-                                         ? getThisHostResources()
-                                         : getHostResources(*left);
-            auto nAvailable = [&r]() -> int {
-                return r.slots() - r.usedslots();
-            };
-            auto claimSlot = [&r]() {
-                int currentUsedSlots = r.usedslots();
-                r.set_usedslots(currentUsedSlots + 1);
-            };
-            while (left < right) {
-                // If both pointers point to the same host, no migration
-                // opportunity, and must check another possible source of
-                // the migration
-                if (*left == *right) {
-                    --right;
-                    continue;
-                }
-
-                // If the left pointer (possible destination of the
-                // migration) is out of available resources, no migration
-                // opportunity, and must check another possible destination
-                // of migration
-                if (nAvailable() == 0) {
-                    auto oldHost = *left;
-                    ++left;
-                    if (*left != oldHost) {
-                        r = (*left == thisHost) ? getThisHostResources()
-                                                : getHostResources(*left);
-                    }
-                    continue;
-                }
-
-                // If each pointer points to a request scheduled in a
-                // different host, and the possible destination has slots,
-                // there is a migration opportunity
-                auto* migration = msg.add_migrations();
-                migration->set_srchost(*right);
-                migration->set_dsthost(*left);
-
-                faabric::Message* msgPtr =
-                  &(*(req->mutable_messages()->begin() +
-                      std::distance(originalDecision.hosts.begin(), right)));
-                auto* migrationMsgPtr = migration->mutable_msg();
-                *migrationMsgPtr = *msgPtr;
-                // Decrement by one the availability, and check for more
-                // possible sources of migration
-                claimSlot();
-                --right;
-            }
-        } else {
-            SPDLOG_ERROR("Unrecognised migration strategy: {}",
-                         migrationStrategy);
-            throw std::runtime_error("Unrecognised migration strategy.");
-        }
-
-        if (msg.migrations_size() > 0) {
-            pendingMigrationsVec.emplace_back(
-              std::make_shared<faabric::PendingMigrations>(msg));
-            SPDLOG_DEBUG("Detected migration opportunity for app: {}",
-                         msg.appid());
-        } else {
-            SPDLOG_DEBUG("No migration opportunity detected for app: {}",
-                         msg.appid());
-        }
-    }
-
-    return pendingMigrationsVec;
-}
-
-// Start the function migration thread if necessary
-// NOTE: ideally, instead of allowing the applications to specify a check
-// period, we would have a default one (overwritable through an env.
-// variable), and apps would just opt in/out of being migrated. We set
-// the actual check period instead to ease with experiments.
-void Scheduler::doStartFunctionMigrationThread(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::batch_scheduler::SchedulingDecision& decision)
-{
-    bool startMigrationThread = inFlightRequests.size() == 0;
-    faabric::Message& firstMsg = req->mutable_messages()->at(0);
-
-    if (inFlightRequests.find(decision.appId) != inFlightRequests.end()) {
-        // MPI applications are made up of two different requests: the
-        // original one (with one message) and the second one (with
-        // world size - 1 messages) created during world creation time.
-        // Thus, to correctly track migration opportunities we must merge
-        // both. We append the batch request to the original one (instead
-        // of the other way around) not to affect the rest of this methods
-        // functionality.
-        if (firstMsg.ismpi()) {
-            startMigrationThread = false;
-            auto originalReq = inFlightRequests[decision.appId].first;
-            auto originalDecision = inFlightRequests[decision.appId].second;
-            assert(req->messages_size() == firstMsg.mpiworldsize() - 1);
-            for (int i = 0; i < firstMsg.mpiworldsize() - 1; i++) {
-                // Append message to original request
-                auto* newMsgPtr = originalReq->add_messages();
-                *newMsgPtr = req->messages().at(i);
-
-                // Append message to original decision
-                originalDecision->addMessage(decision.hosts.at(i),
-                                             req->messages().at(i));
-            }
-        } else {
-            SPDLOG_ERROR("There is already an in-flight request for app {}",
-                         firstMsg.appid());
-            throw std::runtime_error("App already in-flight");
-        }
-    } else {
-        auto decisionPtr =
-          std::make_shared<faabric::batch_scheduler::SchedulingDecision>(
-            decision);
-        inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
-    }
-
-    // Decide wether we have to start the migration thread or not
-    if (startMigrationThread) {
-        functionMigrationThread.start(firstMsg.migrationcheckperiod());
-    } else if (firstMsg.migrationcheckperiod() !=
-               functionMigrationThread.getIntervalSeconds()) {
-        SPDLOG_WARN("Ignoring migration check period for app {} as the"
-                    "migration thread is already running with a different"
-                    " check period (provided: {}, current: {})",
-                    firstMsg.appid(),
-                    firstMsg.migrationcheckperiod(),
-                    functionMigrationThread.getIntervalSeconds());
-    }
+    return migration;
 }
 }

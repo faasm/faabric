@@ -13,11 +13,16 @@ namespace tests {
 
 class SchedulerReapingTestFixture
   : public SchedulerFixture
+  , public FunctionCallClientServerFixture
   , public ConfFixture
 {
   public:
     SchedulerReapingTestFixture()
     {
+        faabric::HostResources res;
+        res.set_slots(20);
+        sch.setThisHostResources(res);
+
         std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
           std::make_shared<faabric::scheduler::DummyExecutorFactory>();
         faabric::scheduler::setExecutorFactory(fac);
@@ -59,7 +64,8 @@ TEST_CASE_METHOD(SchedulerReapingTestFixture,
     int nMsgs = 10;
     auto req = faabric::util::batchExecFactory("foo", "bar", nMsgs);
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
+    plannerCli.getMessageResult(firstMsg, 500);
 
     // Check executor count
     REQUIRE(sch.getFunctionExecutorCount(firstMsg) == nMsgs);

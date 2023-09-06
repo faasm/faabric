@@ -18,6 +18,7 @@
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -168,40 +169,6 @@ class SchedulerFixture
 
         faabric::util::getDirtyTracker()->clearAll();
     };
-
-    // Helper method to set the available hosts and slots per host prior to
-    // making a scheduling decision
-    void setHostResources(std::vector<std::string> hosts,
-                          std::vector<int> slotsPerHost,
-                          std::vector<int> usedPerHost)
-    {
-        if (hosts.size() != slotsPerHost.size() ||
-            hosts.size() != usedPerHost.size()) {
-            SPDLOG_ERROR("Must provide one value for slots and used per host");
-            throw std::runtime_error(
-              "Not providing one value per slot and used per host");
-        }
-
-        sch.clearRecordedMessages();
-        faabric::scheduler::clearMockRequests();
-
-        for (int i = 0; i < hosts.size(); i++) {
-            faabric::HostResources resources;
-            resources.set_slots(slotsPerHost.at(i));
-            resources.set_usedslots(usedPerHost.at(i));
-
-            sch.addHostToGlobalSet(hosts.at(i));
-
-            // If setting resources for the main host, update the scheduler.
-            // Otherwise, queue the resource response
-            if (i == 0) {
-                sch.setThisHostResources(resources);
-            } else {
-                faabric::scheduler::queueResourceResponse(hosts.at(i),
-                                                          resources);
-            }
-        }
-    }
 
   protected:
     faabric::scheduler::Scheduler& sch;
@@ -429,7 +396,8 @@ class MpiBaseTestFixture
       , func("hellompi")
       , worldId(123)
       , worldSize(5)
-      , msg(faabric::util::messageFactory(user, func))
+      , req(faabric::util::batchExecFactory(user, func, 1))
+      , msg(*req->mutable_messages(0))
     {
         std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
           std::make_shared<faabric::scheduler::DummyExecutorFactory>();
@@ -437,14 +405,21 @@ class MpiBaseTestFixture
 
         msg.set_mpiworldid(worldId);
         msg.set_mpiworldsize(worldSize);
+
+        // Make enough space in this host to run MPI functions
+        faabric::HostResources res;
+        res.set_slots(2 * worldSize);
+        sch.setThisHostResources(res);
+
+        // Call the request, so that we have the original message recorded
+        // in the planner
+        plannerCli.callFunctions(req);
     }
 
     ~MpiBaseTestFixture()
     {
-        // TODO - without this sleep, we sometimes clear the PTP broker before
-        // all the executor threads have been set up, and when trying to query
-        // for the comm. group we throw a runtime error.
-        SLEEP_MS(200);
+        // Make sure we get the message result to avoid data races
+        plannerCli.getMessageResult(msg, 500);
     }
 
   protected:
@@ -453,7 +428,49 @@ class MpiBaseTestFixture
     int worldId;
     int worldSize;
 
-    faabric::Message msg;
+    std::shared_ptr<BatchExecuteRequest> req;
+    faabric::Message& msg;
+
+    // This method waits for all MPI messages to be scheduled. In MPI,
+    // (worldSize - 1) messages are scheduled after calling MpiWorld::create.
+    // Thus, it is hard when this second batch has already started executing
+    void waitForMpiMessages(
+      std::shared_ptr<BatchExecuteRequest> reqIn = nullptr,
+      int expectedWorldSize = 0) const
+    {
+        if (reqIn == nullptr) {
+            reqIn = req;
+        }
+
+        if (expectedWorldSize == 0) {
+            expectedWorldSize = worldSize;
+        }
+
+        int maxRetries = 5;
+        int numRetries = 0;
+        auto decision = plannerCli.getSchedulingDecision(reqIn);
+        while (decision.messageIds.size() != expectedWorldSize) {
+            if (numRetries >= maxRetries) {
+                SPDLOG_ERROR(
+                  "Timed-out waiting for MPI messages to be scheduled ({}/{})",
+                  decision.messageIds.size(),
+                  expectedWorldSize);
+                throw std::runtime_error("Timed-out waiting for MPI messges");
+            }
+
+            SPDLOG_DEBUG("Waiting for MPI messages to be scheduled ({}/{})",
+                         decision.messageIds.size(),
+                         expectedWorldSize);
+            SLEEP_MS(200);
+
+            numRetries += 1;
+            decision = plannerCli.getSchedulingDecision(reqIn);
+        }
+
+        for (auto mid : decision.messageIds) {
+            plannerCli.getMessageResult(decision.appId, mid, 500);
+        }
+    }
 };
 
 class MpiTestFixture : public MpiBaseTestFixture
@@ -508,10 +525,8 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         // Set up the other world and add it to the global set of hosts
         faabric::HostResources otherResources;
         otherResources.set_slots(ranksOtherWorld);
-        sch.addHostToGlobalSet(otherHost);
-
-        // Queue the resource response for this other host
-        faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+        sch.addHostToGlobalSet(
+          otherHost, std::make_shared<faabric::HostResources>(otherResources));
     }
 
   protected:

@@ -21,18 +21,26 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
     // Create the world
     MpiWorld world;
     world.create(msg, worldId, worldSize);
+    msg.set_ismpi(true);
+    msg.set_mpiworldid(worldId);
+    msg.set_mpirank(0);
 
     REQUIRE(world.getSize() == worldSize);
     REQUIRE(world.getId() == worldId);
     REQUIRE(world.getUser() == user);
     REQUIRE(world.getFunction() == func);
 
-    // Check that chained function calls are made as expected
-    std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
-    REQUIRE(actual.size() == worldSize - 1);
+    // Wait to make sure all messages are scheduled and dispatched
+    waitForMpiMessages(req, worldSize);
 
-    for (int i = 0; i < worldSize - 1; i++) {
-        faabric::Message actualCall = actual.at(i);
+    // Check that chained function calls are made as expected
+    std::vector<faabric::Message> actual = sch.getRecordedMessages();
+    REQUIRE(actual.size() == worldSize);
+
+    // Check all messages but the first one, which we only modify during
+    // world creation (and not when we first call it)
+    for (int i = 1; i < worldSize - 1; i++) {
+        faabric::Message actualCall = actual.at(i + 1);
         REQUIRE(actualCall.user() == user);
         REQUIRE(actualCall.function() == func);
         REQUIRE(actualCall.ismpi());
@@ -60,8 +68,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating world of size 1", "[mpi]")
     REQUIRE(world.getUser() == user);
     REQUIRE(world.getFunction() == func);
 
-    // Check no messages are sent
-    REQUIRE(sch.getRecordedMessagesAll().empty());
+    // Check only one message is sent
+    REQUIRE(sch.getRecordedMessages().size() == worldSize);
 
     world.destroy();
 }
@@ -434,8 +442,9 @@ TEST_CASE_METHOD(MpiTestFixture, "Test recv with partial data", "[mpi]")
     REQUIRE(status.bytesSize == actualSize * sizeof(int));
 }
 
-// 30/12/21 - MPI_Probe is broken after the switch to single-producer, single-
-// consumer fixed capacity queues.
+/*
+ * 30/12/21 - MPI_Probe is broken after the switch to single-producer, single-
+ * consumer fixed capacity queues.
 TEST_CASE_METHOD(MpiTestFixture, "Test probe", "[.]")
 {
     // Send two messages of different sizes
@@ -477,6 +486,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test probe", "[.]")
     auto* bufferB = bufferBAllocation.get();
     world.recv(1, 2, BYTES(bufferB), MPI_INT, sizeB * sizeof(int), nullptr);
 }
+*/
 
 TEST_CASE_METHOD(MpiTestFixture, "Check sending to invalid rank", "[mpi]")
 {

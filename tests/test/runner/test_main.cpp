@@ -51,15 +51,13 @@ TEST_CASE_METHOD(MainRunnerTestFixture, "Test main runner", "[runner]")
                       req->mutable_messages()->end(),
                       [&msgIds](auto msg) { msgIds.push_back(msg.id()); });
 
-        auto& sch = faabric::scheduler::getScheduler();
-        sch.callFunctions(req);
+        plannerCli.callFunctions(req);
 
         for (auto msgId : msgIds) {
             std::string expected =
               fmt::format("DummyExecutor executed {}", msgId);
             faabric::Message res =
-              faabric::planner::getPlannerClient().getMessageResult(
-                appId, msgId, SHORT_TEST_TIMEOUT_MS);
+              plannerCli.getMessageResult(appId, msgId, SHORT_TEST_TIMEOUT_MS);
             REQUIRE(res.outputdata() == expected);
         }
     }

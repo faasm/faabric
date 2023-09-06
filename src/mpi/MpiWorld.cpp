@@ -1,7 +1,7 @@
 #include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/mpi.pb.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/planner/PlannerClient.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/batch.h>
@@ -134,40 +134,29 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     call.set_mpirank(0);
     call.set_mpiworldid(id);
     call.set_mpiworldsize(size);
-    call.set_groupid(call.mpiworldid());
     call.set_groupidx(call.mpirank());
     call.set_appidx(call.mpirank());
-
-    auto& sch = faabric::scheduler::getScheduler();
 
     // Dispatch all the chained calls. With the main being rank zero, we want
     // to spawn (size - 1) new functions starting with rank 1
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, size - 1);
+    faabric::util::updateBatchExecAppId(req, call.appid());
     for (int i = 0; i < req->messages_size(); i++) {
+        // Update MPI-related fields
         faabric::Message& msg = req->mutable_messages()->at(i);
-        msg.set_appid(call.appid());
         msg.set_ismpi(true);
         msg.set_mpiworldid(call.mpiworldid());
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(call.mpiworldsize());
 
-        // Set group ids for remote messaging
-        msg.set_groupid(call.groupid());
+        // Set group idxs for remote messaging
         msg.set_groupidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
             msg.set_appid(thisRankMsg->appid());
             msg.set_cmdline(thisRankMsg->cmdline());
             msg.set_inputdata(thisRankMsg->inputdata());
-            msg.set_migrationcheckperiod(thisRankMsg->migrationcheckperiod());
-
-            // To run migration experiments easily, we may want to propagate
-            // the UNDERFULL topology hint. In general however, we don't
-            // need to propagate this field
-            if (thisRankMsg->topologyhint() == "UNDERFULL") {
-                msg.set_topologyhint(thisRankMsg->topologyhint());
-            }
 
             // Log chained functions to generate execution graphs
             if (thisRankMsg->recordexecgraph()) {
@@ -178,10 +167,11 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     }
 
     // As a result of the call to the scheduler, a point-to-point communcation
-    // group will have been created with id equal to the MPI world's id.
+    // group will have been created. We update our recorded message group id
+    // to use the new PTP group
     if (size > 1) {
-        faabric::batch_scheduler::SchedulingDecision decision =
-          sch.callFunctions(req);
+        auto decision = faabric::planner::getPlannerClient().callFunctions(req);
+        thisRankMsg->set_groupid(decision.groupId);
         assert(decision.hosts.size() == size - 1);
     } else {
         // If world has size one, create the communication group (of size one)
@@ -298,7 +288,12 @@ void MpiWorld::initLocalRemoteLeaders()
     int groupId = thisRankMsg->groupid();
     auto rankIds = broker.getIdxsRegisteredForGroup(groupId);
     if (rankIds.size() != size) {
-        SPDLOG_ERROR("rankIds != size ({} != {})", rankIds.size(), size);
+        SPDLOG_ERROR("{}:{}:{} rankIds != size ({} != {})",
+                     thisRankMsg->appid(),
+                     groupId,
+                     thisRankMsg->groupidx(),
+                     rankIds.size(),
+                     size);
         throw std::runtime_error("MPI Group-World size mismatch!");
     }
     assert(rankIds.size() == size);
@@ -1408,18 +1403,6 @@ void MpiWorld::barrier(int thisRank)
         send(thisRank, 0, nullptr, MPI_INT, 0, MPIMessage::BARRIER_JOIN);
     }
 
-    if (thisRank == localLeader && hasBeenMigrated) {
-        hasBeenMigrated = false;
-        if (thisRankMsg != nullptr) {
-            faabric::scheduler::getScheduler().removePendingMigration(
-              thisRankMsg->appid());
-        } else {
-            SPDLOG_ERROR("App has been migrated but rank ({}) message not set",
-                         thisRank);
-            throw std::runtime_error("App migrated but rank message not set");
-        }
-    }
-
     // Rank 0 broadcasts that the barrier is done (the others block here)
     broadcast(0, thisRank, nullptr, MPI_INT, 0, MPIMessage::BARRIER_DONE);
     SPDLOG_TRACE("MPI - barrier done {}", thisRank);
@@ -1601,9 +1584,7 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
     }
 }
 
-void MpiWorld::prepareMigration(
-  int thisRank,
-  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
+void MpiWorld::prepareMigration(int thisRank)
 {
     // Check that there are no pending asynchronous messages to send and receive
     for (auto umb : unackedMessageBuffers) {
@@ -1630,46 +1611,7 @@ void MpiWorld::prepareMigration(
 
     // Update local records
     if (thisRank == localLeader) {
-        for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
-            auto m = pendingMigrations->mutable_migrations()->at(i);
-            assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
-
-            // Update the host for this rank. We only update the positions of
-            // the to-be migrated ranks, avoiding race conditions with not-
-            // migrated ranks
-            hostForRank.at(m.msg().mpirank()) = m.dsthost();
-
-            // Update the ranks for host. This structure is used when doing
-            // collective communications by all ranks. At this point, all non-
-            // leader ranks will be hitting a barrier, for which they don't
-            // need the ranks for host map, therefore it is safe to modify it
-            if (m.dsthost() == thisHost && m.msg().mpirank() < localLeader) {
-                SPDLOG_WARN("Changing local leader {} -> {}",
-                            localLeader,
-                            m.msg().mpirank());
-                localLeader = m.msg().mpirank();
-                ranksForHost[m.dsthost()].insert(
-                  ranksForHost[m.dsthost()].begin(), m.msg().mpirank());
-            }
-
-            ranksForHost[m.dsthost()].push_back(m.msg().mpirank());
-            ranksForHost[m.srchost()].erase(
-              std::remove(ranksForHost[m.srchost()].begin(),
-                          ranksForHost[m.srchost()].end(),
-                          m.msg().mpirank()),
-              ranksForHost[m.srchost()].end());
-
-            if (ranksForHost[m.srchost()].empty()) {
-                ranksForHost.erase(m.srchost());
-            }
-
-            // This could be made more efficient as the broker method acquires
-            // a full lock every time
-            broker.updateHostForIdx(id, m.msg().mpirank(), m.dsthost());
-        }
-
-        // Set the migration flag
-        hasBeenMigrated = true;
+        initLocalRemoteLeaders();
 
         // Add the necessary new local messaging queues
         initLocalQueues();

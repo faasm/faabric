@@ -1,9 +1,13 @@
 #include <faabric/planner/PlannerApi.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/snapshot/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/common.h>
+#include <faabric/util/batch.h>
 #include <faabric/util/concurrent_map.h>
 #include <faabric/util/config.h>
+#include <faabric/util/func.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/network.h>
@@ -50,6 +54,7 @@ PlannerClient::PlannerClient(const std::string& plannerIp)
   : faabric::transport::MessageEndpointClient(plannerIp,
                                               PLANNER_ASYNC_PORT,
                                               PLANNER_SYNC_PORT)
+  , snapshotClient(faabric::snapshot::getSnapshotClient(plannerIp))
 {}
 
 void PlannerClient::ping()
@@ -252,6 +257,115 @@ faabric::Message PlannerClient::doGetMessageResult(
 
         return msgResult;
     }
+}
+
+faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    // ------------------------
+    // THREADS
+    // ------------------------
+
+    // For threads, we need to indicate that keep track of the main host (i.e.
+    // the host from which we invoke threads) to gather the diffs after
+    // execution
+    bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
+    if (isThreads) {
+        for (int i = 0; i < req->messages_size(); i++) {
+            req->mutable_messages(i)->set_mainhost(
+              faabric::util::getSystemConfig().endpointHost);
+        }
+    }
+
+    // ------------------------
+    // SNAPSHOTS
+    // ------------------------
+
+    // If we set a snapshot key (mostly in a threaded execution) we send the
+    // snapshot to the planner, that will manage its lifecycle and distribution
+    // to other hosts. Given that we don't support nested threading, if we
+    // have a THREADS request here it means that we are being called from the
+    // main thread (which holds the main snapshot)
+    const std::string funcStr =
+      faabric::util::funcToString(req->messages(0), false);
+    auto& reg = faabric::snapshot::getSnapshotRegistry();
+
+    std::string snapshotKey;
+    const auto firstMsg = req->messages(0);
+    if (isThreads) {
+        if (!firstMsg.snapshotkey().empty()) {
+            SPDLOG_ERROR("{} should not provide snapshot key for {} threads",
+                         funcStr,
+                         req->messages().size());
+
+            std::runtime_error("Should not provide snapshot key for threads");
+        }
+
+        // To optimise for single-host shared memory, we can skip sending the
+        // snapshot to the planner by setting the singlehost flag
+        if (!req->singlehost()) {
+            snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
+        }
+    } else {
+        // In a single-host setting we can skip sending the snapshots to the
+        // planner
+        if (!req->singlehost()) {
+            snapshotKey = req->messages(0).snapshotkey();
+        }
+    }
+
+    if (!snapshotKey.empty()) {
+        faabric::util::UniqueLock lock(plannerCacheMx);
+        auto snap = reg.getSnapshot(snapshotKey);
+
+        // See if we've already pushed this snapshot to the planner once,
+        // if so, just push the diffs that have occurred in this main thread
+        if (cache.pushedSnapshots.contains(snapshotKey)) {
+            std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
+              snap->getTrackedChanges();
+
+            snapshotClient->pushSnapshotUpdate(
+              snapshotKey, snap, snapshotDiffs);
+        } else {
+            snapshotClient->pushSnapshot(snapshotKey, snap);
+            cache.pushedSnapshots.insert(snapshotKey);
+        }
+
+        // Now reset the tracking on the snapshot before we start executing
+        snap->clearTrackedChanges();
+    }
+
+    // ------------------------
+    // EXECUTION REQUEST TO PLANNER
+    // ------------------------
+
+    faabric::PointToPointMappings response;
+    syncSend(PlannerCalls::CallBatch, req.get(), &response);
+
+    auto decision =
+      faabric::batch_scheduler::SchedulingDecision::fromPointToPointMappings(
+        response);
+
+    // The planner decision sets a group id for PTP communication. Make sure we
+    // propagate the group id to the messages in the request. The group idx
+    // is set when creating the request
+    faabric::util::updateBatchExecGroupId(req, decision.groupId);
+
+    return decision;
+}
+
+faabric::batch_scheduler::SchedulingDecision
+PlannerClient::getSchedulingDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::PointToPointMappings response;
+    syncSend(PlannerCalls::GetSchedulingDecision, req.get(), &response);
+
+    auto decision =
+      faabric::batch_scheduler::SchedulingDecision::fromPointToPointMappings(
+        response);
+
+    return decision;
 }
 
 // -----------------------------------

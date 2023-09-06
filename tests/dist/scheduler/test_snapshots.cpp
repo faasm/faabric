@@ -37,9 +37,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     msg.set_inputdata(inputData.data(), inputData.size());
 
     // Set up the main thread snapshot
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-
+    auto& reg = faabric::snapshot::getSnapshotRegistry();
     size_t snapSize = DIST_TEST_EXECUTOR_MEMORY_SIZE;
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
     auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
@@ -47,17 +45,20 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     // Force the function to be executed remotely
     faabric::HostResources res;
-    res.set_slots(0);
+    res.set_usedslots(1);
+    res.set_slots(1);
     sch.setThisHostResources(res);
+    res.set_usedslots(0);
+    res.set_slots(4);
+    sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
 
     std::vector<std::string> expectedHosts = { getWorkerIP() };
-    faabric::batch_scheduler::SchedulingDecision decision =
-      sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
-    int actualResult = sch.awaitThreadResult(msg.id());
-    REQUIRE(actualResult == 123);
+    auto msgResult = plannerCli.getMessageResult(req->appid(), msg.id(), 500);
+    REQUIRE(msgResult.returnvalue() == 123);
 
     // Write the diffs and check they've been applied
     REQUIRE(snap->getQueuedDiffsCount() == 2);
@@ -94,15 +95,18 @@ TEST_CASE_METHOD(DistTestsFixture,
     faabric::Message& msg = req->mutable_messages()->at(0);
     msg.set_inputdata(std::to_string(nThreads));
 
-    // Force the function itself to be executed on this host, but its child
-    // threads on another host
+    // Executing one function that spawns three threads. We execute one locally
+    // and the two others remotely
     faabric::HostResources res;
-    res.set_slots(1);
+    res.set_slots(3);
+    res.set_usedslots(1);
     sch.setThisHostResources(res);
+    res.set_slots(2);
+    res.set_usedslots(0);
+    sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
 
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    faabric::batch_scheduler::SchedulingDecision decision =
-      sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
@@ -121,14 +125,18 @@ TEST_CASE_METHOD(DistTestsFixture,
       faabric::util::batchExecFactory(user, function, 1);
     faabric::Message& msg = req->mutable_messages()->at(0);
 
-    // Main function and one thread execute on this host, others on another
+    // Main function will spawn 4 child threads in a loop. We execute two
+    // locally and two remotely
     faabric::HostResources res;
     res.set_slots(3);
+    res.set_usedslots(0);
     sch.setThisHostResources(res);
+    res.set_usedslots(0);
+    res.set_slots(2);
+    sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
 
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    faabric::batch_scheduler::SchedulingDecision decision =
-      sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 

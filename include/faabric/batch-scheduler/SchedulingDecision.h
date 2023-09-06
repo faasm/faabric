@@ -101,7 +101,7 @@ class SchedulingDecision
 
     std::set<std::string> uniqueHosts();
 
-    void print();
+    void print(const std::string& logLevel = "debug");
 };
 
 }

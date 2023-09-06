@@ -33,11 +33,15 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
 bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
 {
     if (ber == nullptr) {
+        SPDLOG_ERROR("Ber points to null!");
         return false;
     }
 
     // An empty BER (thus invalid) will have 0 messages and an id of 0
     if (ber->messages_size() <= 0 && ber->appid() == 0) {
+        SPDLOG_ERROR("Invalid (uninitialised) BER (size: {} - app id: {})",
+                     ber->messages_size(),
+                     ber->appid());
         return false;
     }
 
@@ -47,6 +51,7 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
 
     // If the user or func are empty, the BER is invalid
     if (user.empty() || func.empty()) {
+        SPDLOG_ERROR("Unset user ({}) or func ({}) in BER!", user, func);
         return false;
     }
 
