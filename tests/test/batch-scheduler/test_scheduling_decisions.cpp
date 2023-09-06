@@ -141,6 +141,46 @@ TEST_CASE("Test converting point-to-point mappings to scheduling decisions",
     REQUIRE(actual.hosts == expectedHosts);
 }
 
+TEST_CASE("Test removing a message from a scheduling decision",
+          "[batch-scheduler]")
+{
+    // Build a scheduling decision
+    auto req = faabric::util::batchExecFactory("foo", "bar", 3);
+    SchedulingDecision decision(req->appid(), req->groupid());
+    decision.addMessage("foo", req->messages(0));
+    decision.addMessage("bar", req->messages(1));
+    decision.addMessage("baz", req->messages(2));
+
+    // Record the original values
+    int nFunctions = decision.nFunctions;
+    int nHosts = decision.hosts.size();
+    int nMessageIds = decision.messageIds.size();
+    int nAppIdxs = decision.appIdxs.size();
+    int nGroupIdxs = decision.groupIdxs.size();
+
+    // Remove message from scheduling decision
+    decision.removeMessage(req->messages(1).id());
+
+    // Check decision after removal
+    REQUIRE(decision.nFunctions == (nFunctions - 1));
+    REQUIRE(decision.hosts.size() == (nHosts - 1));
+    REQUIRE(decision.messageIds.size() == (nMessageIds - 1));
+    REQUIRE(decision.appIdxs.size() == (nAppIdxs - 1));
+    REQUIRE(decision.groupIdxs.size() == (nGroupIdxs - 1));
+
+    // Removing a non-existant id throws an exception
+    REQUIRE_THROWS(decision.removeMessage(req->messages(1).id()));
+
+    // Lastly, drain the decision and check again
+    decision.removeMessage(req->messages(0).id());
+    decision.removeMessage(req->messages(2).id());
+    REQUIRE(decision.nFunctions == 0);
+    REQUIRE(decision.hosts.empty());
+    REQUIRE(decision.messageIds.empty());
+    REQUIRE(decision.appIdxs.empty());
+    REQUIRE(decision.groupIdxs.empty());
+}
+
 TEST_CASE_METHOD(CachedDecisionTestFixture,
                  "Test caching scheduling decisions",
                  "[util]")
