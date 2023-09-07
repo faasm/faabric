@@ -18,7 +18,8 @@ docker compose \
     run \
     --rm \
     cli \
-    /build/faabric/static/bin/faabric_dist_tests
+    # See faasm/faabric#335
+    POINT_TO_POINT_SERVER_THREADS=8 /build/faabric/static/bin/faabric_dist_tests
 
 RETURN_VAL=$?
 

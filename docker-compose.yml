@@ -50,6 +50,8 @@ services:
       - LOG_LEVEL=debug
       - PLANNER_HOST=planner
       - PLANNER_PORT=8080
+      # See faasm/faabric#335
+      - POINT_TO_POINT_SERVER_THREADS=8
       - REDIS_STATE_HOST=redis
       - REDIS_QUEUE_HOST=redis
       - OVERRIDE_CPU_COUNT=${OVERRIDE_CPU_COUNT:-0}
