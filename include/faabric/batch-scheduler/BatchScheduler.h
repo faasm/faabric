@@ -21,7 +21,6 @@ typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
 
 typedef std::map<int32_t, InFlightPair> InFlightReqs;
 
-// TODO: remove duplication with PlannerState
 struct HostState
 {
     HostState(const std::string& ipIn, int slotsIn, int usedSlotsIn)

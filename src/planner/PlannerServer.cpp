@@ -54,6 +54,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::GetMessageResult: {
             return recvGetMessageResult(message.udata());
         }
+        case PlannerCalls::GetBatchResults: {
+            return recvGetBatchResults(message.udata());
+        }
         case PlannerCalls::GetSchedulingDecision: {
             return recvGetSchedulingDecision(message.udata());
         }
@@ -151,6 +154,21 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetMessageResult(
     }
 
     return std::make_unique<faabric::Message>(*resultMsg);
+}
+
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetBatchResults(
+  std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(BatchExecuteRequest, buffer.data(), buffer.size());
+    auto req = std::make_shared<faabric::BatchExecuteRequest>(parsedMsg);
+
+    auto berStatus = planner.getBatchResults(req->appid());
+
+    if (berStatus == nullptr) {
+        return std::make_unique<BatchExecuteRequestStatus>();
+    }
+
+    return std::make_unique<BatchExecuteRequestStatus>(*berStatus);
 }
 
 std::unique_ptr<google::protobuf::Message>

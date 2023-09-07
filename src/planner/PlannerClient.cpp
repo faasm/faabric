@@ -259,6 +259,18 @@ faabric::Message PlannerClient::doGetMessageResult(
     }
 }
 
+// This method is deliberately non-blocking, and returns all results tracked
+// for a particular app
+std::shared_ptr<faabric::BatchExecuteRequestStatus>
+PlannerClient::getBatchResults(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::BatchExecuteRequestStatus berStatus;
+    syncSend(PlannerCalls::GetBatchResults, req.get(), &berStatus);
+
+    return std::make_shared<BatchExecuteRequestStatus>(berStatus);
+}
+
 faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {

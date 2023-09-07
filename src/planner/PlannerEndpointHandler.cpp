@@ -65,8 +65,10 @@ void PlannerEndpointHandler::onRequest(
         }
         case faabric::planner::HttpMessage_Type_FLUSH_AVAILABLE_HOSTS: {
             SPDLOG_DEBUG("Planner received FLUSH_AVAILABLE_HOSTS request");
+
             bool success = faabric::planner::getPlanner().flush(
               faabric::planner::FlushType::Hosts);
+
             if (success) {
                 response.result(beast::http::status::ok);
                 response.body() = std::string("Flushed available hosts!");
@@ -75,6 +77,7 @@ void PlannerEndpointHandler::onRequest(
                 response.body() =
                   std::string("Failed flushing available hosts!");
             }
+
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_FLUSH_EXECUTORS: {
@@ -88,6 +91,17 @@ void PlannerEndpointHandler::onRequest(
                 response.result(beast::http::status::internal_server_error);
                 response.body() = std::string("Failed flushing executors!");
             }
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_FLUSH_SCHEDULING_STATE: {
+            SPDLOG_DEBUG("Planner received FLUSH_SCHEDULING_STATE request");
+
+            faabric::planner::getPlanner().flush(
+              faabric::planner::FlushType::SchedulingState);
+
+            response.result(beast::http::status::ok);
+            response.body() = std::string("Flushed scheduling state!");
+
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_GET_AVAILABLE_HOSTS: {
@@ -151,6 +165,29 @@ void PlannerEndpointHandler::onRequest(
                 response.result(beast::http::status::ok);
                 response.body() = faabric::util::execGraphToJson(execGraph);
             }
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_GET_IN_FLIGHT_APPS: {
+            SPDLOG_DEBUG("Planner received GET_IN_FLIGHT_APPS request");
+
+            // Get in-flight apps
+            auto inFlightApps =
+              faabric::planner::getPlanner().getInFlightReqs();
+
+            // Prepare response
+            faabric::planner::GetInFlightAppsResponse inFlightAppsResponse;
+            for (const auto& [appId, inFlightPair] : inFlightApps) {
+                auto decision = inFlightPair.second;
+                auto* inFlightAppResp = inFlightAppsResponse.add_apps();
+                inFlightAppResp->set_appid(appId);
+                for (const auto& hostIp : decision->hosts) {
+                    inFlightAppResp->add_hostips(hostIp);
+                }
+            }
+
+            response.result(beast::http::status::ok);
+            response.body() =
+              faabric::util::messageToJson(inFlightAppsResponse);
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_EXECUTE_BATCH: {

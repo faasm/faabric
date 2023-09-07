@@ -225,4 +225,37 @@ TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
         REQUIRE(resultMsg.returnvalue() == 0);
     }
 }
+
+TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
+                 "Test getting the batch results from the planner client",
+                 "[planner]")
+{
+    int nFuncs = 4;
+    faabric::HostResources res;
+    res.set_slots(nFuncs);
+    sch.setThisHostResources(res);
+    auto req = faabric::util::batchExecFactory("foo", "bar", nFuncs);
+
+    // If we get the batch results before we call the batch, we get nothing
+    auto berStatus = plannerCli.getBatchResults(req);
+    REQUIRE(berStatus->appid() == 0);
+
+    // We call and wait for the results
+    plannerCli.callFunctions(req);
+    std::map<int, Message> messageResults;
+    for (int i = 0; i < req->messages_size(); i++) {
+        auto result =
+          plannerCli.getMessageResult(req->appid(), req->messages(i).id(), 500);
+        REQUIRE(result.returnvalue() == 0);
+        messageResults[result.id()] = result;
+    }
+
+    // Now, all results for the batch should be registered
+    berStatus = plannerCli.getBatchResults(req);
+    REQUIRE(berStatus->appid() == req->appid());
+    for (const auto& msg : berStatus->messageresults()) {
+        REQUIRE(messageResults.contains(msg.id()));
+        checkMessageEquality(messageResults[msg.id()], msg);
+    }
+}
 }

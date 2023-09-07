@@ -83,6 +83,9 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
     faabric::Message getMessageResult(const faabric::Message& msg,
                                       int timeoutMs);
 
+    std::shared_ptr<faabric::BatchExecuteRequestStatus> getBatchResults(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
+
     faabric::batch_scheduler::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 

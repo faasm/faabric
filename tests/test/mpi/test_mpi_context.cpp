@@ -14,7 +14,10 @@ namespace tests {
 
 TEST_CASE_METHOD(MpiBaseTestFixture, "Check world creation", "[mpi]")
 {
+    // First call the message so that it is recorded in the planner, and then
+    // create the world
     MpiContext c;
+    plannerCli.callFunctions(req);
     c.createWorld(msg);
 
     // Check a new world ID is created
@@ -50,10 +53,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
 
 TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
 {
-    msg.set_mpirank(0);
-
     // Set a new world size
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    auto& conf = faabric::util::getSystemConfig();
     int origSize = conf.defaultMpiWorldSize;
     int defaultWorldSize = 3;
     conf.defaultMpiWorldSize = defaultWorldSize;
@@ -63,8 +64,6 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
     res.set_slots(defaultWorldSize * 2);
     sch.setThisHostResources(res);
 
-    SLEEP_MS(200);
-
     // Request different sizes
     int requestedWorldSize;
     SECTION("Under zero") { requestedWorldSize = -1; }
@@ -72,6 +71,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
 
     // Create the world
     MpiContext c;
+    plannerCli.callFunctions(req);
+    msg.set_mpirank(0);
     msg.set_mpiworldsize(requestedWorldSize);
     c.createWorld(msg);
     int worldId = c.getWorldId();

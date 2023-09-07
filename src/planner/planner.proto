@@ -37,11 +37,13 @@ message HttpMessage {
         RESET = 1;
         FLUSH_AVAILABLE_HOSTS = 2;
         FLUSH_EXECUTORS = 3;
-        GET_AVAILABLE_HOSTS = 4;
-        GET_CONFIG = 5;
-        GET_EXEC_GRAPH = 6;
-        EXECUTE_BATCH = 7;
-        EXECUTE_BATCH_STATUS = 8;
+        FLUSH_SCHEDULING_STATE = 4;
+        GET_AVAILABLE_HOSTS = 5;
+        GET_CONFIG = 6;
+        GET_EXEC_GRAPH = 7;
+        GET_IN_FLIGHT_APPS = 8;
+        EXECUTE_BATCH = 9;
+        EXECUTE_BATCH_STATUS = 10;
     }
 
     Type type = 1 [json_name = "http_type"];
@@ -51,6 +53,15 @@ message HttpMessage {
     // - EXECUTE_BATCH: where the body is a faabric::BatchExecuteRequest
     // - EXECUTE_BATCH_STATUS: where the body is a BER too
     string payloadJson = 2 [json_name = "payload"];
+}
+
+message GetInFlightAppsResponse {
+    message InFlightApp {
+        int32 appId = 1;
+        repeated string hostIps = 2;
+    }
+
+    repeated InFlightApp apps = 1;
 }
 
 // ---------------------------------------------
@@ -102,3 +113,4 @@ message RemoveHostResponse {
 message AvailableHostsResponse {
     repeated Host hosts = 1;
 }
+

@@ -14,6 +14,7 @@ enum FlushType
     NoFlushType = 0,
     Hosts = 1,
     Executors = 2,
+    SchedulingState = 3,
 };
 
 /* The planner is a standalone component that has a global view of the state
@@ -69,6 +70,9 @@ class Planner
     std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>
     getSchedulingDecision(std::shared_ptr<BatchExecuteRequest> req);
 
+    faabric::batch_scheduler::InFlightReqs getInFlightReqs();
+
+    // Main entrypoint to request the execution of batches
     std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> callBatch(
       std::shared_ptr<BatchExecuteRequest> req);
 
@@ -90,6 +94,8 @@ class Planner
     void flushHosts();
 
     void flushExecutors();
+
+    void flushSchedulingState();
 
     // ----------
     // Host membership private API
