@@ -12,8 +12,8 @@ class MultiWorldMpiTestFixture : public MpiBaseTestFixture
   public:
     MultiWorldMpiTestFixture()
     {
-        auto reqA = faabric::util::batchExecFactory(userA, funcA, 1);
-        auto reqB = faabric::util::batchExecFactory(userB, funcB, 1);
+        reqA = faabric::util::batchExecFactory(userA, funcA, 1);
+        reqB = faabric::util::batchExecFactory(userB, funcB, 1);
         auto& msgA = *reqA->mutable_messages(0);
         auto& msgB = *reqB->mutable_messages(0);
         msgA.set_mpiworldsize(worldSizeA);
@@ -33,16 +33,21 @@ class MultiWorldMpiTestFixture : public MpiBaseTestFixture
     {
         worldA.destroy();
         worldB.destroy();
+
+        waitForMpiMessages(reqA, worldSizeA);
+        waitForMpiMessages(reqB, worldSizeB);
     }
 
   protected:
     MpiWorld worldA;
+    std::shared_ptr<BatchExecuteRequest> reqA = nullptr;
     std::string userA = "userA";
     std::string funcA = "funcA";
     int worldIdA = 123;
     int worldSizeA = 3;
 
     MpiWorld worldB;
+    std::shared_ptr<BatchExecuteRequest> reqB = nullptr;
     std::string userB = "userB";
     std::string funcB = "funcB";
     int worldIdB = 245;
