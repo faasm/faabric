@@ -394,6 +394,54 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
     return nullptr;
 }
 
+void Planner::preloadSchedulingDecision(
+  int32_t appId,
+  std::shared_ptr<batch_scheduler::SchedulingDecision> decision)
+{
+    faabric::util::FullLock lock(plannerMx);
+
+    if (state.preloadedSchedulingDecisions.contains(appId)) {
+        SPDLOG_ERROR("ERROR: preloaded scheduling decisions already contain app {}", appId);
+        return;
+    }
+
+    SPDLOG_INFO("Pre-loading scheduling decision for app {}", appId);
+    state.preloadedSchedulingDecisions[appId] = decision;
+}
+
+std::shared_ptr<batch_scheduler::SchedulingDecision> Planner::getPreloadedSchedulingDecision(
+  int32_t appId,
+  std::shared_ptr<BatchExecuteRequest> ber)
+{
+    faabric::util::SharedLock lock(plannerMx);
+
+    // Only include in the returned scheduling decision the group indexes that
+    // are in this BER. This can happen when consuming a preloaded decision
+    // in two steps (e.g. for MPI)
+    auto decision = state.preloadedSchedulingDecisions.at(appId);
+    std::shared_ptr<batch_scheduler::SchedulingDecision> filteredDecision;
+    for (const auto& msg : ber->messages()) {
+        int groupIdx = msg.groupidx();
+        int idxInDecision = std::distance(
+            decision->groupIdxs.begin(),
+            std::find(decision->groupIdxs.begin(),
+                      decision->groupIdxs.end(),
+                      groupIdx));
+        assert(idxInDecision < decision->groupIdxs.size());
+
+        // Add the schedulign for this group idx to the filtered decision
+        filteredDecision->addMessage(
+            decision->hosts.at(idxInDecision),
+            decision->messageIds.at(idxInDecision),
+            decision->appIdxs.at(idxInDecision),
+            decision->groupIdxs.at(idxInDecision)
+        );
+    }
+    assert(filteredDecision->hosts.size() == ber->messages_size());
+
+    return filteredDecision;
+}
+
 std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(
   int32_t appId)
 {
@@ -488,8 +536,18 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         }
     }
 
-    auto decision = batchScheduler->makeSchedulingDecision(
-      hostMapCopy, state.inFlightReqs, req);
+    // Check if there exists a pre-loaded scheduling decision for this app
+    // (e.g. if we want to force a migration)
+    // Note that if the pre-loaded scheduling decision is not consistent with
+    // the scheduling state, the planner will crash.
+    std::shared_ptr<batch_scheduler::SchedulingDecision> decision = nullptr;
+    if (state.preloadedSchedulingDecisions.contains(appId)) {
+        decision = getPreloadedSchedulingDecision(appId, req);
+    } else {
+        decision = batchScheduler->makeSchedulingDecision(
+            hostMapCopy, state.inFlightReqs, req);
+    }
+    assert(decision != nullptr);
 
     // Handle failures to schedule work
     if (*decision == NOT_ENOUGH_SLOTS_DECISION) {

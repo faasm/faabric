@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/batch-scheduler/BatchScheduler.h>
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
 
@@ -27,5 +28,9 @@ struct PlannerState
 
     // Map keeping track of the requests that are in-flight
     faabric::batch_scheduler::InFlightReqs inFlightReqs;
+
+    // Map keeping track of pre-loaded scheduling decisions that bypass the
+    // planner's scheduling
+    std::map<int, std::shared_ptr<batch_scheduler::SchedulingDecision>> preloadedSchedulingDecisions;
 };
 }
