@@ -258,7 +258,7 @@ void PlannerEndpointHandler::onRequest(
             // Prepare the response
             response.result(beast::http::status::ok);
             // Work-out if it has finished using user-provided flags
-            if (actualBerStatus->messageresults_size() ==
+            if (faabric::util::getNumFinishedMessagesInBatch(actualBerStatus) ==
                 berStatus.expectednummessages()) {
                 actualBerStatus->set_finished(true);
             } else {
@@ -272,7 +272,8 @@ void PlannerEndpointHandler::onRequest(
             // foo bar
             // in: BatchExecuteRequest
             // out: none
-            SPDLOG_DEBUG("Planner received PRELOAD_SCHEDULING_DECISION request");
+            SPDLOG_DEBUG(
+              "Planner received PRELOAD_SCHEDULING_DECISION request");
             faabric::BatchExecuteRequest ber;
             try {
                 faabric::util::jsonToMessage(msg.payloadjson(), &ber);
@@ -286,7 +287,9 @@ void PlannerEndpointHandler::onRequest(
             // crafter BER. In particular, we only need to read the BER's
             // app ID, and the `executedHost` parameter of each message in the
             // BER.
-            auto decision = std::make_shared<batch_scheduler::SchedulingDecision>(ber.appid(), ber.groupid());
+            auto decision =
+              std::make_shared<batch_scheduler::SchedulingDecision>(
+                ber.appid(), ber.groupid());
             for (int i = 0; i < ber.messages_size(); i++) {
                 // Setting the right group idx here is key as it is the only
                 // message parameter that we can emulate in advance (i.e. we
@@ -298,11 +301,14 @@ void PlannerEndpointHandler::onRequest(
             }
 
             // Pre-load the scheduling decision in the planner
-            faabric::planner::getPlanner().preloadSchedulingDecision(decision->appId, decision);
+            faabric::planner::getPlanner().preloadSchedulingDecision(
+              decision->appId, decision);
 
             // Prepare the response
             response.result(beast::http::status::ok);
             response.body() = std::string("Decision pre-loaded to planner");
+
+            return ctx.sendFunction(std::move(response));
         }
         default: {
             SPDLOG_ERROR("Unrecognised message type {}", msg.type());

@@ -31,6 +31,7 @@ struct PlannerState
 
     // Map keeping track of pre-loaded scheduling decisions that bypass the
     // planner's scheduling
-    std::map<int, std::shared_ptr<batch_scheduler::SchedulingDecision>> preloadedSchedulingDecisions;
+    std::map<int, std::shared_ptr<batch_scheduler::SchedulingDecision>>
+      preloadedSchedulingDecisions;
 };
 }

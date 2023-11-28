@@ -119,4 +119,18 @@ std::shared_ptr<faabric::BatchExecuteRequestStatus> batchExecStatusFactory(
 {
     return batchExecStatusFactory(ber->appid());
 }
+
+int getNumFinishedMessagesInBatch(
+  std::shared_ptr<faabric::BatchExecuteRequestStatus> berStatus)
+{
+    int numFinishedMsgs = 0;
+
+    for (const auto& msg : berStatus->messageresults()) {
+        if (msg.returnvalue() != MIGRATED_FUNCTION_RETURN_VALUE) {
+            numFinishedMsgs += 1;
+        }
+    }
+
+    return numFinishedMsgs;
+}
 }

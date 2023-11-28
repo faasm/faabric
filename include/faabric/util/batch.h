@@ -32,4 +32,9 @@ std::shared_ptr<faabric::BatchExecuteRequestStatus> batchExecStatusFactory(
 
 std::shared_ptr<faabric::BatchExecuteRequestStatus> batchExecStatusFactory(
   std::shared_ptr<faabric::BatchExecuteRequest> ber);
+
+// Get the number of messages in a BER Status that have actually finished (i.e.
+// those that have not been migrated)
+int getNumFinishedMessagesInBatch(
+  std::shared_ptr<faabric::BatchExecuteRequestStatus> berStatus);
 }

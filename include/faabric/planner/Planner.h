@@ -64,11 +64,13 @@ class Planner
       std::shared_ptr<faabric::Message> msg);
 
     // Setter/Getter to bypass the planner's scheduling for a specific app
-    void preloadSchedulingDecision(int appId, std::shared_ptr<batch_scheduler::SchedulingDecision> decision);
+    void preloadSchedulingDecision(
+      int appId,
+      std::shared_ptr<batch_scheduler::SchedulingDecision> decision);
 
-    std::shared_ptr<batch_scheduler::SchedulingDecision> getPreloadedSchedulingDecision(
-      int32_t appId,
-      std::shared_ptr<BatchExecuteRequest> ber);
+    std::shared_ptr<batch_scheduler::SchedulingDecision>
+    getPreloadedSchedulingDecision(int32_t appId,
+                                   std::shared_ptr<BatchExecuteRequest> ber);
 
     // Get all the results recorded for one batch
     std::shared_ptr<faabric::BatchExecuteRequestStatus> getBatchResults(
