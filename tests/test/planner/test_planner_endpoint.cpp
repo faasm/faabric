@@ -677,4 +677,55 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
             beast::http::status::ok);
     REQUIRE(result.second == expectedResponseBody);
 }
+
+TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
+                 "Check pre-loading a scheduling decision through endpoint",
+                 "[planner]")
+{
+    // First, prepare an HTTP request to execute a batch
+    int numMessages = 5;
+    HttpMessage msg;
+    msg.set_type(HttpMessage_Type_EXECUTE_BATCH);
+    auto ber = faabric::util::batchExecFactory("foo", "bar", numMessages);
+    msg.set_payloadjson(faabric::util::messageToJson(*ber));
+    msgJsonStr = faabric::util::messageToJson(msg);
+
+    // Prepare the preload message
+    HttpMessage preloadMsg;
+    preloadMsg.set_type(HttpMessage_Type_PRELOAD_SCHEDULING_DECISION);
+    for (int i = 0; i < ber->messages_size(); i++) {
+        auto& msg = ber->mutable_messages()->at(i);
+        msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
+        msg.set_groupidx(i);
+    }
+
+    SECTION("Valid request")
+    {
+        preloadMsg.set_payloadjson(faabric::util::messageToJson(*ber));
+        expectedResponseBody = "Decision pre-loaded to planner";
+        expectedReturnCode = beast::http::status::ok;
+    }
+
+    SECTION("Bad request payload")
+    {
+        preloadMsg.set_payloadjson("foo bar");
+        expectedReturnCode = beast::http::status::bad_request;
+        expectedResponseBody = "Bad JSON in request body";
+    }
+
+    // Post the preload HTTP request
+    std::string preloadMsgJsonStr = faabric::util::messageToJson(preloadMsg);
+    std::pair<int, std::string> result = doPost(preloadMsgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+    REQUIRE(result.second == expectedResponseBody);
+
+    // Now execute the batch
+    result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            beast::http::status::ok);
+
+    // Wait for BER to finish
+    waitForBerToFinish(ber);
+}
 }

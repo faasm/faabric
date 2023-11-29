@@ -447,9 +447,11 @@ Planner::getPreloadedSchedulingDecision(
                                                     groupIdx));
         assert(idxInDecision < decision->groupIdxs.size());
 
-        // Add the schedulign for this group idx to the filtered decision
+        // Add the schedulign for this group idx to the filtered decision.
+        // Make sure we also maintain the message IDs that come from the BER
+        // (as we can not possibly predict them in the preloaded decision)
         filteredDecision->addMessage(decision->hosts.at(idxInDecision),
-                                     decision->messageIds.at(idxInDecision),
+                                     msg.id(),
                                      decision->appIdxs.at(idxInDecision),
                                      decision->groupIdxs.at(idxInDecision));
     }
