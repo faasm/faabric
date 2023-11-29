@@ -5,6 +5,7 @@
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/ptp.h>
 
 #include <fmt/format.h>
 
@@ -59,6 +60,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         }
         case PlannerCalls::GetSchedulingDecision: {
             return recvGetSchedulingDecision(message.udata());
+        }
+        case PlannerCalls::PreloadSchedulingDecision: {
+            return recvPreloadSchedulingDecision(message.udata());
         }
         case PlannerCalls::CallBatch: {
             return recvCallBatch(message.udata());
@@ -185,18 +189,27 @@ PlannerServer::recvGetSchedulingDecision(std::span<const uint8_t> buffer)
     }
 
     // Build PointToPointMappings from scheduling decision
-    faabric::PointToPointMappings mappings;
-    mappings.set_appid(decision->appId);
-    mappings.set_groupid(decision->groupId);
-    for (int i = 0; i < decision->hosts.size(); i++) {
-        auto* mapping = mappings.add_mappings();
-        mapping->set_host(decision->hosts.at(i));
-        mapping->set_messageid(decision->messageIds.at(i));
-        mapping->set_appidx(decision->appIdxs.at(i));
-        mapping->set_groupidx(decision->groupIdxs.at(i));
-    }
+    faabric::PointToPointMappings mappings =
+      faabric::util::ptpMappingsFromSchedulingDecision(decision);
 
     return std::make_unique<faabric::PointToPointMappings>(mappings);
+}
+
+std::unique_ptr<google::protobuf::Message>
+PlannerServer::recvPreloadSchedulingDecision(std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(PointToPointMappings, buffer.data(), buffer.size());
+
+    auto preloadDecision =
+      faabric::batch_scheduler::SchedulingDecision::fromPointToPointMappings(
+        parsedMsg);
+
+    planner.preloadSchedulingDecision(
+      preloadDecision.appId,
+      std::make_shared<faabric::batch_scheduler::SchedulingDecision>(
+        preloadDecision));
+
+    return std::make_unique<faabric::EmptyResponse>();
 }
 
 std::unique_ptr<google::protobuf::Message> PlannerServer::recvCallBatch(

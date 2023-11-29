@@ -11,6 +11,7 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/network.h>
+#include <faabric/util/ptp.h>
 
 namespace faabric::planner {
 
@@ -378,6 +379,15 @@ PlannerClient::getSchedulingDecision(
         response);
 
     return decision;
+}
+
+void PlannerClient::preloadSchedulingDecision(
+  std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> preloadDec)
+{
+    faabric::EmptyResponse response;
+    auto mappings =
+      faabric::util::ptpMappingsFromSchedulingDecision(preloadDec);
+    syncSend(PlannerCalls::PreloadSchedulingDecision, &mappings, &response);
 }
 
 // -----------------------------------

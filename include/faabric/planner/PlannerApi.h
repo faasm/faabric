@@ -16,5 +16,6 @@ enum PlannerCalls
     GetBatchResults = 10,
     GetSchedulingDecision = 11,
     CallBatch = 12,
+    PreloadSchedulingDecision = 13,
 };
 }
