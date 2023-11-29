@@ -331,6 +331,15 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
                 assert(decision->appIdxs.empty());
                 assert(decision->groupIdxs.empty());
                 state.inFlightReqs.erase(appId);
+
+                // If we are removing the app from in-flight, we can also
+                // remmove any pre-loaded scheduling decisions
+                if (state.preloadedSchedulingDecisions.contains(appId)) {
+                    SPDLOG_DEBUG(
+                      "Removing preloaded scheduling decision for app {}",
+                      appId);
+                    state.preloadedSchedulingDecisions.erase(appId);
+                }
             }
         }
     }
