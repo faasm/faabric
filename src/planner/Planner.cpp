@@ -331,6 +331,15 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
                 assert(decision->appIdxs.empty());
                 assert(decision->groupIdxs.empty());
                 state.inFlightReqs.erase(appId);
+
+                // If we are removing the app from in-flight, we can also
+                // remmove any pre-loaded scheduling decisions
+                if (state.preloadedSchedulingDecisions.contains(appId)) {
+                    SPDLOG_DEBUG(
+                      "Removing preloaded scheduling decision for app {}",
+                      appId);
+                    state.preloadedSchedulingDecisions.erase(appId);
+                }
             }
         }
     }
@@ -392,6 +401,63 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
     }
 
     return nullptr;
+}
+
+void Planner::preloadSchedulingDecision(
+  int32_t appId,
+  std::shared_ptr<batch_scheduler::SchedulingDecision> decision)
+{
+    faabric::util::FullLock lock(plannerMx);
+
+    if (state.preloadedSchedulingDecisions.contains(appId)) {
+        SPDLOG_ERROR(
+          "ERROR: preloaded scheduling decisions already contain app {}",
+          appId);
+        return;
+    }
+
+    SPDLOG_INFO("Pre-loading scheduling decision for app {}", appId);
+    state.preloadedSchedulingDecisions[appId] = decision;
+}
+
+std::shared_ptr<batch_scheduler::SchedulingDecision>
+Planner::getPreloadedSchedulingDecision(
+  int32_t appId,
+  std::shared_ptr<BatchExecuteRequest> ber)
+{
+    SPDLOG_DEBUG("Requesting pre-loaded scheduling decision for app {}", appId);
+    // WARNING: this method is currently only called from the main Planner
+    // entrypoint (callBatch) which has a FullLock, thus we don't need to
+    // acquire a (SharedLock) here. In general, we would need a read-lock
+    // to read the dict from the planner's state
+    auto decision = state.preloadedSchedulingDecisions.at(appId);
+    assert(decision != nullptr);
+
+    // Only include in the returned scheduling decision the group indexes that
+    // are in this BER. This can happen when consuming a preloaded decision
+    // in two steps (e.g. for MPI)
+    std::shared_ptr<batch_scheduler::SchedulingDecision> filteredDecision =
+      std::make_shared<batch_scheduler::SchedulingDecision>(decision->appId,
+                                                            decision->groupId);
+    for (const auto& msg : ber->messages()) {
+        int groupIdx = msg.groupidx();
+        int idxInDecision = std::distance(decision->groupIdxs.begin(),
+                                          std::find(decision->groupIdxs.begin(),
+                                                    decision->groupIdxs.end(),
+                                                    groupIdx));
+        assert(idxInDecision < decision->groupIdxs.size());
+
+        // Add the schedulign for this group idx to the filtered decision.
+        // Make sure we also maintain the message IDs that come from the BER
+        // (as we can not possibly predict them in the preloaded decision)
+        filteredDecision->addMessage(decision->hosts.at(idxInDecision),
+                                     msg.id(),
+                                     decision->appIdxs.at(idxInDecision),
+                                     decision->groupIdxs.at(idxInDecision));
+    }
+    assert(filteredDecision->hosts.size() == ber->messages_size());
+
+    return filteredDecision;
 }
 
 std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(
@@ -475,11 +541,13 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     // Make a copy of the host-map state to make sure the scheduling process
     // does not modify it
     auto hostMapCopy = convertToBatchSchedHostMap(state.hostMap);
+    bool isDistChange =
+      decisionType == faabric::batch_scheduler::DecisionType::DIST_CHANGE;
 
     // For a DIST_CHANGE decision (i.e. migration) we want to try to imrpove
     // on the old decision (we don't care the one we send), so we make sure
     // we are scheduling the same messages from the old request
-    if (decisionType == faabric::batch_scheduler::DecisionType::DIST_CHANGE) {
+    if (isDistChange) {
         SPDLOG_INFO("App {} asked for migration opportunities", appId);
         auto oldReq = state.inFlightReqs.at(appId).first;
         req->clear_messages();
@@ -488,8 +556,17 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         }
     }
 
-    auto decision = batchScheduler->makeSchedulingDecision(
-      hostMapCopy, state.inFlightReqs, req);
+    // Check if there exists a pre-loaded scheduling decision for this app
+    // (e.g. if we want to force a migration). Note that we don't want to check
+    // pre-loaded decisions for dist-change requests
+    std::shared_ptr<batch_scheduler::SchedulingDecision> decision = nullptr;
+    if (!isDistChange && state.preloadedSchedulingDecisions.contains(appId)) {
+        decision = getPreloadedSchedulingDecision(appId, req);
+    } else {
+        decision = batchScheduler->makeSchedulingDecision(
+          hostMapCopy, state.inFlightReqs, req);
+    }
+    assert(decision != nullptr);
 
     // Handle failures to schedule work
     if (*decision == NOT_ENOUGH_SLOTS_DECISION) {

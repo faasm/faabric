@@ -258,13 +258,55 @@ void PlannerEndpointHandler::onRequest(
             // Prepare the response
             response.result(beast::http::status::ok);
             // Work-out if it has finished using user-provided flags
-            if (actualBerStatus->messageresults_size() ==
+            if (faabric::util::getNumFinishedMessagesInBatch(actualBerStatus) ==
                 berStatus.expectednummessages()) {
                 actualBerStatus->set_finished(true);
             } else {
                 actualBerStatus->set_finished(false);
             }
             response.body() = faabric::util::messageToJson(*actualBerStatus);
+
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_PRELOAD_SCHEDULING_DECISION: {
+            // foo bar
+            // in: BatchExecuteRequest
+            // out: none
+            SPDLOG_DEBUG(
+              "Planner received PRELOAD_SCHEDULING_DECISION request");
+            faabric::BatchExecuteRequest ber;
+            try {
+                faabric::util::jsonToMessage(msg.payloadjson(), &ber);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Bad JSON in request body");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // For this method, we build the SchedulingDecision from a specially
+            // crafter BER. In particular, we only need to read the BER's
+            // app ID, and the `executedHost` parameter of each message in the
+            // BER.
+            auto decision =
+              std::make_shared<batch_scheduler::SchedulingDecision>(
+                ber.appid(), ber.groupid());
+            for (int i = 0; i < ber.messages_size(); i++) {
+                // Setting the right group idx here is key as it is the only
+                // message parameter that we can emulate in advance (i.e. we
+                // can not guess message ids in advance)
+                decision->addMessage(ber.messages(i).executedhost(),
+                                     ber.messages(i).id(),
+                                     ber.messages(i).appidx(),
+                                     ber.messages(i).groupidx());
+            }
+
+            // Pre-load the scheduling decision in the planner
+            faabric::planner::getPlanner().preloadSchedulingDecision(
+              decision->appId, decision);
+
+            // Prepare the response
+            response.result(beast::http::status::ok);
+            response.body() = std::string("Decision pre-loaded to planner");
 
             return ctx.sendFunction(std::move(response));
         }

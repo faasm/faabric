@@ -258,4 +258,43 @@ TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
         checkMessageEquality(messageResults[msg.id()], msg);
     }
 }
+
+TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
+                 "Test preloading a scheduling decision from the client",
+                 "[planner]")
+{
+    int nFuncs = 4;
+    faabric::HostResources res;
+    res.set_slots(nFuncs);
+    sch.setThisHostResources(res);
+    auto req = faabric::util::batchExecFactory("foo", "bar", nFuncs);
+
+    // Preload a scheduling decision
+    auto decision =
+      std::make_shared<faabric::batch_scheduler::SchedulingDecision>(
+        req->appid(), req->groupid());
+    for (int i = 0; i < nFuncs; i++) {
+        decision->addMessage(
+          faabric::util::getSystemConfig().endpointHost, 0, 0, i);
+    }
+    plannerCli.preloadSchedulingDecision(decision);
+
+    // Now call the request with a preloaded decision
+    plannerCli.callFunctions(req);
+    std::map<int, Message> messageResults;
+    for (int i = 0; i < req->messages_size(); i++) {
+        auto result =
+          plannerCli.getMessageResult(req->appid(), req->messages(i).id(), 500);
+        REQUIRE(result.returnvalue() == 0);
+        messageResults[result.id()] = result;
+    }
+
+    // Now, all results for the batch should be registered
+    auto berStatus = plannerCli.getBatchResults(req);
+    REQUIRE(berStatus->appid() == req->appid());
+    for (const auto& msg : berStatus->messageresults()) {
+        REQUIRE(messageResults.contains(msg.id()));
+        checkMessageEquality(messageResults[msg.id()], msg);
+    }
+}
 }

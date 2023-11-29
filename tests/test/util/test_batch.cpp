@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include <faabric/util/batch.h>
+#include <faabric/util/func.h>
 
 using namespace faabric::util;
 
@@ -145,5 +146,32 @@ TEST_CASE("Test BER status factory")
 
     // And the finished flag will be set to false
     REQUIRE(berStatus->finished() == false);
+}
+
+TEST_CASE("Test getting the number of finished messages in a BER")
+{
+    int numTotalMsgs = 4;
+    int expectedNumFinishedMsgs = 0;
+    auto ber = faabric::util::batchExecFactory("foo", "bar", numTotalMsgs);
+    auto berStatus = faabric::util::batchExecStatusFactory(ber);
+    for (int i = 0; i < ber->messages_size(); i++) {
+        *berStatus->add_messageresults() = *ber->mutable_messages(i);
+        berStatus->mutable_messageresults(i)->set_returnvalue(0);
+    }
+
+    SECTION("All messages have finished")
+    {
+        expectedNumFinishedMsgs = numTotalMsgs;
+    }
+
+    SECTION("One message has been migrated")
+    {
+        expectedNumFinishedMsgs = 3;
+        berStatus->mutable_messageresults(0)->set_returnvalue(
+          MIGRATED_FUNCTION_RETURN_VALUE);
+    }
+
+    REQUIRE(faabric::util::getNumFinishedMessagesInBatch(berStatus) ==
+            expectedNumFinishedMsgs);
 }
 }

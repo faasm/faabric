@@ -44,6 +44,7 @@ message HttpMessage {
         GET_IN_FLIGHT_APPS = 8;
         EXECUTE_BATCH = 9;
         EXECUTE_BATCH_STATUS = 10;
+        PRELOAD_SCHEDULING_DECISION = 11;
     }
 
     Type type = 1 [json_name = "http_type"];
@@ -52,6 +53,8 @@ message HttpMessage {
     // - GET_EXEC_GRAPH: where the body is a faabric::Message
     // - EXECUTE_BATCH: where the body is a faabric::BatchExecuteRequest
     // - EXECUTE_BATCH_STATUS: where the body is a BER too
+    // - PRELOAD_SCHEDULING_DECISION: where the body is a
+    //     faabric::BatchExecuteRequest
     string payloadJson = 2 [json_name = "payload"];
 }
 

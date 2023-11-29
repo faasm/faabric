@@ -20,6 +20,7 @@ faabric_lib(util
     logging.cpp
     memory.cpp
     network.cpp
+    ptp.cpp
     queue.cpp
     random.cpp
     snapshot.cpp
