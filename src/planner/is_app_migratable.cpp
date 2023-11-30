@@ -11,17 +11,15 @@
 
 using namespace faabric::batch_scheduler;
 
-std::pair<HostMap, InFlightReqs>
-readOccupationFromFile(const std::string& filePath)
+std::pair<HostMap, InFlightReqs> readOccupationFromFile(
+  const std::string& filePath)
 {
     faabric::batch_scheduler::HostMap hostMap;
     InFlightReqs inFlightReqs;
 
     std::ifstream inFile(filePath);
     if (!inFile.is_open()) {
-        std::cout << "Error opening file: "
-                  << filePath
-                  << std::endl;
+        std::cout << "Error opening file: " << filePath << std::endl;
         throw std::runtime_error("Error opening file!");
     }
 
@@ -62,8 +60,10 @@ readOccupationFromFile(const std::string& filePath)
                 ber->set_user("foo");
                 ber->set_function("bar");
                 faabric::util::updateBatchExecAppId(ber, appId);
-                faabric::util::updateBatchExecGroupId(ber, faabric::util::generateGid());
-                auto decision = std::make_shared<SchedulingDecision>(ber->appid(), ber->groupid());
+                faabric::util::updateBatchExecGroupId(
+                  ber, faabric::util::generateGid());
+                auto decision = std::make_shared<SchedulingDecision>(
+                  ber->appid(), ber->groupid());
                 inFlightReqs[appId] = std::make_pair(ber, decision);
             }
 
@@ -109,9 +109,7 @@ int main(int argc, char** argv)
 
     if (argc != 3) {
         std::cout << "ERROR: required two positional arguments, got "
-                  << argc -1
-                  << " instead!"
-                  << std::endl;
+                  << argc - 1 << " instead!" << std::endl;
         throw std::runtime_error("Unexpected number of positional arguments!");
     }
 
@@ -123,20 +121,26 @@ int main(int argc, char** argv)
     // ------
 
     auto batchScheduler = faabric::batch_scheduler::getBatchScheduler();
-    auto [hostMap, inFlightReqs] = readOccupationFromFile(workerOccupationFilePath);
+    auto [hostMap, inFlightReqs] =
+      readOccupationFromFile(workerOccupationFilePath);
 
     auto req = inFlightReqs.at(appId).first;
     req->set_type(faabric::BatchExecuteRequest::MIGRATION);
 
     std::cout << "Preliminary host map check:" << std::endl;
     for (const auto& [ip, host] : hostMap) {
-        std::cout << fmt::format("IP: {} - Slots: {}/{}", ip, host->usedSlots, host->slots)
+        std::cout << fmt::format("IP: {} - Slots: {}/{}",
+                                 ip,
+                                 host->usedSlots,
+                                 host->slots)
                   << std::endl;
     }
 
     for (const auto& [appId, inFlightPair] : inFlightReqs) {
         auto decision = inFlightPair.second;
-        std::cout << fmt::format("App {} has a decision with {} messages!", appId, decision->hosts.size())
+        std::cout << fmt::format("App {} has a decision with {} messages!",
+                                 appId,
+                                 decision->hosts.size())
                   << std::endl;
     }
 
@@ -145,8 +149,8 @@ int main(int argc, char** argv)
     // ------
 
     faabric::util::initLogging();
-    auto decision = batchScheduler->makeSchedulingDecision(
-      hostMap, inFlightReqs, req);
+    auto decision =
+      batchScheduler->makeSchedulingDecision(hostMap, inFlightReqs, req);
 
     if (*decision == DO_NOT_MIGRATE_DECISION) {
         std::cout << "NOT migrating app: " << req->appid() << std::endl;
