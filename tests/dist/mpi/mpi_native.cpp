@@ -831,7 +831,8 @@ void mpiMigrationPoint(int entrypointFuncArg)
           ->pushSnapshot(snapKey, snap);
         msg.set_snapshotkey(snapKey);
 
-        // Propagate the group idx
+        // Propagate the group idx and message id
+        msg.set_id(call->id());
         msg.set_groupidx(call->groupidx());
 
         // If message is MPI, propagate the necessary MPI bits
