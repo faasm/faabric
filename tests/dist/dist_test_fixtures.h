@@ -108,69 +108,71 @@ class MpiDistTestsFixture : public DistTestsFixture
         faabric::Message& msg = req->mutable_messages()->at(0);
         msg.set_ismpi(true);
         msg.set_mpiworldsize(worldSize);
-        msg.set_recordexecgraph(true);
 
         return req;
     }
 
-    void checkSchedulingFromExecGraph(const faabric::util::ExecGraph& execGraph)
+    std::vector<std::string> waitForMpiMessagesInFlight(
+      std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
-        // Build the expectation
-        std::vector<std::string> expecedHosts;
-        // The distributed server is hardcoded to have four slots
-        int remoteSlots = 4;
-        std::string remoteIp = getWorkerIP();
-        std::string localIp = getMasterIP();
-        // First, allocate locally as much as we can
-        for (int i = 0; i < nLocalSlots; i++) {
-            expecedHosts.push_back(localIp);
-        }
-        // Second, allocate remotely as much as we can
-        int allocateRemotely =
-          std::min<int>(worldSize - nLocalSlots, remoteSlots);
-        for (int i = 0; i < allocateRemotely; i++) {
-            expecedHosts.push_back(remoteIp);
-        }
-        // Lastly, overload the main with all the ranks we haven't been able
-        // to allocate anywhere
-        int overloadMaster = worldSize - nLocalSlots - allocateRemotely;
-        for (int i = 0; i < overloadMaster; i++) {
-            expecedHosts.push_back(localIp);
+        // Wait until all the messages have been scheduled
+        int maxRetries = 20;
+        int numRetries = 0;
+        int pollSleepMs = 500;
+        auto decision = plannerCli.getSchedulingDecision(req);
+        while (decision.messageIds.size() != worldSize) {
+            if (numRetries >= maxRetries) {
+                SPDLOG_ERROR(
+                  "Timed-out waiting for MPI messages to be scheduled ({}/{})",
+                  decision.messageIds.size(),
+                  worldSize);
+                throw std::runtime_error("Timed-out waiting for MPI messges");
+            }
+
+            SLEEP_MS(pollSleepMs);
+            decision = plannerCli.getSchedulingDecision(req);
+            numRetries += 1;
         }
 
-        // Check against the actual scheduling decision
-        REQUIRE(expecedHosts ==
-                faabric::util::getMpiRankHostsFromExecGraph(execGraph));
+        return decision.hosts;
     }
 
-    // Specialisation for migration tests
-    void checkSchedulingFromExecGraph(
-      const faabric::util::ExecGraph& execGraph,
-      const std::vector<std::string> expectedHostsBefore,
-      const std::vector<std::string> expectedHostsAfter)
+    void checkAllocationAndResult(
+      std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
-        auto actualHostsBeforeAndAfter =
-          faabric::util::getMigratedMpiRankHostsFromExecGraph(execGraph);
-
-        REQUIRE(actualHostsBeforeAndAfter.first == expectedHostsBefore);
-        REQUIRE(actualHostsBeforeAndAfter.second == expectedHostsAfter);
+        checkAllocationAndResult(
+          req, { getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP() });
     }
 
     void checkAllocationAndResult(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      int timeoutMs = 10000,
-      bool skipExecGraphCheck = false)
+      const std::vector<std::string>& expectedHosts)
     {
-        faabric::Message& msg = req->mutable_messages()->at(0);
-        faabric::Message result = plannerCli.getMessageResult(msg, timeoutMs);
-        REQUIRE(result.returnvalue() == 0);
-        SLEEP_MS(1000);
-        if (!skipExecGraphCheck) {
-            auto execGraph = faabric::util::getFunctionExecGraph(msg);
-            checkSchedulingFromExecGraph(execGraph);
+        int numRetries = 0;
+        int maxRetries = 100;
+        int pollSleepMs = 250;
+        auto batchResults = plannerCli.getBatchResults(req);
+        while (batchResults->messageresults_size() != worldSize) {
+            if (numRetries >= maxRetries) {
+                SPDLOG_ERROR(
+                  "Timed-out waiting for MPI messages results ({}/{})",
+                  batchResults->messageresults_size(),
+                  worldSize);
+                throw std::runtime_error("Timed-out waiting for MPI messges");
+            }
+
+            SLEEP_MS(pollSleepMs);
+            batchResults = plannerCli.getBatchResults(req);
+            numRetries += 1;
+        }
+
+        for (const auto& msg : batchResults->messageresults()) {
+            REQUIRE(msg.returnvalue() == 0);
+            REQUIRE(expectedHosts.at(msg.mpirank()) == msg.executedhost());
         }
     }
 
+    /*
     void checkAllocationAndResultMigration(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       const std::vector<std::string>& expectedHostsBefore,
@@ -188,5 +190,6 @@ class MpiDistTestsFixture : public DistTestsFixture
         checkSchedulingFromExecGraph(
           execGraph, expectedHostsBefore, expectedHostsAfter);
     }
+    */
 };
 }

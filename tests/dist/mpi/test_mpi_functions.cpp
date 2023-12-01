@@ -78,7 +78,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     plannerCli.callFunctions(req);
 
     // Wait for extra time as the test will sleep for five seconds
-    checkAllocationAndResult(req, 20000);
+    checkAllocationAndResult(req);
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI barrier", "[mpi]")
@@ -143,63 +143,47 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI checks", "[mpi]")
 
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
 {
-    // We fist distribute the execution, and update the local slots
-    // mid-execution to fit all ranks, and create a migration opportunity.
-    int localSlots = 2;
-    int worldSize = 4;
-    setLocalSlots(localSlots, worldSize);
+    updateLocalSlots(worldSize);
+    updateRemoteSlots(worldSize);
 
     auto req = setRequest("migration");
     auto& msg = req->mutable_messages()->at(0);
-
-    // Check very often for migration opportunities so that we detect it
-    // right away
     msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
 
-    // Call the functions
-    plannerCli.callFunctions(req);
-
-    // Sleep for a while to let the planner schedule the MPI calls
-    SLEEP_MS(500);
-
-    // Update the slots so that a migration opportunity appears. We update
-    // either the local or remote worlds to force the migration of one
-    // half of the ranks or the other one (we also want to keep some used slots
-    // to prevent the planner reaching an inconsistent state)
-    bool migratingMainRank;
+    std::vector<std::string> hostsBeforeMigration;
+    std::vector<std::string> hostsAfterMigration;
 
     SECTION("Migrate main rank")
     {
-        // Make more space remotely, so we migrate the first half of ranks
-        // (including the main rank)
-        migratingMainRank = true;
-        updateRemoteSlots(2 * worldSize, worldSize);
+        hostsBeforeMigration = {
+            getMasterIP(), getWorkerIP(), getWorkerIP(), getWorkerIP()
+        };
+        hostsAfterMigration = std::vector<std::string>(4, getWorkerIP());
     }
 
     SECTION("Don't migrate main rank")
     {
-        // Make more space locally, so we migrate the second half of ranks
-        migratingMainRank = false;
-        updateLocalSlots(2 * worldSize, worldSize);
+        hostsBeforeMigration = {
+            getMasterIP(), getMasterIP(), getMasterIP(), getWorkerIP()
+        };
+        hostsAfterMigration = std::vector<std::string>(4, getMasterIP());
     }
 
-    // The current function migration approach breaks the execution graph, as
-    // some messages are left dangling (deliberately) without return value
-    std::vector<std::string> hostsBeforeMigration = {
-        getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
-    };
-    std::vector<std::string> hostsAfterMigration;
-    if (migratingMainRank) {
-        hostsAfterMigration = {
-            getWorkerIP(), getWorkerIP(), getWorkerIP(), getWorkerIP()
-        };
-    } else {
-        hostsAfterMigration = {
-            getMasterIP(), getMasterIP(), getMasterIP(), getMasterIP()
-        };
+    // Preload a scheduling decision to force a migration opportunity
+    auto preloadDec = std::make_shared<batch_scheduler::SchedulingDecision>(
+      req->appid(), req->groupid());
+    for (int i = 0; i < worldSize; i++) {
+        preloadDec->addMessage(hostsBeforeMigration.at(i), 0, 0, i);
     }
-    checkAllocationAndResultMigration(
-      req, hostsBeforeMigration, hostsAfterMigration, 15000);
+
+    // Call the functions
+    plannerCli.callFunctions(req);
+
+    auto actualHostsBeforeMigration = waitForMpiMessagesInFlight(req);
+    REQUIRE(hostsBeforeMigration == actualHostsBeforeMigration);
+
+    // Wait for messages to be finished
+    checkAllocationAndResult(req, hostsAfterMigration);
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI gather", "[mpi]")
