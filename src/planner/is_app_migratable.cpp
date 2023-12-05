@@ -14,7 +14,7 @@ using namespace faabric::batch_scheduler;
 std::pair<HostMap, InFlightReqs> readOccupationFromFile(
   const std::string& filePath)
 {
-    faabric::batch_scheduler::HostMap hostMap;
+    HostMap hostMap;
     InFlightReqs inFlightReqs;
 
     std::ifstream inFile(filePath);
@@ -120,7 +120,7 @@ int main(int argc, char** argv)
     // Prepare variables to get a trustworthy scheduling decision
     // ------
 
-    auto batchScheduler = faabric::batch_scheduler::getBatchScheduler();
+    auto batchScheduler = getBatchScheduler();
     auto [hostMap, inFlightReqs] =
       readOccupationFromFile(workerOccupationFilePath);
 
