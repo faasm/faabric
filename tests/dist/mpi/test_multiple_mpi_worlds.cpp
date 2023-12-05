@@ -76,14 +76,14 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
 
     // Both requests will initially be split evenly between the two hosts. Then
-    // one of them will be migrated locally to make use of the free resources
+    // one of them will be migrated to make use of the free resources
     std::vector<std::string> hostsAfterMigration;
     SECTION("Migrate main rank")
     {
         updateLocalSlots(4);
         updateRemoteSlots(6);
         hostsAfterMigration =
-          std::vector<std::string>(worldSize, getMasterIP());
+          std::vector<std::string>(worldSize, getWorkerIP());
     }
 
     SECTION("Don't migrate main rank")
@@ -131,8 +131,8 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
 {
     // Set the slots for the first request: 2 locally and 2 remote
     int worldSize = 4;
-    updateLocalSlots(4);
-    updateRemoteSlots(4);
+    updateLocalSlots(5);
+    updateRemoteSlots(5);
 
     // Prepare both requests: both will do work and check for migration
     // opportunities
