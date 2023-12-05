@@ -102,7 +102,7 @@ class MpiDistTestsFixture : public DistTestsFixture
     }
 
     std::shared_ptr<faabric::BatchExecuteRequest> setRequest(
-      const std::string& function)
+      const std::string& function) const
     {
         auto req = faabric::util::batchExecFactory("mpi", function, 1);
         faabric::Message& msg = req->mutable_messages()->at(0);
@@ -171,25 +171,5 @@ class MpiDistTestsFixture : public DistTestsFixture
             REQUIRE(expectedHosts.at(msg.mpirank()) == msg.executedhost());
         }
     }
-
-    /*
-    void checkAllocationAndResultMigration(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      const std::vector<std::string>& expectedHostsBefore,
-      const std::vector<std::string>& expectedHostsAfter,
-      int timeoutMs = 1000)
-    {
-        faabric::Message& msg = req->mutable_messages()->at(0);
-        faabric::Message result = plannerCli.getMessageResult(msg, timeoutMs);
-
-        if (result.returnvalue() != MIGRATED_FUNCTION_RETURN_VALUE) {
-            REQUIRE(result.returnvalue() == 0);
-        }
-        SLEEP_MS(1000);
-        auto execGraph = faabric::util::getFunctionExecGraph(msg);
-        checkSchedulingFromExecGraph(
-          execGraph, expectedHostsBefore, expectedHostsAfter);
-    }
-    */
 };
 }
