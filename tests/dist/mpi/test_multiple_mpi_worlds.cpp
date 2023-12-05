@@ -28,20 +28,14 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
 
     SECTION("Same main host")
     {
-        hosts1 = {
-            getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
-        };
+        hosts1 = { getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP() };
         hosts2 = hosts1;
     }
 
     SECTION("Different main host")
     {
-        hosts1 = {
-            getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
-        };
-        hosts2 = {
-            getWorkerIP(), getWorkerIP(), getMasterIP(), getMasterIP()
-        };
+        hosts1 = { getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP() };
+        hosts2 = { getWorkerIP(), getWorkerIP(), getMasterIP(), getMasterIP() };
     }
 
     auto preloadDec1 = std::make_shared<batch_scheduler::SchedulingDecision>(
