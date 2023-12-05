@@ -10,7 +10,7 @@
 namespace tests {
 
 TEST_CASE_METHOD(MpiDistTestsFixture,
-                 "Test concurrent MPI applications with same main host",
+                 "Test concurrent MPI applications",
                  "[mpi]")
 {
     // Prepare both requests
@@ -23,23 +23,23 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     updateLocalSlots(worldSize);
     updateRemoteSlots(worldSize);
 
-    std::vector<std::string> hostsBefore1;
-    std::vector<std::string> hostsBefore2;
+    std::vector<std::string> hosts1;
+    std::vector<std::string> hosts2;
 
     SECTION("Same main host")
     {
-        hostsBefore1 = {
+        hosts1 = {
             getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
         };
-        hostsBefore2 = hostsBefore1;
+        hosts2 = hosts1;
     }
 
     SECTION("Different main host")
     {
-        hostsBefore1 = {
+        hosts1 = {
             getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
         };
-        hostsBefore2 = {
+        hosts2 = {
             getWorkerIP(), getWorkerIP(), getMasterIP(), getMasterIP()
         };
     }
@@ -49,25 +49,22 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     auto preloadDec2 = std::make_shared<batch_scheduler::SchedulingDecision>(
       req2->appid(), req2->groupid());
     for (int i = 0; i < worldSize; i++) {
-        preloadDec1->addMessage(hostsBefore1.at(i), 0, 0, i);
-        preloadDec2->addMessage(hostsBefore2.at(i), 0, 0, i);
+        preloadDec1->addMessage(hosts1.at(i), 0, 0, i);
+        preloadDec2->addMessage(hosts2.at(i), 0, 0, i);
     }
     plannerCli.preloadSchedulingDecision(preloadDec1);
     plannerCli.preloadSchedulingDecision(preloadDec2);
 
     plannerCli.callFunctions(req1);
     auto actualHostsBefore1 = waitForMpiMessagesInFlight(req1);
-    REQUIRE(actualHostsBefore1 == hostsBefore1);
+    REQUIRE(actualHostsBefore1 == hosts1);
 
     plannerCli.callFunctions(req2);
-    auto actualHostsBefore2 = waitForMpiMessagesInFlight(req1);
-    REQUIRE(actualHostsBefore2 == hostsBefore1);
+    auto actualHostsBefore2 = waitForMpiMessagesInFlight(req2);
+    REQUIRE(actualHostsBefore2 == hosts2);
 
-    std::vector<std::string> hostsAfterMigration1(worldSize, getMasterIP());
-    std::vector<std::string> hostsAfterMigration2(worldSize, getWorkerIP());
-
-    checkAllocationAndResult(req1, hostsAfterMigration1);
-    checkAllocationAndResult(req2, hostsAfterMigration2);
+    checkAllocationAndResult(req1, hosts1);
+    checkAllocationAndResult(req2, hosts2);
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture,
