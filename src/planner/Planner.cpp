@@ -304,12 +304,6 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
         SPDLOG_DEBUG("Setting result for non-existant (or finished) app: {}",
                      appId);
     } else {
-        // Note that if the message is a migrated message, the in-flight
-        // request will contain a copy of the message (with the same id) still
-        // in-flight, and the decision will have already been updated as part
-        // of the migration, so we can skip all the book-keeping logic that
-        // follows the completion of a message
-
         auto req = state.inFlightReqs.at(appId).first;
         auto decision = state.inFlightReqs.at(appId).second;
 
