@@ -269,6 +269,16 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
     int appId = msg->appid();
     int msgId = msg->id();
 
+    // If we are dealing with a migrated message, we can ignore the setting
+    // of the message result. This is because the migrated function will
+    // have the same message id, and thus we will call this method again with
+    // a message with the same message id. In addition, all the in-flihght
+    // state is updated accordingly when we schedule the migration
+    bool isMigratedMsg = msg->returnvalue() == MIGRATED_FUNCTION_RETURN_VALUE;
+    if (isMigratedMsg) {
+        return;
+    }
+
     faabric::util::FullLock lock(plannerMx);
 
     SPDLOG_DEBUG("Planner setting message result (id: {}) for {}:{}:{}",
@@ -280,12 +290,7 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
     // Release the slot only once
     assert(state.hostMap.contains(msg->executedhost()));
     if (!state.appResults[appId].contains(msgId)) {
-
-        // If the message has been migrated, we have already release the slot
-        // so we don't have to do it here again
-        if (msg->returnvalue() != MIGRATED_FUNCTION_RETURN_VALUE) {
-            releaseHostSlots(state.hostMap.at(msg->executedhost()));
-        }
+        releaseHostSlots(state.hostMap.at(msg->executedhost()));
     }
 
     // Set the result
