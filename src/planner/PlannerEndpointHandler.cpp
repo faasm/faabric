@@ -185,6 +185,11 @@ void PlannerEndpointHandler::onRequest(
                 }
             }
 
+            // Also include the total number of migrations to-date
+            int numMigrations =
+              faabric::planner::getPlanner().getNumMigrations();
+            inFlightAppsResponse.set_nummigrations(numMigrations);
+
             response.result(beast::http::status::ok);
             response.body() =
               faabric::util::messageToJson(inFlightAppsResponse);

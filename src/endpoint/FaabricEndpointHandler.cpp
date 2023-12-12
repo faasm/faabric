@@ -38,14 +38,19 @@ void FaabricEndpointHandler::onRequest(
     // TODO: for the moment we keep the endpoint handler, but we are not meant
     // to receive any requests here. Eventually we will delete it
     if (requestStr.empty()) {
-        SPDLOG_ERROR("Planner handler received empty request");
+        SPDLOG_WARN("Worker HTTP handler received empty request!");
         response.result(beast::http::status::bad_request);
         response.body() = std::string("Empty request");
         return ctx.sendFunction(std::move(response));
     }
 
-    SPDLOG_ERROR("Worker HTTP handler received non-empty request (body: {})",
-                 request.body());
-    throw std::runtime_error("Worker HTTP handler received non-empty request");
+    // We don't expect to receive any requests here, but we sometimes do (e.g.
+    // probing if exposed port is vulnerable to certain CVEs when deployed in
+    // AKS)
+    SPDLOG_WARN("Worker HTTP handler received non-empty request (body: {})",
+                request.body());
+    response.result(beast::http::status::bad_request);
+    response.body() = std::string("Unexpected request!");
+    return ctx.sendFunction(std::move(response));
 }
 }

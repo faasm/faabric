@@ -61,6 +61,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::GetSchedulingDecision: {
             return recvGetSchedulingDecision(message.udata());
         }
+        case PlannerCalls::GetNumMigrations: {
+            return recvGetNumMigrations(message.udata());
+        }
         case PlannerCalls::PreloadSchedulingDecision: {
             return recvPreloadSchedulingDecision(message.udata());
         }
@@ -193,6 +196,15 @@ PlannerServer::recvGetSchedulingDecision(std::span<const uint8_t> buffer)
       faabric::util::ptpMappingsFromSchedulingDecision(decision);
 
     return std::make_unique<faabric::PointToPointMappings>(mappings);
+}
+
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetNumMigrations(
+  std::span<const uint8_t> buffer)
+{
+    NumMigrationsResponse response;
+    response.set_nummigrations(planner.getNumMigrations());
+
+    return std::make_unique<NumMigrationsResponse>(response);
 }
 
 std::unique_ptr<google::protobuf::Message>
