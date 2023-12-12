@@ -387,6 +387,8 @@ int PlannerClient::getNumMigrations()
     NumMigrationsResponse response;
 
     syncSend(PlannerCalls::GetNumMigrations, &request, &response);
+
+    return response.nummigrations();
 }
 
 void PlannerClient::preloadSchedulingDecision(

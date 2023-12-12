@@ -57,6 +57,7 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
     void ping();
 
+    // Clear the client-local cache
     void clearCache();
 
     // ------

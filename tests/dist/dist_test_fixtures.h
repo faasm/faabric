@@ -21,6 +21,9 @@ class DistTestsFixture
   public:
     DistTestsFixture()
     {
+        // Reset the planner
+        resetPlanner();
+
         // Make sure the host list is up to date
         sch.addHostToGlobalSet(getMasterIP());
         sch.addHostToGlobalSet(getWorkerIP());
