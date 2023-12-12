@@ -630,6 +630,7 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     HttpMessage inFlightMsg;
     inFlightMsg.set_type(HttpMessage_Type_GET_IN_FLIGHT_APPS);
     GetInFlightAppsResponse expectedResponse;
+    expectedResponse.set_nummigrations(0);
     msgJsonStr = faabric::util::messageToJson(inFlightMsg);
     expectedResponseBody = faabric::util::messageToJson(expectedResponse);
     expectedReturnCode = beast::http::status::ok;

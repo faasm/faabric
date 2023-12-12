@@ -260,6 +260,16 @@ TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
 }
 
 TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
+                 "Test getting the number of migrations",
+                 "[planner]")
+{
+    // We should be able to get the number of migrations from the planner
+    REQUIRE(plannerCli.getNumMigrations() == 0);
+
+    // To see a non-zero result, we need a distributed test
+}
+
+TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
                  "Test preloading a scheduling decision from the client",
                  "[planner]")
 {

@@ -57,6 +57,7 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
     void ping();
 
+    // Clear the client-local cache
     void clearCache();
 
     // ------
@@ -91,6 +92,8 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
     faabric::batch_scheduler::SchedulingDecision getSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    int getNumMigrations();
 
     void preloadSchedulingDecision(
       std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> preloadDec);

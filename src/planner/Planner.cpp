@@ -151,6 +151,7 @@ void Planner::flushSchedulingState()
     state.inFlightReqs.clear();
     state.appResults.clear();
     state.appResultWaiters.clear();
+    state.numMigrations = 0;
 }
 
 std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()
@@ -517,6 +518,11 @@ faabric::batch_scheduler::InFlightReqs Planner::getInFlightReqs()
     return inFlightReqsCopy;
 }
 
+int Planner::getNumMigrations()
+{
+    return state.numMigrations.load(std::memory_order_acquire);
+}
+
 static faabric::batch_scheduler::HostMap convertToBatchSchedHostMap(
   std::map<std::string, std::shared_ptr<Host>> hostMapIn)
 {
@@ -662,6 +668,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             oldDec->print("info");
             SPDLOG_INFO("New decision:");
             decision->print("info");
+            state.numMigrations += 1;
 
             // We want to let all hosts involved in the migration (not only
             // those in the new decision) that we are gonna migrate. For the

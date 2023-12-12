@@ -381,6 +381,16 @@ PlannerClient::getSchedulingDecision(
     return decision;
 }
 
+int PlannerClient::getNumMigrations()
+{
+    EmptyRequest request;
+    NumMigrationsResponse response;
+
+    syncSend(PlannerCalls::GetNumMigrations, &request, &response);
+
+    return response.nummigrations();
+}
+
 void PlannerClient::preloadSchedulingDecision(
   std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> preloadDec)
 {

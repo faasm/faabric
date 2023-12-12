@@ -33,5 +33,8 @@ struct PlannerState
     // planner's scheduling
     std::map<int, std::shared_ptr<batch_scheduler::SchedulingDecision>>
       preloadedSchedulingDecisions;
+
+    // Helper coutner of the total number of migrations
+    std::atomic<int> numMigrations = 0;
 };
 }

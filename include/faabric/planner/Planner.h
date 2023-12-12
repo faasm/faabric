@@ -81,6 +81,10 @@ class Planner
 
     faabric::batch_scheduler::InFlightReqs getInFlightReqs();
 
+    // Helper method to get the number of migrations that have happened since
+    // the planner was last reset
+    int getNumMigrations();
+
     // Main entrypoint to request the execution of batches
     std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> callBatch(
       std::shared_ptr<BatchExecuteRequest> req);

@@ -42,9 +42,9 @@ message HttpMessage {
         GET_CONFIG = 6;
         GET_EXEC_GRAPH = 7;
         GET_IN_FLIGHT_APPS = 8;
-        EXECUTE_BATCH = 9;
-        EXECUTE_BATCH_STATUS = 10;
-        PRELOAD_SCHEDULING_DECISION = 11;
+        EXECUTE_BATCH = 10;
+        EXECUTE_BATCH_STATUS = 11;
+        PRELOAD_SCHEDULING_DECISION = 12;
     }
 
     Type type = 1 [json_name = "http_type"];
@@ -65,6 +65,11 @@ message GetInFlightAppsResponse {
     }
 
     repeated InFlightApp apps = 1;
+    int32 numMigrations = 2;
+}
+
+message NumMigrationsResponse {
+    int32 numMigrations = 1;
 }
 
 // ---------------------------------------------

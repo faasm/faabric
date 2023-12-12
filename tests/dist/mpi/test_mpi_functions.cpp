@@ -189,6 +189,9 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
 
     // Wait for messages to be finished
     checkAllocationAndResult(req, hostsAfterMigration);
+
+    // Check that, indeed, one migration happened
+    REQUIRE(plannerCli.getNumMigrations() == 1);
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI gather", "[mpi]")
