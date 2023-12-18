@@ -110,6 +110,8 @@ Executor::~Executor()
     }
 }
 
+// TODO(thread-opt): get rid of this method here and move to
+// PlannerClient::callFunctions()
 std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions)

@@ -612,7 +612,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             decision->print();
 #endif
 
-            // 1. For a scale change request, we only need to update the hosts
+            // 1. For a new request, we only need to update the hosts
             // with the new messages being scheduled
             for (int i = 0; i < decision->hosts.size(); i++) {
                 claimHostSlots(state.hostMap.at(decision->hosts.at(i)));
