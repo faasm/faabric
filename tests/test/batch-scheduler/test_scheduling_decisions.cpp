@@ -30,7 +30,7 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
         hostB = "hostA";
         hostC = "hostA";
 
-        expectSingleHost = false;
+        expectSingleHost = true;
         expectedUniqueHosts = { "hostA" };
     }
 
