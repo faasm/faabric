@@ -27,38 +27,43 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::string function = "fake-diffs";
     std::vector<uint8_t> inputData = { 0, 1, 2, 3, 4, 5, 6 };
 
-    // Set up the message
+    // Set up the messages
     std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory(user, function, 1);
+      faabric::util::batchExecFactory(user, function, 2);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
 
-    // Set up some input data
-    faabric::Message& msg = req->mutable_messages()->at(0);
-    msg.set_inputdata(inputData.data(), inputData.size());
+    for (int i = 0; i < req->messages_size(); i++) {
+        req->mutable_messages(i)->set_groupidx(i);
+        req->mutable_messages(i)->set_inputdata(inputData.data(),
+                                                inputData.size());
+    }
 
     // Set up the main thread snapshot
     auto& reg = faabric::snapshot::getSnapshotRegistry();
     size_t snapSize = DIST_TEST_EXECUTOR_MEMORY_SIZE;
-    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+    std::string snapshotKey =
+      faabric::util::getMainThreadSnapshotKey(req->messages(0));
     auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
     reg.registerSnapshot(snapshotKey, snap);
 
-    // Force the function to be executed remotely
-    faabric::HostResources res;
-    res.set_usedslots(1);
-    res.set_slots(1);
-    sch.setThisHostResources(res);
-    res.set_usedslots(0);
-    res.set_slots(4);
-    sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
+    // Force the execution to span multiple hosts so that it triggers dirty
+    // tracking
+    std::vector<std::string> expectedHosts = { getMasterIP(), getWorkerIP() };
+    auto preloadDec = std::make_shared<batch_scheduler::SchedulingDecision>(
+      req->appid(), req->groupid());
+    for (int i = 0; i < req->messages_size(); i++) {
+        preloadDec->addMessage(expectedHosts.at(i), 0, 0, i);
+    }
 
-    std::vector<std::string> expectedHosts = { getWorkerIP() };
+    plannerCli.preloadSchedulingDecision(preloadDec);
     auto decision = plannerCli.callFunctions(req);
-    std::vector<std::string> executedHosts = decision.hosts;
-    REQUIRE(expectedHosts == executedHosts);
+    REQUIRE(expectedHosts == decision.hosts);
 
-    auto msgResult = plannerCli.getMessageResult(req->appid(), msg.id(), 500);
-    REQUIRE(msgResult.returnvalue() == 123);
+    for (const auto& msg : req->messages()) {
+        auto msgResult =
+          plannerCli.getMessageResult(req->appid(), msg.id(), 500);
+        REQUIRE(msgResult.returnvalue() == 123);
+    }
 
     // Write the diffs and check they've been applied
     REQUIRE(snap->getQueuedDiffsCount() == 2);

@@ -11,16 +11,17 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
 
 bool SchedulingDecision::isSingleHost()
 {
+    auto& conf = faabric::util::getSystemConfig();
+
     // Always return false if single-host optimisations are switched off
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    // TODO(thread-opt): remove this flag
     if (conf.noSingleHostOptimisations == 1) {
         return false;
     }
 
     std::string thisHost = conf.endpointHost;
-    return std::all_of(hosts.begin(), hosts.end(), [&](const std::string& s) {
-        return s == thisHost;
-    });
+    std::set<std::string> hostSet(hosts.begin(), hosts.end());
+    return hostSet.size() == 1;
 }
 
 void SchedulingDecision::addMessage(const std::string& host,
