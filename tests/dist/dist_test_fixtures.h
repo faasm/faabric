@@ -29,10 +29,31 @@ class DistTestsFixture
         sch.addHostToGlobalSet(getWorkerIP());
         sch.removeHostFromGlobalSet(LOCALHOST);
 
+        // Give some resources to each host
+        updateLocalSlots(4, 0);
+        updateRemoteSlots(4, 0);
+
         // Set up executor
         std::shared_ptr<tests::DistTestExecutorFactory> fac =
           std::make_shared<tests::DistTestExecutorFactory>();
         faabric::scheduler::setExecutorFactory(fac);
+    }
+
+    void updateLocalSlots(int newLocalSlots, int newUsedLocalSlots = 0)
+    {
+        faabric::HostResources localRes;
+        localRes.set_slots(newLocalSlots);
+        localRes.set_usedslots(newUsedLocalSlots);
+        sch.setThisHostResources(localRes);
+    }
+
+    void updateRemoteSlots(int newRemoteSlots, int newRemoteUsedSlots = 0)
+    {
+        faabric::HostResources remoteRes;
+        remoteRes.set_slots(newRemoteSlots);
+        remoteRes.set_usedslots(newRemoteUsedSlots);
+        sch.addHostToGlobalSet(workerIP,
+                               std::make_shared<HostResources>(remoteRes));
     }
 
     ~DistTestsFixture() = default;
@@ -64,23 +85,6 @@ class MpiDistTestsFixture : public DistTestsFixture
     int nLocalSlots = 2;
     int worldSize = 4;
     bool origIsMsgOrderingOn;
-
-    void updateLocalSlots(int newLocalSlots, int newUsedLocalSlots = 0)
-    {
-        faabric::HostResources localRes;
-        localRes.set_slots(newLocalSlots);
-        localRes.set_usedslots(newUsedLocalSlots);
-        sch.setThisHostResources(localRes);
-    }
-
-    void updateRemoteSlots(int newRemoteSlots, int newRemoteUsedSlots = 0)
-    {
-        faabric::HostResources remoteRes;
-        remoteRes.set_slots(newRemoteSlots);
-        remoteRes.set_usedslots(newRemoteUsedSlots);
-        sch.addHostToGlobalSet(workerIP,
-                               std::make_shared<HostResources>(remoteRes));
-    }
 
     void setLocalSlots(int numLocalSlots, int worldSizeIn = 0)
     {
