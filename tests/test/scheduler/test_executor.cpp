@@ -492,12 +492,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     SECTION("Underloaded") { nThreads = 10; }
 
-    SECTION("Underloaded no single host optimisation")
-    {
-        nThreads = 10;
-        conf.noSingleHostOptimisations = 1;
-    }
-
     // Set resources
     HostResources localHost;
     localHost.set_slots(nThreads);
@@ -532,14 +526,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
                  "Test executing chained threads",
                  "[executor]")
 {
-    int nThreads;
-    SECTION("Underloaded") { nThreads = 8; }
-
-    SECTION("Underloaded no single host optimisation")
-    {
-        nThreads = 10;
-        conf.noSingleHostOptimisations = 1;
-    }
+    int nThreads = 8;
 
     // Set resources
     HostResources localHost;

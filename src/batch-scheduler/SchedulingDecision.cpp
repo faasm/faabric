@@ -13,12 +13,6 @@ bool SchedulingDecision::isSingleHost()
 {
     auto& conf = faabric::util::getSystemConfig();
 
-    // Always return false if single-host optimisations are switched off
-    // TODO(thread-opt): remove this flag
-    if (conf.noSingleHostOptimisations == 1) {
-        return false;
-    }
-
     std::string thisHost = conf.endpointHost;
     std::set<std::string> hostSet(hosts.begin(), hosts.end());
     return hostSet.size() == 1;

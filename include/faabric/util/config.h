@@ -26,10 +26,7 @@ class SystemConfig
     std::string redisPort;
 
     // Scheduling
-    int noScheduler;
     int overrideCpuCount;
-    std::string noTopologyHints;
-    int noSingleHostOptimisations;
     std::string batchSchedulerMode;
 
     // Worker-related timeouts
@@ -39,7 +36,6 @@ class SystemConfig
 
     // MPI
     int defaultMpiWorldSize;
-    int mpiBasePort;
 
     // Endpoint
     std::string endpointInterface;

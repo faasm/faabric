@@ -44,7 +44,6 @@ std::vector<std::shared_ptr<MPIMessage>> getMpiMockedMessages(int sendRank)
 
 MpiWorld::MpiWorld()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
-  , basePort(faabric::util::getSystemConfig().mpiBasePort)
   , creationTime(faabric::util::startTimer())
   , cartProcsPerDim(2)
   , broker(faabric::transport::getPointToPointBroker())
