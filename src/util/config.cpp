@@ -33,11 +33,7 @@ void SystemConfig::initialise()
 
     // Scheduling
     // TODO(planner-scheduler): remove some of this
-    noScheduler = this->getSystemConfIntParam("NO_SCHEDULER", "0");
     overrideCpuCount = this->getSystemConfIntParam("OVERRIDE_CPU_COUNT", "0");
-    noTopologyHints = getEnvVar("NO_TOPOLOGY_HINTS", "off");
-    noSingleHostOptimisations =
-      this->getSystemConfIntParam("NO_SINGLE_HOST", "0");
     batchSchedulerMode = getEnvVar("BATCH_SCHEDULER_MODE", "bin-pack");
 
     // Worker-related timeouts (all in seconds)
@@ -50,7 +46,6 @@ void SystemConfig::initialise()
     // MPI
     defaultMpiWorldSize =
       this->getSystemConfIntParam("DEFAULT_MPI_WORLD_SIZE", "5");
-    mpiBasePort = this->getSystemConfIntParam("MPI_BASE_PORT", "10800");
 
     // Endpoint
     endpointInterface = getEnvVar("ENDPOINT_INTERFACE", "");
@@ -115,9 +110,7 @@ void SystemConfig::print()
     SPDLOG_INFO("REDIS_PORT                 {}", redisPort);
 
     SPDLOG_INFO("--- Scheduling ---");
-    SPDLOG_INFO("NO_SCHEDULER               {}", noScheduler);
     SPDLOG_INFO("OVERRIDE_CPU_COUNT         {}", overrideCpuCount);
-    SPDLOG_INFO("NO_TOPOLOGY_HINTS         {}", noTopologyHints);
 
     SPDLOG_INFO("--- Timeouts ---");
     SPDLOG_INFO("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);
@@ -125,7 +118,6 @@ void SystemConfig::print()
 
     SPDLOG_INFO("--- MPI ---");
     SPDLOG_INFO("DEFAULT_MPI_WORLD_SIZE  {}", defaultMpiWorldSize);
-    SPDLOG_INFO("MPI_BASE_PORT  {}", mpiBasePort);
 
     SPDLOG_INFO("--- Endpoint ---");
     SPDLOG_INFO("ENDPOINT_INTERFACE         {}", endpointInterface);

@@ -207,7 +207,6 @@ class MpiWorld
     int id = -1;
     int size = -1;
     std::string thisHost;
-    int basePort;
     faabric::util::TimePoint creationTime;
 
     std::atomic_flag isDestroyed = false;

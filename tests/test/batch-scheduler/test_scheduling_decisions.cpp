@@ -44,18 +44,6 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
         expectedUniqueHosts = { thisHost };
     }
 
-    SECTION("All this host single host optimisations off")
-    {
-        conf.noSingleHostOptimisations = 1;
-
-        hostA = thisHost;
-        hostB = thisHost;
-        hostC = thisHost;
-
-        expectSingleHost = false;
-        expectedUniqueHosts = { thisHost };
-    }
-
     auto req = faabric::util::batchExecFactory("foo", "bar", 3);
 
     SchedulingDecision decision(appId, groupId);

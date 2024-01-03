@@ -20,16 +20,12 @@ TEST_CASE("Test default system config initialisation", "[util]")
 
     REQUIRE(conf.redisPort == "6379");
 
-    REQUIRE(conf.noScheduler == 0);
-    REQUIRE(conf.noTopologyHints == "off");
-    REQUIRE(conf.noSingleHostOptimisations == 0);
     REQUIRE(conf.batchSchedulerMode == "bin-pack");
 
     REQUIRE(conf.globalMessageTimeout == 60000);
     REQUIRE(conf.boundTimeout == 30000);
 
     REQUIRE(conf.defaultMpiWorldSize == 5);
-    REQUIRE(conf.mpiBasePort == 10800);
 
     REQUIRE(conf.dirtyTrackingMode == "segfault");
 
@@ -83,10 +79,7 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.redisQueueHost == "other-host");
     REQUIRE(conf.redisPort == "1234");
 
-    REQUIRE(conf.noScheduler == 1);
     REQUIRE(conf.overrideCpuCount == 4);
-    REQUIRE(conf.noTopologyHints == "on");
-    REQUIRE(conf.noSingleHostOptimisations == 1);
     REQUIRE(conf.batchSchedulerMode == "foo-bar");
 
     REQUIRE(conf.globalMessageTimeout == 9876);
@@ -98,7 +91,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.pointToPointServerThreads == 444);
 
     REQUIRE(conf.defaultMpiWorldSize == 2468);
-    REQUIRE(conf.mpiBasePort == 9999);
 
     REQUIRE(conf.dirtyTrackingMode == "dummy-track");
 
