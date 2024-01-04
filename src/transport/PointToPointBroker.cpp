@@ -100,7 +100,10 @@ bool PointToPointGroup::groupExists(int groupId)
     return groups.contains(groupId);
 }
 
-void PointToPointGroup::addGroup(int appId, int groupId, int groupSize, bool isSingleHost)
+void PointToPointGroup::addGroup(int appId,
+                                 int groupId,
+                                 int groupSize,
+                                 bool isSingleHost)
 {
     groups.tryEmplaceShared(groupId, appId, groupId, groupSize, isSingleHost);
 }
@@ -132,7 +135,7 @@ PointToPointGroup::PointToPointGroup(int appIdIn,
   , groupSize(groupSizeIn)
   , isSingleHost(isSingleHostIn)
   , ptpBroker(faabric::transport::getPointToPointBroker())
-  , localBarrier(isSingleHost ? groupSize : 0, [](){;})
+  , localBarrier(isSingleHost ? groupSize : 0, []() { ; })
 {}
 
 void PointToPointGroup::lock(int groupIdx, bool recursive)
@@ -430,8 +433,10 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
         }
 
         // Register the group
-        PointToPointGroup::addGroup(
-          decision.appId, groupId, decision.nFunctions, decision.isSingleHost());
+        PointToPointGroup::addGroup(decision.appId,
+                                    groupId,
+                                    decision.nFunctions,
+                                    decision.isSingleHost());
     }
 
     SPDLOG_TRACE(

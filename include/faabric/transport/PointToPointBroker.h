@@ -33,7 +33,10 @@ class PointToPointGroup
 
     static bool groupExists(int groupId);
 
-    static void addGroup(int appId, int groupId, int groupSize, bool isSingleHost);
+    static void addGroup(int appId,
+                         int groupId,
+                         int groupSize,
+                         bool isSingleHost);
 
     static void addGroupIfNotExists(int appId, int groupId, int groupSize);
 
@@ -41,7 +44,10 @@ class PointToPointGroup
 
     static void clear();
 
-    PointToPointGroup(int appId, int groupIdIn, int groupSizeIn, bool isSingleHostIn);
+    PointToPointGroup(int appId,
+                      int groupIdIn,
+                      int groupSizeIn,
+                      bool isSingleHostIn);
 
     void lock(int groupIdx, bool recursive);
 
@@ -81,7 +87,7 @@ class PointToPointGroup
     std::recursive_timed_mutex localRecursiveMx;
 
     // Local barrier
-    std::barrier<void(*)()> localBarrier;
+    std::barrier<void (*)()> localBarrier;
 
     // Distributed lock
     std::stack<int> recursiveLockOwners;
