@@ -315,7 +315,7 @@ void PointToPointGroup::notifyLocked(int groupIdx)
 
 void PointToPointGroup::barrier(int groupIdx)
 {
-    if (isSingleHost && singleHostOptSwitch) {
+    if (isSingleHost) {
         localBarrier.arrive_and_wait();
         return;
     }
