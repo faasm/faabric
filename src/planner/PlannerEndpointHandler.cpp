@@ -16,7 +16,7 @@ void PlannerEndpointHandler::onRequest(
   faabric::endpoint::HttpRequestContext&& ctx,
   faabric::util::BeastHttpRequest&& request)
 {
-    SPDLOG_DEBUG("Faabric planner received request");
+    SPDLOG_TRACE("Faabric planner received request");
 
     // Very permissive CORS
     faabric::util::BeastHttpResponse response;
@@ -238,7 +238,7 @@ void PlannerEndpointHandler::onRequest(
             // in: BatchExecuteRequestStatus
             // out: BatchExecuteRequestStatus
             // Parse the message payload
-            SPDLOG_DEBUG("Planner received EXECUTE_BATCH_STATUS request");
+            SPDLOG_TRACE("Planner received EXECUTE_BATCH_STATUS request");
             faabric::BatchExecuteRequestStatus berStatus;
             try {
                 faabric::util::jsonToMessage(msg.payloadjson(), &berStatus);

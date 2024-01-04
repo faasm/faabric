@@ -82,13 +82,13 @@ class SchedulingDecision
     std::string returnHost;
 
     /**
-     * Work out if this decision is all on this host. If the decision is
+     * Work out if this decision is all in one host. If the decision is
      * completely on *another* host, we still count it as not being on a single
      * host, as this host will be the main.
      *
      * Will always return false if single host optimisations are switched off.
      */
-    bool isSingleHost();
+    bool isSingleHost() const;
 
     void addMessage(const std::string& host, const faabric::Message& msg);
 

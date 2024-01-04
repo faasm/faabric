@@ -6,6 +6,7 @@
 #include <faabric/util/locks.h>
 
 #include <atomic>
+#include <barrier>
 #include <condition_variable>
 #include <queue>
 #include <set>
@@ -32,7 +33,7 @@ class PointToPointGroup
 
     static bool groupExists(int groupId);
 
-    static void addGroup(int appId, int groupId, int groupSize);
+    static void addGroup(int appId, int groupId, int groupSize, bool isSingleHost);
 
     static void addGroupIfNotExists(int appId, int groupId, int groupSize);
 
@@ -40,7 +41,7 @@ class PointToPointGroup
 
     static void clear();
 
-    PointToPointGroup(int appId, int groupIdIn, int groupSizeIn);
+    PointToPointGroup(int appId, int groupIdIn, int groupSizeIn, bool isSingleHostIn);
 
     void lock(int groupIdx, bool recursive);
 
@@ -67,6 +68,8 @@ class PointToPointGroup
     int appId = 0;
     int groupId = 0;
     int groupSize = 0;
+    // Hint to speed-up local operations
+    bool isSingleHost;
 
     std::shared_mutex mx;
 
@@ -76,6 +79,9 @@ class PointToPointGroup
     // Local lock
     std::timed_mutex localMx;
     std::recursive_timed_mutex localRecursiveMx;
+
+    // Local barrier
+    std::barrier<void(*)()> localBarrier;
 
     // Distributed lock
     std::stack<int> recursiveLockOwners;

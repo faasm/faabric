@@ -9,7 +9,7 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
   , groupId(groupIdIn)
 {}
 
-bool SchedulingDecision::isSingleHost()
+bool SchedulingDecision::isSingleHost() const
 {
     auto& conf = faabric::util::getSystemConfig();
 
