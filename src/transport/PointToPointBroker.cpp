@@ -100,16 +100,19 @@ bool PointToPointGroup::groupExists(int groupId)
     return groups.contains(groupId);
 }
 
-void PointToPointGroup::addGroup(int appId, int groupId, int groupSize)
+void PointToPointGroup::addGroup(int appId,
+                                 int groupId,
+                                 int groupSize,
+                                 bool isSingleHost)
 {
-    groups.tryEmplaceShared(groupId, appId, groupId, groupSize);
+    groups.tryEmplaceShared(groupId, appId, groupId, groupSize, isSingleHost);
 }
 
 void PointToPointGroup::addGroupIfNotExists(int appId,
                                             int groupId,
                                             int groupSize)
 {
-    addGroup(appId, groupId, groupSize);
+    addGroup(appId, groupId, groupSize, false);
 }
 
 void PointToPointGroup::clearGroup(int groupId)
@@ -124,12 +127,15 @@ void PointToPointGroup::clear()
 
 PointToPointGroup::PointToPointGroup(int appIdIn,
                                      int groupIdIn,
-                                     int groupSizeIn)
+                                     int groupSizeIn,
+                                     bool isSingleHostIn)
   : conf(faabric::util::getSystemConfig())
   , appId(appIdIn)
   , groupId(groupIdIn)
   , groupSize(groupSizeIn)
+  , isSingleHost(isSingleHostIn)
   , ptpBroker(faabric::transport::getPointToPointBroker())
+  , localBarrier(isSingleHost ? groupSize : 0, []() { ; })
 {}
 
 void PointToPointGroup::lock(int groupIdx, bool recursive)
@@ -309,6 +315,11 @@ void PointToPointGroup::notifyLocked(int groupIdx)
 
 void PointToPointGroup::barrier(int groupIdx)
 {
+    if (isSingleHost) {
+        localBarrier.arrive_and_wait();
+        return;
+    }
+
     // TODO more efficient barrier implementation to avoid load on the main
     if (groupIdx == POINT_TO_POINT_MAIN_IDX) {
         // Receive from all
@@ -422,8 +433,10 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
         }
 
         // Register the group
-        PointToPointGroup::addGroup(
-          decision.appId, groupId, decision.nFunctions);
+        PointToPointGroup::addGroup(decision.appId,
+                                    groupId,
+                                    decision.nFunctions,
+                                    decision.isSingleHost());
     }
 
     SPDLOG_TRACE(

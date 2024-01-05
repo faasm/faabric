@@ -164,9 +164,11 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // Invoke threads and await
+    // TODO: for the time being, threads may execute for a long time so we
+    // are a bit more generous with the timeout
     auto decision = faabric::planner::getPlannerClient().callFunctions(req);
     std::vector<std::pair<uint32_t, int32_t>> results = sch.awaitThreadResults(
-      req, faabric::util::getSystemConfig().boundTimeout);
+      req, 10 * faabric::util::getSystemConfig().boundTimeout);
 
     // Perform snapshot updates if not on single host
     if (!isSingleHost) {
