@@ -262,13 +262,6 @@ void PlannerEndpointHandler::onRequest(
 
             // Prepare the response
             response.result(beast::http::status::ok);
-            // Work-out if it has finished using user-provided flags
-            if (faabric::util::getNumFinishedMessagesInBatch(actualBerStatus) ==
-                berStatus.expectednummessages()) {
-                actualBerStatus->set_finished(true);
-            } else {
-                actualBerStatus->set_finished(false);
-            }
             response.body() = faabric::util::messageToJson(*actualBerStatus);
 
             return ctx.sendFunction(std::move(response));

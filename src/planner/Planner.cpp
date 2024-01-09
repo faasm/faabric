@@ -482,6 +482,9 @@ std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(
         for (auto msgResultPair : state.appResults.at(appId)) {
             *berStatus->add_messageresults() = *(msgResultPair.second);
         }
+
+        // Set the finished condition
+        berStatus->set_finished(!state.inFlightReqs.contains(appId));
     }
 
     return berStatus;
