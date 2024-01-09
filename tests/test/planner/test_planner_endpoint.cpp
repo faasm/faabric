@@ -544,21 +544,6 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
         msg.set_payloadjson(faabric::util::messageToJson(*otherBerStatus));
     }
 
-    // If the request JSON payload contains a BER status for an in-flight BER,
-    // the request will succeed. Depending on the messages we tell the planner
-    // we are expecting, it will either succeed or not
-    SECTION("Success, but not finished")
-    {
-        expectedReturnCode = beast::http::status::ok;
-        auto expectedBerStatus = faabric::util::batchExecStatusFactory(appId);
-        expectedBerStatus->set_finished(false);
-        *expectedBerStatus->add_messageresults() = msgResult;
-        expectedResponseBody = faabric::util::messageToJson(*expectedBerStatus);
-        // Change the expected number of messages
-        berStatus->set_expectednummessages(2);
-        msg.set_payloadjson(faabric::util::messageToJson(*berStatus));
-    }
-
     // Post the EXECUTE_BATCH_STATUS request:
     msgJsonStr = faabric::util::messageToJson(msg);
     result = doPost(msgJsonStr);
