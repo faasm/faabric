@@ -11,14 +11,11 @@ defaults:
   run:
     shell: bash
 
-jobs:
-  # Cancel previous running actions for the same PR
-  cancel_previous:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Cancel Workflow Action
-        uses: styfle/cancel-workflow-action@0.12.0
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+jobs:
   conan-cache:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
