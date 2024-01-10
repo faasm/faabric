@@ -768,10 +768,8 @@ void Planner::dispatchSchedulingDecision(
             hostRequests[thisHost]->set_type(req->type());
             hostRequests[thisHost]->set_subtype(req->subtype());
             hostRequests[thisHost]->set_contextdata(req->contextdata());
-
-            if (decision->isSingleHost()) {
-                hostRequests[thisHost]->set_singlehost(true);
-            }
+            // Propagate the single host hint
+            hostRequests[thisHost]->set_singlehost(req->singlehost());
         }
 
         *hostRequests[thisHost]->add_messages() = msg;
