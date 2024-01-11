@@ -324,7 +324,7 @@ faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
     } else {
         // In a single-host setting we can skip sending the snapshots to the
         // planner
-        if (!req->singlehost()) {
+        if (!req->singlehosthint()) {
             snapshotKey = req->messages(0).snapshotkey();
         }
     }

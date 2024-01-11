@@ -241,7 +241,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     reqOne->set_contextdata(expectedContextData);
 
     // Set the singlehost flag to avoid sending snapshots to the planner
-    reqOne->set_singlehost(true);
+    reqOne->set_singlehosthint(true);
 
     auto actualDecisionOne = plannerCli.callFunctions(reqOne);
 
@@ -297,7 +297,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     reqTwo->set_type(execMode);
 
     // Set the singlehost flag to avoid sending snapshots to the planner
-    reqTwo->set_singlehost(true);
+    reqTwo->set_singlehosthint(true);
 
     // Schedule the functions
     auto actualDecisionTwo = plannerCli.callFunctions(reqTwo);
