@@ -171,6 +171,10 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
     // Perform snapshot updates if not on single host
     if (!isSingleHost) {
+        // Add the diffs corresponding to this executor
+        auto diffs = mergeDirtyRegions(msg);
+        snap->queueDiffs(diffs);
+
         // Write queued changes to snapshot
         int nWritten = snap->writeQueuedDiffs();
 
