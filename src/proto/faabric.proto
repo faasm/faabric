@@ -50,6 +50,10 @@ message BatchExecuteRequest {
     // Flag set by the scheduler when this batch is all executing on a single
     // host
     bool singleHost = 10;
+
+    // Hint set by the user to hint that this execution should all be in a
+    // single host
+    bool singleHostHint = 11;
 }
 
 message BatchExecuteRequestStatus {
