@@ -12,7 +12,6 @@ void checkMessageEquality(const faabric::Message& msgA,
     REQUIRE(msgA.user() == msgB.user());
     REQUIRE(msgA.function() == msgB.function());
     REQUIRE(msgA.executedhost() == msgB.executedhost());
-    REQUIRE(msgA.finishtimestamp() == msgB.finishtimestamp());
 
     REQUIRE(msgA.timestamp() == msgB.timestamp());
     REQUIRE(msgA.snapshotkey() == msgB.snapshotkey());

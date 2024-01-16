@@ -1,14 +1,14 @@
 #include "DummyExecutor.h"
 
+#include <faabric/executor/Executor.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
 #define SHORT_SLEEP_MS 50
 
-namespace faabric::scheduler {
+namespace faabric::executor {
 
 DummyExecutor::DummyExecutor(faabric::Message& msg)
   : Executor(msg)

@@ -1,10 +1,10 @@
 #include "mpi_native.h"
 
+#include <faabric/executor/ExecutorContext.h>
 #include <faabric/mpi/MpiContext.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/mpi.h>
 #include <faabric/mpi/mpi.pb.h>
-#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
@@ -773,7 +773,7 @@ namespace tests::mpi {
 // run migration tests for MPI also in faabric
 void mpiMigrationPoint(int entrypointFuncArg)
 {
-    auto* call = &faabric::scheduler::ExecutorContext::get()->getMsg();
+    auto* call = &faabric::executor::ExecutorContext::get()->getMsg();
     auto& sch = faabric::scheduler::getScheduler();
 
     // Detect if there is a pending migration for the current app
@@ -821,7 +821,7 @@ void mpiMigrationPoint(int entrypointFuncArg)
         // chaining from the main host of the app, and
         // we are most likely migrating from a non-main host. Thus, we must
         // take and push the snapshot manually.
-        auto* exec = faabric::scheduler::ExecutorContext::get()->getExecutor();
+        auto* exec = faabric::executor::ExecutorContext::get()->getExecutor();
         auto snap =
           std::make_shared<faabric::util::SnapshotData>(exec->getMemoryView());
         std::string snapKey = "migration_" + std::to_string(msg.id());

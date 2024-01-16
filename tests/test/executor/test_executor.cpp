@@ -1306,7 +1306,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test execute threads using top-level function in executor",
+                 "Test executing threads manually",
                  "[executor]")
 {
     int nThreads = 5;
@@ -1324,23 +1324,14 @@ TEST_CASE_METHOD(TestExecutorFixture,
     // Set single-host to avoid any snapshot sending
     req->set_singlehosthint(true);
 
-    // Prepare executor
-    auto exec = std::make_shared<TestExecutor>(*req->mutable_messages(0));
-
-    // Execute directly calling the executor
-    SPDLOG_ERROR("pls fixme");
-    throw std::runtime_error("Fix this test!");
-    /*
-    auto results = exec->executeThreads(req, {});
+    auto decision = faabric::planner::getPlannerClient().callFunctions(req);
+    auto results = faabric::scheduler::getScheduler().awaitThreadResults(
+      req, 10 * faabric::util::getSystemConfig().boundTimeout);
 
     // Check results
     REQUIRE(results.size() == req->messages_size());
     for (const auto& [mid, res] : results) {
         REQUIRE(res == (mid / 100));
     }
-
-    // Shut down executor
-    exec->shutdown();
-    */
 }
 }

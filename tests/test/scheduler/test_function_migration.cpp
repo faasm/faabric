@@ -137,8 +137,10 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
         req->mutable_messages(1)->set_executedhost(LOCALHOST);
     }
 
-    sch.setFunctionResult(*req->mutable_messages(0));
-    sch.setFunctionResult(*req->mutable_messages(1));
+    plannerCli.setMessageResult(
+      std::make_shared<Message>(*req->mutable_messages(0)));
+    plannerCli.setMessageResult(
+      std::make_shared<Message>(*req->mutable_messages(1)));
 }
 
 TEST_CASE_METHOD(FunctionMigrationTestFixture,

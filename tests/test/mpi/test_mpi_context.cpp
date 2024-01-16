@@ -112,9 +112,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
     int worldId = cA.getWorldId();
 
     waitForMpiMessages(reqA, worldSize);
-    Scheduler& sch = getScheduler();
     // Set the function result to have access to the chained messages
-    sch.setFunctionResult(msgA);
+    plannerCli.setMessageResult(std::make_shared<Message>(msgA));
 
     auto chainedMsgs = faabric::util::getChainedFunctions(msgA);
     REQUIRE(chainedMsgs.size() == worldSize - 1);

@@ -445,13 +445,13 @@ TEST_CASE_METHOD(SnapshotClientServerTestFixture,
     msgA.set_id(threadIdA);
     msgA.set_returnvalue(returnValueA);
     msgA.set_executedhost(faabric::util::getSystemConfig().endpointHost);
-    sch.setFunctionResult(msgA);
+    plannerCli.setMessageResult(std::make_shared<Message>(msgA));
     Message msgB;
     msgB.set_appid(appIdB);
     msgB.set_id(threadIdB);
     msgB.set_returnvalue(returnValueB);
     msgB.set_executedhost(faabric::util::getSystemConfig().endpointHost);
-    sch.setFunctionResult(msgB);
+    plannerCli.setMessageResult(std::make_shared<Message>(msgB));
 
     int rA = 0;
     int rB = 0;

@@ -55,14 +55,14 @@ TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[util]")
     logChainedFunction(msgC2, msgD);
 
     // Set all execution results
-    scheduler::Scheduler& sch = scheduler::getScheduler();
-    sch.setFunctionResult(msgA);
-    sch.setFunctionResult(msgB1);
-    sch.setFunctionResult(msgB2);
-    sch.setFunctionResult(msgC1);
-    sch.setFunctionResult(msgC2);
-    sch.setFunctionResult(msgC3);
-    sch.setFunctionResult(msgD);
+    auto& plannerCli = faabric::planner::getPlannerClient();
+    plannerCli.setMessageResult(std::make_shared<Message>(msgA));
+    plannerCli.setMessageResult(std::make_shared<Message>(msgB1));
+    plannerCli.setMessageResult(std::make_shared<Message>(msgB2));
+    plannerCli.setMessageResult(std::make_shared<Message>(msgC1));
+    plannerCli.setMessageResult(std::make_shared<Message>(msgC2));
+    plannerCli.setMessageResult(std::make_shared<Message>(msgC3));
+    plannerCli.setMessageResult(std::make_shared<Message>(msgD));
 
     ExecGraph actual = getFunctionExecGraph(msgA);
 
@@ -176,7 +176,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     // it here
     SLEEP_MS(500);
     msg.set_executedhost(thisHost);
-    sch.setFunctionResult(msg);
+    plannerCli.setMessageResult(std::make_shared<Message>(msg));
 
     // Wait for the MPI messages to finish
     plannerCli.getMessageResult(msg, 2000);

@@ -5,9 +5,9 @@
 #include "fixtures.h"
 
 #include <faabric/batch-scheduler/SchedulingDecision.h>
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
-#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
@@ -27,7 +27,7 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-class SlowExecutor final : public Executor
+class SlowExecutor final : public faabric::executor::Executor
 {
   public:
     SlowExecutor(faabric::Message& msg)
@@ -72,10 +72,11 @@ class SlowExecutor final : public Executor
     }
 };
 
-class SlowExecutorFactory : public ExecutorFactory
+class SlowExecutorFactory : public faabric::executor::ExecutorFactory
 {
   protected:
-    std::shared_ptr<Executor> createExecutor(faabric::Message& msg) override
+    std::shared_ptr<faabric::executor::Executor> createExecutor(
+      faabric::Message& msg) override
     {
         return std::make_shared<SlowExecutor>(msg);
     }
@@ -90,15 +91,15 @@ class SlowExecutorTestFixture
   public:
     SlowExecutorTestFixture()
     {
-        std::shared_ptr<ExecutorFactory> fac =
+        std::shared_ptr<faabric::executor::ExecutorFactory> fac =
           std::make_shared<SlowExecutorFactory>();
         setExecutorFactory(fac);
     };
 
     ~SlowExecutorTestFixture()
     {
-        std::shared_ptr<DummyExecutorFactory> fac =
-          std::make_shared<DummyExecutorFactory>();
+        std::shared_ptr<faabric::executor::DummyExecutorFactory> fac =
+          std::make_shared<faabric::executor::DummyExecutorFactory>();
         setExecutorFactory(fac);
     };
 };
@@ -112,15 +113,15 @@ class DummyExecutorTestFixture
   public:
     DummyExecutorTestFixture()
     {
-        std::shared_ptr<ExecutorFactory> fac =
-          std::make_shared<DummyExecutorFactory>();
+        std::shared_ptr<faabric::executor::ExecutorFactory> fac =
+          std::make_shared<faabric::executor::DummyExecutorFactory>();
         setExecutorFactory(fac);
     };
 
     ~DummyExecutorTestFixture()
     {
-        std::shared_ptr<DummyExecutorFactory> fac =
-          std::make_shared<DummyExecutorFactory>();
+        std::shared_ptr<faabric::executor::DummyExecutorFactory> fac =
+          std::make_shared<faabric::executor::DummyExecutorFactory>();
         setExecutorFactory(fac);
     };
 };
@@ -384,10 +385,14 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     res.set_usedslots(1);
     sch.setThisHostResources(res);
 
-    sch.setFunctionResult(firstMsg);
+    plannerCli.setMessageResult(std::make_shared<Message>(firstMsg));
 
     // Check retrieval method gets the same call out again
     faabric::Message resultMsg = plannerCli.getMessageResult(firstMsg, 1);
+
+    // Manually set the timestamp for the sent message so that the check
+    // matches (the timestamp is set in the planner client)
+    firstMsg.set_finishtimestamp(resultMsg.finishtimestamp());
 
     checkMessageEquality(firstMsg, resultMsg);
 }
@@ -467,7 +472,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         msg.set_outputdata(expectedOutput);
         msg.set_returnvalue(1);
         msg.set_executedhost(expectedHost);
-        sch.setFunctionResult(msg);
+        plannerCli.setMessageResult(std::make_shared<Message>(msg));
 
         expectedReturnValue = 1;
         expectedType = faabric::Message_MessageType_CALL;
@@ -481,7 +486,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         msg.set_outputdata(expectedOutput);
         msg.set_returnvalue(0);
         msg.set_executedhost(expectedHost);
-        sch.setFunctionResult(msg);
+        plannerCli.setMessageResult(std::make_shared<Message>(msg));
 
         expectedReturnValue = 0;
         expectedType = faabric::Message_MessageType_CALL;
@@ -516,7 +521,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     // We need to set the function result in order to get the chained
     // functions. We can do so multiple times
     msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
-    sch.setFunctionResult(msg);
+    plannerCli.setMessageResult(std::make_shared<Message>(msg));
 
     // Check empty initially
     REQUIRE(faabric::util::getChainedFunctions(msg).empty());
@@ -528,7 +533,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     faabric::util::logChainedFunction(msg, chainedMsgA);
     std::set<unsigned int> expected = { (unsigned int)chainedMsgA.id() };
 
-    sch.setFunctionResult(msg);
+    plannerCli.setMessageResult(std::make_shared<Message>(msg));
     REQUIRE(faabric::util::getChainedFunctions(msg) == expected);
 
     // Log some more and check (update the message id again)
@@ -540,7 +545,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
                  (unsigned int)chainedMsgB.id(),
                  (unsigned int)chainedMsgC.id() };
 
-    sch.setFunctionResult(msg);
+    plannerCli.setMessageResult(std::make_shared<Message>(msg));
     REQUIRE(faabric::util::getChainedFunctions(msg) == expected);
 }
 
@@ -610,6 +615,9 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     msg.set_mainhost("otherHost");
     msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
 
+    auto fac = faabric::executor::getExecutorFactory();
+    auto exec = fac->createExecutor(msg);
+
     // If we want to set a function result, the planner must see at least one
     // slot, and at least one used slot in this host
     faabric::HostResources res;
@@ -637,7 +645,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
           snapData));
     }
 
-    sch.setThreadResult(msg, returnValue, snapKey, diffs);
+    exec->setThreadResult(msg, returnValue, snapKey, diffs);
     auto actualResults = faabric::snapshot::getThreadResults();
 
     REQUIRE(actualResults.size() == 1);

@@ -7,7 +7,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/memory.h>
 
-using namespace faabric::scheduler;
+using namespace faabric::executor;
 
 namespace tests {
 
@@ -23,9 +23,9 @@ class SchedulerReapingTestFixture
         res.set_slots(20);
         sch.setThisHostResources(res);
 
-        std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-        faabric::scheduler::setExecutorFactory(fac);
+        std::shared_ptr<ExecutorFactory> fac =
+          std::make_shared<DummyExecutorFactory>();
+        setExecutorFactory(fac);
     }
 
     ~SchedulerReapingTestFixture() {}
