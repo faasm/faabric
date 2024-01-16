@@ -1,9 +1,9 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/runner/FaabricMain.h>
-#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/util/logging.h>
 
-using namespace faabric::scheduler;
+using namespace faabric::executor;
 
 class ExampleExecutor : public Executor
 {
