@@ -96,6 +96,7 @@ endfunction()
 
 add_subdirectory(src/batch-scheduler)
 add_subdirectory(src/endpoint)
+add_subdirectory(src/executor)
 add_subdirectory(src/flat)
 add_subdirectory(src/mpi)
 add_subdirectory(src/planner)
@@ -121,6 +122,7 @@ add_library(faabric
     faabric.cpp
     $<TARGET_OBJECTS:batch_scheduler_obj>
     $<TARGET_OBJECTS:endpoint_obj>
+    $<TARGET_OBJECTS:executor_obj>
     $<TARGET_OBJECTS:flat_obj>
     $<TARGET_OBJECTS:mpi_obj>
     $<TARGET_OBJECTS:planner_obj>

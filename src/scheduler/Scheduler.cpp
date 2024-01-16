@@ -1,8 +1,8 @@
 #include <faabric/batch-scheduler/BatchScheduler.h>
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
@@ -179,8 +179,9 @@ int Scheduler::reapStaleExecutors()
     int nReaped = 0;
     for (auto& execPair : executors) {
         std::string key = execPair.first;
-        std::vector<std::shared_ptr<Executor>>& execs = execPair.second;
-        std::vector<std::shared_ptr<Executor>> toRemove;
+        std::vector<std::shared_ptr<faabric::executor::Executor>>& execs =
+          execPair.second;
+        std::vector<std::shared_ptr<faabric::executor::Executor>> toRemove;
 
         if (execs.empty()) {
             continue;
@@ -268,10 +269,10 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     if (isThreads) {
         // Threads use the existing executor. We assume there's only
         // one running at a time.
-        std::vector<std::shared_ptr<Executor>>& thisExecutors =
-          executors[funcStr];
+        std::vector<std::shared_ptr<faabric::executor::Executor>>&
+          thisExecutors = executors[funcStr];
 
-        std::shared_ptr<Executor> e = nullptr;
+        std::shared_ptr<faabric::executor::Executor> e = nullptr;
         if (thisExecutors.empty()) {
             // Create executor if not exists
             e = claimExecutor(*req->mutable_messages(0), lock);
@@ -297,7 +298,8 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
         for (int i = 0; i < nMessages; i++) {
             faabric::Message& localMsg = req->mutable_messages()->at(i);
 
-            std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
+            std::shared_ptr<faabric::executor::Executor> e =
+              claimExecutor(localMsg, lock);
             e->executeTasks({ i }, req);
         }
     }
@@ -315,18 +317,18 @@ std::vector<faabric::Message> Scheduler::getRecordedMessages()
     return recordedMessages;
 }
 
-std::shared_ptr<Executor> Scheduler::claimExecutor(
+std::shared_ptr<faabric::executor::Executor> Scheduler::claimExecutor(
   faabric::Message& msg,
   faabric::util::FullLock& schedulerLock)
 {
     std::string funcStr = faabric::util::funcToString(msg, false);
 
-    std::vector<std::shared_ptr<Executor>>& thisExecutors = executors[funcStr];
+    std::vector<std::shared_ptr<faabric::executor::Executor>>& thisExecutors =
+      executors[funcStr];
 
-    std::shared_ptr<faabric::scheduler::ExecutorFactory> factory =
-      getExecutorFactory();
+    auto factory = faabric::executor::getExecutorFactory();
 
-    std::shared_ptr<Executor> claimed = nullptr;
+    std::shared_ptr<faabric::executor::Executor> claimed = nullptr;
     for (auto& e : thisExecutors) {
         if (e->tryClaim()) {
             claimed = e;
@@ -363,63 +365,6 @@ std::string Scheduler::getThisHost()
 {
     faabric::util::SharedLock lock(mx);
     return thisHost;
-}
-
-void Scheduler::flushLocally()
-{
-    SPDLOG_INFO("Flushing host {}",
-                faabric::util::getSystemConfig().endpointHost);
-
-    // Reset this scheduler
-    reset();
-
-    // Flush the host
-    getExecutorFactory()->flushHost();
-}
-
-void Scheduler::setFunctionResult(faabric::Message& msg)
-{
-    // Set finish timestamp
-    msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
-
-    // Let the planner know this function has finished execution. This will
-    // wake any thread waiting on this result
-    faabric::planner::getPlannerClient().setMessageResult(
-      std::make_shared<faabric::Message>(msg));
-}
-
-void Scheduler::setThreadResult(
-  faabric::Message& msg,
-  int32_t returnValue,
-  const std::string& key,
-  const std::vector<faabric::util::SnapshotDiff>& diffs)
-{
-    bool isMaster = msg.mainhost() == conf.endpointHost;
-    if (isMaster) {
-        if (!diffs.empty()) {
-            // On main we queue the diffs locally directly, on a remote
-            // host we push them back to main
-            SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",
-                         diffs.size(),
-                         faabric::util::funcToString(msg, false),
-                         key,
-                         msg.groupid());
-
-            auto snap = reg.getSnapshot(key);
-
-            // Here we don't have ownership over all of the snapshot diff data,
-            // but that's ok as the executor memory will outlast the snapshot
-            // merging operation.
-            snap->queueDiffs(diffs);
-        }
-    } else {
-        // Push thread result and diffs together
-        getSnapshotClient(msg.mainhost())
-          ->pushThreadResult(msg.appid(), msg.id(), returnValue, key, diffs);
-    }
-
-    // Finally, set the message result in the planner
-    setFunctionResult(msg);
 }
 
 void Scheduler::setThreadResultLocally(uint32_t appId,

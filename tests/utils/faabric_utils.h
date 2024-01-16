@@ -61,7 +61,6 @@ using namespace faabric;
     CATCH_REGISTER_LISTENER(LogListener)
 
 namespace tests {
-void cleanFaabric();
 
 template<class T>
 void checkMessageMapEquality(T mapA, T mapB)

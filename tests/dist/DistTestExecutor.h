@@ -1,7 +1,6 @@
 #pragma once
 
-#include <faabric/scheduler/ExecutorFactory.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 
@@ -9,7 +8,7 @@ namespace tests {
 
 #define DIST_TEST_EXECUTOR_MEMORY_SIZE (30 * faabric::util::HOST_PAGE_SIZE)
 
-class DistTestExecutor final : public faabric::scheduler::Executor
+class DistTestExecutor final : public faabric::executor::Executor
 {
   public:
     DistTestExecutor(faabric::Message& msg);
@@ -27,6 +26,11 @@ class DistTestExecutor final : public faabric::scheduler::Executor
 
     std::span<uint8_t> getDummyMemory();
 
+    // Helper method to execute threads in a distributed test
+    std::vector<std::pair<uint32_t, int32_t>> executeThreads(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions);
+
   protected:
     void setMemorySize(size_t newSize) override;
 
@@ -38,10 +42,10 @@ class DistTestExecutor final : public faabric::scheduler::Executor
     void setUpDummyMemory(size_t memSize);
 };
 
-class DistTestExecutorFactory : public faabric::scheduler::ExecutorFactory
+class DistTestExecutorFactory : public faabric::executor::ExecutorFactory
 {
   protected:
-    std::shared_ptr<faabric::scheduler::Executor> createExecutor(
+    std::shared_ptr<faabric::executor::Executor> createExecutor(
       faabric::Message& msg) override;
 };
 

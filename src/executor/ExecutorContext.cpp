@@ -1,6 +1,6 @@
-#include <faabric/scheduler/ExecutorContext.h>
+#include <faabric/executor/ExecutorContext.h>
 
-namespace faabric::scheduler {
+namespace faabric::executor {
 
 static thread_local std::shared_ptr<ExecutorContext> context = nullptr;
 

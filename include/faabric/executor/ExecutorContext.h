@@ -1,9 +1,10 @@
 #pragma once
 
+#include <faabric/executor/Executor.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/exception.h>
 
-namespace faabric::scheduler {
+namespace faabric::executor {
 
 class ExecutorContextException : public faabric::util::FaabricException
 {

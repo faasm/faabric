@@ -6,10 +6,10 @@
 #include <DummyExecutor.h>
 #include <DummyExecutorFactory.h>
 
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -31,14 +31,14 @@ class FunctionClientServerTestFixture
     FunctionClientServerTestFixture()
     {
         executorFactory =
-          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+          std::make_shared<faabric::executor::DummyExecutorFactory>();
         setExecutorFactory(executorFactory);
     }
 
     ~FunctionClientServerTestFixture() { executorFactory->reset(); }
 
   protected:
-    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
+    std::shared_ptr<faabric::executor::DummyExecutorFactory> executorFactory;
 };
 
 TEST_CASE_METHOD(ConfFixture,

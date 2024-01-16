@@ -3,9 +3,9 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/runner/FaabricMain.h>
-#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
@@ -20,16 +20,16 @@ class MainRunnerTestFixture : public SchedulerFixture
   public:
     MainRunnerTestFixture()
     {
-        std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-        faabric::scheduler::setExecutorFactory(fac);
+        std::shared_ptr<faabric::executor::ExecutorFactory> fac =
+          std::make_shared<faabric::executor::DummyExecutorFactory>();
+        faabric::executor::setExecutorFactory(fac);
     }
 };
 
 TEST_CASE_METHOD(MainRunnerTestFixture, "Test main runner", "[runner]")
 {
-    std::shared_ptr<ExecutorFactory> fac =
-      faabric::scheduler::getExecutorFactory();
+    std::shared_ptr<faabric::executor::ExecutorFactory> fac =
+      faabric::executor::getExecutorFactory();
     faabric::runner::FaabricMain m(fac);
 
     m.startBackground();

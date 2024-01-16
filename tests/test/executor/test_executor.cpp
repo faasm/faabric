@@ -2,12 +2,10 @@
 
 #include "fixtures.h"
 
-#include <sys/mman.h>
-
+#include <faabric/executor/ExecutorContext.h>
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
-#include <faabric/scheduler/ExecutorContext.h>
-#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -19,7 +17,9 @@
 #include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
 
-using namespace faabric::scheduler;
+#include <sys/mman.h>
+
+using namespace faabric::executor;
 using namespace faabric::util;
 
 namespace tests {
@@ -79,6 +79,7 @@ int32_t TestExecutor::executeTask(
 {
     faabric::Message& msg = reqOrig->mutable_messages()->at(msgIdx);
     std::string funcStr = faabric::util::funcToString(msg, true);
+    auto& sch = faabric::scheduler::getScheduler();
 
     bool isThread = reqOrig->type() == faabric::BatchExecuteRequest::THREADS;
 
@@ -239,8 +240,7 @@ int32_t TestExecutor::executeTask(
     }
 
     if (msg.function() == "context-check") {
-        std::shared_ptr<faabric::scheduler::ExecutorContext> ctx =
-          faabric::scheduler::ExecutorContext::get();
+        std::shared_ptr<ExecutorContext> ctx = ExecutorContext::get();
         if (ctx == nullptr) {
             SPDLOG_ERROR("Executor context is null");
             return 999;
@@ -398,7 +398,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         REQUIRE(result.outputdata() == expected);
 
         // Flush
-        sch.flushLocally();
+        getExecutorFactory()->flushHost();
     }
 }
 
@@ -478,7 +478,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     // Check sent to other host if necessary
-    auto batchRequests = getBatchRequests();
+    auto batchRequests = faabric::scheduler::getBatchRequests();
 
     // Check the hosts match up
     REQUIRE(restoreCount == expectedRestoreCount);
@@ -742,12 +742,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
     faabric::Message msgB = faabric::util::messageFactory("foo", "bar");
 
-    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-      faabric::scheduler::getExecutorFactory();
-    std::shared_ptr<faabric::scheduler::Executor> execA =
-      fac->createExecutor(msgA);
-    std::shared_ptr<faabric::scheduler::Executor> execB =
-      fac->createExecutor(msgB);
+    std::shared_ptr<ExecutorFactory> fac = getExecutorFactory();
+    std::shared_ptr<Executor> execA = fac->createExecutor(msgA);
+    std::shared_ptr<Executor> execB = fac->createExecutor(msgB);
 
     // Claim one
     REQUIRE(execA->tryClaim());
@@ -783,10 +780,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     localHost.set_usedslots(5);
     sch.setThisHostResources(localHost);
 
-    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-      faabric::scheduler::getExecutorFactory();
-    std::shared_ptr<faabric::scheduler::Executor> exec =
-      fac->createExecutor(msg);
+    std::shared_ptr<ExecutorFactory> fac = getExecutorFactory();
+    std::shared_ptr<Executor> exec = fac->createExecutor(msg);
 
     long millisA = exec->getMillisSinceLastExec();
 
@@ -1189,9 +1184,8 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test executor restore", "[executor]")
     snap->copyInData(dataB, offsetB);
 
     // Create an executor
-    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-      faabric::scheduler::getExecutorFactory();
-    std::shared_ptr<faabric::scheduler::Executor> exec = fac->createExecutor(m);
+    std::shared_ptr<ExecutorFactory> fac = getExecutorFactory();
+    std::shared_ptr<Executor> exec = fac->createExecutor(m);
 
     // Restore from snapshot
     exec->restore(snapKey);
@@ -1226,9 +1220,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::string snapKey = faabric::util::getMainThreadSnapshotKey(m);
 
     // Create an executor
-    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-      faabric::scheduler::getExecutorFactory();
-    std::shared_ptr<faabric::scheduler::Executor> exec = fac->createExecutor(m);
+    std::shared_ptr<ExecutorFactory> fac = getExecutorFactory();
+    std::shared_ptr<Executor> exec = fac->createExecutor(m);
 
     // Get a pointer to the TestExecutor so we can override the max memory
     auto testExec = std::static_pointer_cast<TestExecutor>(exec);
@@ -1290,7 +1283,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     auto& firstMsg = *req->mutable_messages(0);
 
     // Create an executor
-    auto fac = faabric::scheduler::getExecutorFactory();
+    auto fac = getExecutorFactory();
     auto exec = fac->createExecutor(firstMsg);
 
     // At the begining there are no chained messages
@@ -1313,7 +1306,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test execute threads using top-level function in executor",
+                 "Test executing threads manually",
                  "[executor]")
 {
     int nThreads = 5;
@@ -1331,19 +1324,14 @@ TEST_CASE_METHOD(TestExecutorFixture,
     // Set single-host to avoid any snapshot sending
     req->set_singlehosthint(true);
 
-    // Prepare executor
-    auto exec = std::make_shared<TestExecutor>(*req->mutable_messages(0));
-
-    // Execute directly calling the executor
-    auto results = exec->executeThreads(req, {});
+    auto decision = faabric::planner::getPlannerClient().callFunctions(req);
+    auto results = faabric::scheduler::getScheduler().awaitThreadResults(
+      req, 10 * faabric::util::getSystemConfig().boundTimeout);
 
     // Check results
     REQUIRE(results.size() == req->messages_size());
     for (const auto& [mid, res] : results) {
         REQUIRE(res == (mid / 100));
     }
-
-    // Shut down executor
-    exec->shutdown();
 }
 }

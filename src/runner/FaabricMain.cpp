@@ -1,6 +1,6 @@
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/runner/FaabricMain.h>
-#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/util/config.h>
 #include <faabric/util/crash.h>
@@ -9,10 +9,10 @@
 
 namespace faabric::runner {
 FaabricMain::FaabricMain(
-  std::shared_ptr<faabric::scheduler::ExecutorFactory> execFactory)
+  std::shared_ptr<faabric::executor::ExecutorFactory> execFactory)
   : stateServer(faabric::state::getGlobalState())
 {
-    faabric::scheduler::setExecutorFactory(execFactory);
+    faabric::executor::setExecutorFactory(execFactory);
 }
 
 void FaabricMain::startBackground()

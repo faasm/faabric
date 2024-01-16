@@ -1,8 +1,8 @@
 #pragma once
 
-#include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/executor/ExecutorFactory.h>
 
-namespace faabric::scheduler {
+namespace faabric::executor {
 
 class DummyExecutorFactory : public ExecutorFactory
 {

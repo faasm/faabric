@@ -5,7 +5,7 @@
 
 #include "DistTestExecutor.h"
 
-#include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 
@@ -36,7 +36,7 @@ class DistTestsFixture
         // Set up executor
         std::shared_ptr<tests::DistTestExecutorFactory> fac =
           std::make_shared<tests::DistTestExecutorFactory>();
-        faabric::scheduler::setExecutorFactory(fac);
+        faabric::executor::setExecutorFactory(fac);
     }
 
     void updateLocalSlots(int newLocalSlots, int newUsedLocalSlots = 0)

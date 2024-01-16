@@ -7,7 +7,6 @@ add_library(faabric_test_utils
     message_utils.cpp
     planner_utils.cpp
     scheduling_utils.cpp
-    system_utils.cpp
 )
 
 target_compile_options(faabric_test_utils PUBLIC -fno-omit-frame-pointer)

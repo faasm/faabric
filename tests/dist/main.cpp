@@ -9,8 +9,8 @@
 #include "faabric_utils.h"
 #include "init.h"
 
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/runner/FaabricMain.h>
-#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/util/crash.h>
 #include <faabric/util/logging.h>
 
@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
     faabric::util::initLogging();
     tests::initDistTests();
 
-    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+    std::shared_ptr<faabric::executor::ExecutorFactory> fac =
       std::make_shared<tests::DistTestExecutorFactory>();
 
     // WARNING: all 0MQ sockets have to have gone *out of scope* before we shut

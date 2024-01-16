@@ -154,9 +154,9 @@ class PlannerClientServerExecTestFixture
         sch.shutdown();
         sch.addHostToGlobalSet();
 
-        std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-        faabric::scheduler::setExecutorFactory(fac);
+        std::shared_ptr<faabric::executor::ExecutorFactory> fac =
+          std::make_shared<faabric::executor::DummyExecutorFactory>();
+        faabric::executor::setExecutorFactory(fac);
     }
 
     ~PlannerClientServerExecTestFixture()

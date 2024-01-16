@@ -1,3 +1,4 @@
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
@@ -54,11 +55,17 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvFlush(
   std::span<const uint8_t> buffer)
 {
+    SPDLOG_INFO("Flushing host {}",
+                faabric::util::getSystemConfig().endpointHost);
+
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
 
     // Clear the scheduler
-    scheduler.flushLocally();
+    faabric::scheduler::getScheduler().reset();
+
+    // Clear the executor factory
+    faabric::executor::getExecutorFactory()->flushHost();
 
     return std::make_unique<faabric::EmptyResponse>();
 }

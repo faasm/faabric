@@ -1,7 +1,7 @@
-#include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/util/logging.h>
 
-namespace faabric::scheduler {
+namespace faabric::executor {
 
 static std::shared_ptr<ExecutorFactory> _factory;
 
