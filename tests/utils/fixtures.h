@@ -9,6 +9,8 @@
 #include <faabric/batch-scheduler/BinPackScheduler.h>
 #include <faabric/batch-scheduler/DecisionCache.h>
 #include <faabric/batch-scheduler/SchedulingDecision.h>
+#include <faabric/executor/ExecutorContext.h>
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/planner/PlannerClient.h>
@@ -16,8 +18,6 @@
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
-#include <faabric/scheduler/ExecutorContext.h>
-#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -271,7 +271,7 @@ class ExecutorContextFixture
   public:
     ExecutorContextFixture() {}
 
-    ~ExecutorContextFixture() { faabric::scheduler::ExecutorContext::unset(); }
+    ~ExecutorContextFixture() { faabric::executor::ExecutorContext::unset(); }
 
     /**
      * Creates a batch request and sets up the associated context
@@ -293,13 +293,13 @@ class ExecutorContextFixture
      */
     void setUpContext(std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
-        faabric::scheduler::ExecutorContext::set(nullptr, req, 0);
+        faabric::executor::ExecutorContext::set(nullptr, req, 0);
     }
 };
 
 #define TEST_EXECUTOR_DEFAULT_MEMORY_SIZE (10 * faabric::util::HOST_PAGE_SIZE)
 
-class TestExecutor final : public faabric::scheduler::Executor
+class TestExecutor final : public faabric::executor::Executor
 {
   public:
     TestExecutor(faabric::Message& msg);
@@ -324,10 +324,10 @@ class TestExecutor final : public faabric::scheduler::Executor
       std::shared_ptr<faabric::BatchExecuteRequest> reqOrig) override;
 };
 
-class TestExecutorFactory : public faabric::scheduler::ExecutorFactory
+class TestExecutorFactory : public faabric::executor::ExecutorFactory
 {
   protected:
-    std::shared_ptr<faabric::scheduler::Executor> createExecutor(
+    std::shared_ptr<faabric::executor::Executor> createExecutor(
       faabric::Message& msg) override;
 };
 
@@ -399,9 +399,9 @@ class MpiBaseTestFixture
       , req(faabric::util::batchExecFactory(user, func, 1))
       , msg(*req->mutable_messages(0))
     {
-        std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-        faabric::scheduler::setExecutorFactory(fac);
+        std::shared_ptr<faabric::executor::ExecutorFactory> fac =
+          std::make_shared<faabric::executor::DummyExecutorFactory>();
+        faabric::executor::setExecutorFactory(fac);
 
         msg.set_mpiworldid(worldId);
         msg.set_mpiworldsize(worldSize);

@@ -1,8 +1,11 @@
 #include <faabric/batch-scheduler/SchedulingDecision.h>
+#include <faabric/executor/Executor.h>
+#include <faabric/executor/ExecutorContext.h>
+#include <faabric/executor/ExecutorTask.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
+#include <faabric/planner/PlannerClient.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/ExecutorContext.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/transport/PointToPointBroker.h>
@@ -29,18 +32,11 @@
 
 #define POOL_SHUTDOWN -1
 
-namespace faabric::scheduler {
-
-ExecutorTask::ExecutorTask(int messageIndexIn,
-                           std::shared_ptr<faabric::BatchExecuteRequest> reqIn)
-  : req(std::move(reqIn))
-  , messageIndex(messageIndexIn)
-{}
+namespace faabric::executor {
 
 // TODO - avoid the copy of the message here?
 Executor::Executor(faabric::Message& msg)
   : boundMessage(msg)
-  , sch(getScheduler())
   , reg(faabric::snapshot::getSnapshotRegistry())
   , tracker(faabric::util::getDirtyTracker())
   , threadPoolSize(faabric::util::getUsableCores())
@@ -110,90 +106,8 @@ Executor::~Executor()
     }
 }
 
-// TODO(rm-executeThreads): get rid of this method here
-std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions)
-{
-    SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
-
-    std::string funcStr = faabric::util::funcToString(req);
-    bool isSingleHost = req->singlehost();
-
-    // Do snapshotting if not on a single host
-    faabric::Message& msg = req->mutable_messages()->at(0);
-    std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
-    if (!isSingleHost) {
-        snap = getMainThreadSnapshot(msg, true);
-
-        // Get dirty regions since last batch of threads
-        std::span<uint8_t> memView = getMemoryView();
-        tracker->stopTracking(memView);
-        tracker->stopThreadLocalTracking(memView);
-
-        // If this is the first batch, these dirty regions will be empty
-        std::vector<char> dirtyRegions = tracker->getBothDirtyPages(memView);
-
-        // Apply changes to snapshot
-        snap->fillGapsWithBytewiseRegions();
-        std::vector<faabric::util::SnapshotDiff> updates =
-          snap->diffWithDirtyRegions(memView, dirtyRegions);
-
-        if (updates.empty()) {
-            SPDLOG_DEBUG(
-              "No updates to main thread snapshot for {} over {} pages",
-              faabric::util::funcToString(msg, false),
-              dirtyRegions.size());
-        } else {
-            SPDLOG_DEBUG("Updating main thread snapshot for {} with {} diffs",
-                         faabric::util::funcToString(msg, false),
-                         updates.size());
-            snap->applyDiffs(updates);
-        }
-
-        // Clear merge regions, not persisted between batches of threads
-        snap->clearMergeRegions();
-
-        // Now we have to add any merge regions we've been saving up for this
-        // next batch of threads
-        for (const auto& mr : mergeRegions) {
-            snap->addMergeRegion(
-              mr.offset, mr.length, mr.dataType, mr.operation);
-        }
-    }
-
-    // Invoke threads and await
-    // TODO: for the time being, threads may execute for a long time so we
-    // are a bit more generous with the timeout
-    auto decision = faabric::planner::getPlannerClient().callFunctions(req);
-    std::vector<std::pair<uint32_t, int32_t>> results = sch.awaitThreadResults(
-      req, 10 * faabric::util::getSystemConfig().boundTimeout);
-
-    // Perform snapshot updates if not on single host
-    if (!isSingleHost) {
-        // Add the diffs corresponding to this executor
-        auto diffs = mergeDirtyRegions(msg);
-        snap->queueDiffs(diffs);
-
-        // Write queued changes to snapshot
-        int nWritten = snap->writeQueuedDiffs();
-
-        // Remap memory to snapshot if it's been updated
-        std::span<uint8_t> memView = getMemoryView();
-        if (nWritten > 0) {
-            setMemorySize(snap->getSize());
-            snap->mapToMemory(memView);
-        }
-
-        // Start tracking again
-        memView = getMemoryView();
-        tracker->startTracking(memView);
-        tracker->startThreadLocalTracking(memView);
-    }
-
-    return results;
-}
-
+// TODO(thread-opt): get rid of this method here and move to
+// PlannerClient::callFunctions()
 void Executor::executeTasks(std::vector<int> msgIdxs,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -352,6 +266,42 @@ void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
     }
 }
 */
+
+void Executor::setThreadResult(
+  faabric::Message& msg,
+  int32_t returnValue,
+  const std::string& key,
+  const std::vector<faabric::util::SnapshotDiff>& diffs)
+{
+    bool isMaster =
+      msg.mainhost() == faabric::util::getSystemConfig().endpointHost;
+    if (isMaster) {
+        if (!diffs.empty()) {
+            // On main we queue the diffs locally directly, on a remote
+            // host we push them back to main
+            SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",
+                         diffs.size(),
+                         faabric::util::funcToString(msg, false),
+                         key,
+                         msg.groupid());
+
+            auto snap = reg.getSnapshot(key);
+
+            // Here we don't have ownership over all of the snapshot diff data,
+            // but that's ok as the executor memory will outlast the snapshot
+            // merging operation.
+            snap->queueDiffs(diffs);
+        }
+    } else {
+        // Push thread result and diffs together
+        faabric::snapshot::getSnapshotClient(msg.mainhost())
+          ->pushThreadResult(msg.appid(), msg.id(), returnValue, key, diffs);
+    }
+
+    // Finally, set the message result in the planner
+    faabric::planner::getPlannerClient().setMessageResult(
+      std::make_shared<faabric::Message>(msg));
+}
 
 void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 {
@@ -517,8 +467,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // If this is not a threads request and last in its batch, it may be
         // the main function (thread) in a threaded application, in which case
         // we want to stop any tracking and delete the main thread snapshot
-        // TODO(rm-executeThreads): this should disappear when pthreads do
-        // not call executeThreads anymore
+        /* FIXME: remove me
         if (!isThreads && isLastThreadInExecutor) {
             // Stop tracking memory
             std::span<uint8_t> memView = getMemoryView();
@@ -532,6 +481,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
                 // deleteMainThreadSnapshot(msg);
             }
         }
+        */
 
         // If this batch is finished, reset the executor and release its
         // claim. Note that we have to release the claim _after_ resetting,
@@ -564,13 +514,14 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             // Set non-final thread result
             if (isLastThreadInBatch) {
                 // Include diffs if this is the last one
-                sch.setThreadResult(msg, returnValue, mainThreadSnapKey, diffs);
+                setThreadResult(msg, returnValue, mainThreadSnapKey, diffs);
             } else {
-                sch.setThreadResult(msg, returnValue, "", {});
+                setThreadResult(msg, returnValue, "", {});
             }
         } else {
             // Set normal function result
-            sch.setFunctionResult(msg);
+            faabric::planner::getPlannerClient().setMessageResult(
+              std::make_shared<faabric::Message>(msg));
         }
     }
 }

@@ -5,6 +5,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/common.h>
 #include <faabric/util/batch.h>
+#include <faabric/util/clock.h>
 #include <faabric/util/concurrent_map.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
@@ -129,6 +130,11 @@ void PlannerClient::removeHost(std::shared_ptr<RemoveHostRequest> req)
 
 void PlannerClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
 {
+    // Set finish timestamp
+    msg->set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
+
+    // Let the planner know this function has finished execution. This will
+    // wake any thread waiting on this result
     asyncSend(PlannerCalls::SetMessageResult, msg.get());
 }
 

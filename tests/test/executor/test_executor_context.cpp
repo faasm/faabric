@@ -3,10 +3,10 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
-#include <faabric/scheduler/ExecutorContext.h>
+#include <faabric/executor/ExecutorContext.h>
 #include <faabric/util/func.h>
 
-using namespace faabric::scheduler;
+using namespace faabric::executor;
 
 namespace tests {
 

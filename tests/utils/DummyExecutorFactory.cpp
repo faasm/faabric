@@ -3,7 +3,7 @@
 
 #include <faabric/util/logging.h>
 
-namespace faabric::scheduler {
+namespace faabric::executor {
 
 std::shared_ptr<Executor> DummyExecutorFactory::createExecutor(
   faabric::Message& msg)

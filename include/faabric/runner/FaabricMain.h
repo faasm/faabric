@@ -1,6 +1,6 @@
 #pragma once
 
-#include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/executor/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotServer.h>
@@ -12,7 +12,7 @@ namespace faabric::runner {
 class FaabricMain
 {
   public:
-    FaabricMain(std::shared_ptr<faabric::scheduler::ExecutorFactory> fac);
+    FaabricMain(std::shared_ptr<faabric::executor::ExecutorFactory> fac);
 
     void startBackground();
 

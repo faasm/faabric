@@ -1,12 +1,10 @@
 faabric_lib(scheduler
-    ExecutorContext.cpp
-    ExecutorFactory.cpp
-    Executor.cpp
     FunctionCallClient.cpp
     FunctionCallServer.cpp
     Scheduler.cpp
 )
 
+# FIXME: do we need all these deps here?
 target_link_libraries(scheduler PRIVATE
     faabric::scheduling_util
     faabric::snapshot
