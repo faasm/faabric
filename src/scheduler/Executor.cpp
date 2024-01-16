@@ -214,7 +214,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Update the last-executed time for this executor
     lastExec = faabric::util::startTimer();
 
-    const auto firstMsg = req->mutable_messages()->at(0);
+    auto& firstMsg = req->mutable_messages()->at(0);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
