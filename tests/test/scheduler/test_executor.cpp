@@ -1329,7 +1329,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
     // Set single-host to avoid any snapshot sending
-    req->set_singlehost(true);
+    req->set_singlehosthint(true);
 
     // Prepare executor
     auto exec = std::make_shared<TestExecutor>(*req->mutable_messages(0));

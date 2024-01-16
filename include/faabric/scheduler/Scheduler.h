@@ -102,9 +102,16 @@ class Executor
 
     std::set<unsigned int> getChainedMessageIds();
 
-  protected:
+    // This method merges all the thread-local dirty regions and returns a
+    // set of diffs. It must be called once per executor, once all other
+    // threads in the local batch have finished executing
+    std::vector<faabric::util::SnapshotDiff> mergeDirtyRegions(
+      const Message& msg,
+      const std::vector<char>& extraDirtyPages = {});
+
     virtual void setMemorySize(size_t newSize);
 
+  protected:
     virtual size_t getMaxMemorySize();
 
     faabric::Message boundMessage;

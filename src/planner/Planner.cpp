@@ -482,6 +482,9 @@ std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(
         for (auto msgResultPair : state.appResults.at(appId)) {
             *berStatus->add_messageresults() = *(msgResultPair.second);
         }
+
+        // Set the finished condition
+        berStatus->set_finished(!state.inFlightReqs.contains(appId));
     }
 
     return berStatus;
@@ -746,6 +749,7 @@ void Planner::dispatchSchedulingDecision(
       hostRequests;
 
     assert(req->messages_size() == decision->hosts.size());
+    bool isSingleHost = decision->isSingleHost();
 
     // First we build all the BatchExecuteRequests for all the different hosts.
     // We need to keep a map as the hosts may not be contiguous in the decision
@@ -765,18 +769,16 @@ void Planner::dispatchSchedulingDecision(
             hostRequests[thisHost]->set_type(req->type());
             hostRequests[thisHost]->set_subtype(req->subtype());
             hostRequests[thisHost]->set_contextdata(req->contextdata());
-
-            if (decision->isSingleHost()) {
-                hostRequests[thisHost]->set_singlehost(true);
-            }
+            hostRequests[thisHost]->set_singlehost(isSingleHost);
+            // Propagate the single host hint
+            hostRequests[thisHost]->set_singlehosthint(req->singlehosthint());
         }
 
         *hostRequests[thisHost]->add_messages() = msg;
     }
 
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    bool isSingleHost = req->singlehost();
-    if (isSingleHost && !decision->isSingleHost()) {
+    if (!isSingleHost && req->singlehosthint()) {
         SPDLOG_ERROR(
           "User provided single-host hint in BER, but decision is not!");
     }
@@ -789,6 +791,9 @@ void Planner::dispatchSchedulingDecision(
 
         // In a THREADS request, before sending an execution request we need to
         // push the main (caller) thread snapshot to all non-main hosts
+        // FIXME: ideally, we would do this from the caller thread, once we
+        // know the scheduling decision and all other threads would be awaiting
+        // for the snapshot
         if (isThreads && !isSingleHost) {
             auto snapshotKey =
               faabric::util::getMainThreadSnapshotKey(hostReq->messages(0));

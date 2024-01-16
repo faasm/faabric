@@ -315,14 +315,16 @@ faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
         }
 
         // To optimise for single-host shared memory, we can skip sending the
-        // snapshot to the planner by setting the singlehost flag
-        if (!req->singlehost()) {
+        // snapshot to the planner by setting the single host hint
+        // FIXME(async-snaps): ideally, snapshots would be synchornised
+        // _after_ the scheduling decision is made
+        if (!req->singlehosthint()) {
             snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
         }
     } else {
         // In a single-host setting we can skip sending the snapshots to the
         // planner
-        if (!req->singlehost()) {
+        if (!req->singlehosthint()) {
             snapshotKey = req->messages(0).snapshotkey();
         }
     }

@@ -110,8 +110,7 @@ Executor::~Executor()
     }
 }
 
-// TODO(thread-opt): get rid of this method here and move to
-// PlannerClient::callFunctions()
+// TODO(rm-executeThreads): get rid of this method here
 std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions)
@@ -172,6 +171,10 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
     // Perform snapshot updates if not on single host
     if (!isSingleHost) {
+        // Add the diffs corresponding to this executor
+        auto diffs = mergeDirtyRegions(msg);
+        snap->queueDiffs(diffs);
+
         // Write queued changes to snapshot
         int nWritten = snap->writeQueuedDiffs();
 
@@ -211,10 +214,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Update the last-executed time for this executor
     lastExec = faabric::util::startTimer();
 
-    faabric::Message& firstMsg = req->mutable_messages()->at(0);
+    auto& firstMsg = req->mutable_messages()->at(0);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
-    bool isMaster = firstMsg.mainhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     bool isSingleHost = req->singlehost();
     std::string snapshotKey = firstMsg.snapshotkey();
@@ -269,43 +271,18 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
 
-        int threadPoolIdx = -1;
         if (availablePoolThreads.empty()) {
-            // Here all threads are still executing, so we have to overload.
-            // If any tasks are blocking we risk a deadlock, and can no
-            // longer guarantee the application will finish. In general if
-            // we're on the main host and this is a thread, we should
-            // avoid the zeroth and first pool threads as they are likely to
-            // be the main thread and the zeroth in the communication group,
-            // so will be blocking.
-            if (isThreads && isMaster) {
-                if (threadPoolSize <= 2) {
-                    SPDLOG_ERROR("Insufficient pool threads ({}) to "
-                                 "overload {} idx {}",
-                                 threadPoolSize,
-                                 funcStr,
-                                 msg.appidx());
-
-                    throw std::runtime_error("Insufficient pool threads");
-                }
-
-                threadPoolIdx = (msg.appidx() % (threadPoolSize - 2)) + 2;
-            } else {
-                threadPoolIdx = msg.appidx() % threadPoolSize;
-            }
-
-            SPDLOG_DEBUG("Overloaded app index {} to thread {}",
-                         msg.appidx(),
-                         threadPoolIdx);
-        } else {
-            // Take next from those that are available
-            threadPoolIdx = *availablePoolThreads.begin();
-            availablePoolThreads.erase(threadPoolIdx);
-
-            SPDLOG_TRACE("Assigned app index {} to thread {}",
-                         msg.appidx(),
-                         threadPoolIdx);
+            SPDLOG_ERROR("No available thread pool threads (size: {})",
+                         threadPoolSize);
+            throw std::runtime_error("No available thread pool threads!");
         }
+
+        // Take next from those that are available
+        int threadPoolIdx = *availablePoolThreads.begin();
+        availablePoolThreads.erase(threadPoolIdx);
+
+        SPDLOG_TRACE(
+          "Assigned app index {} to thread {}", msg.appidx(), threadPoolIdx);
 
         // Enqueue the task
         threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(msgIdx, req));
@@ -524,54 +501,24 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
                      threadPoolIdx,
                      oldTaskCount - 1);
 
-        // Handle last-in-batch dirty tracking
-        std::string mainThreadSnapKey =
-          faabric::util::getMainThreadSnapshotKey(msg);
+        // Handle last-in-batch dirty tracking if we are last thread in a
+        // not-single-host execution, and are not on the main host (on the
+        // main host we still have the zero-th thread executing)
+        auto mainThreadSnapKey = faabric::util::getMainThreadSnapshotKey(msg);
         std::vector<faabric::util::SnapshotDiff> diffs;
-        if (isLastThreadInBatch && doDirtyTracking) {
-            // Stop non-thread-local tracking as we're the last in the batch
-            std::span<uint8_t> memView = getMemoryView();
-            tracker->stopTracking(memView);
-
-            // Merge all dirty regions
-            {
-                faabric::util::FullLock lock(threadExecutionMutex);
-
-                // Merge together regions from all threads
-                faabric::util::mergeManyDirtyPages(dirtyRegions,
-                                                   threadLocalDirtyRegions);
-
-                // Clear thread-local dirty regions, no longer needed
-                threadLocalDirtyRegions.clear();
-
-                // Merge the globally tracked regions
-                std::vector<char> globalDirtyRegions =
-                  tracker->getDirtyPages(memView);
-                faabric::util::mergeDirtyPages(dirtyRegions,
-                                               globalDirtyRegions);
-            }
-
-            // Fill snapshot gaps with overwrite regions first
-            auto snap = reg.getSnapshot(mainThreadSnapKey);
-            snap->fillGapsWithBytewiseRegions();
-
-            // Compare snapshot with all dirty regions for this executor
-            {
-                // Do the diffing
-                faabric::util::FullLock lock(threadExecutionMutex);
-                diffs = snap->diffWithDirtyRegions(memView, dirtyRegions);
-                dirtyRegions.clear();
-            }
-
-            // If last in batch on this host, clear the merge regions (only
-            // needed for doing the diffing on the current host)
-            SPDLOG_DEBUG("Clearing merge regions for {}", mainThreadSnapKey);
-            snap->clearMergeRegions();
+        // FIXME: thread 0 locally is not part of this batch, but is still
+        // in the same executor
+        bool isRemoteThread =
+          task.req->messages(0).mainhost() != conf.endpointHost;
+        if (isLastThreadInBatch && doDirtyTracking && isRemoteThread) {
+            diffs = mergeDirtyRegions(msg);
         }
 
         // If this is not a threads request and last in its batch, it may be
         // the main function (thread) in a threaded application, in which case
         // we want to stop any tracking and delete the main thread snapshot
+        // TODO(rm-executeThreads): this should disappear when pthreads do
+        // not call executeThreads anymore
         if (!isThreads && isLastThreadInExecutor) {
             // Stop tracking memory
             std::span<uint8_t> memView = getMemoryView();
@@ -730,6 +677,54 @@ const faabric::Message& Executor::getChainedMessage(int messageId)
     }
 
     return *(it->second);
+}
+
+std::vector<faabric::util::SnapshotDiff> Executor::mergeDirtyRegions(
+  const Message& msg,
+  const std::vector<char>& extraDirtyPages)
+{
+    std::vector<faabric::util::SnapshotDiff> diffs;
+    auto mainThreadSnapKey = faabric::util::getMainThreadSnapshotKey(msg);
+
+    // Stop non-thread-local tracking as we're the last in the batch
+    std::span<uint8_t> memView = getMemoryView();
+    tracker->stopTracking(memView);
+
+    // Merge all dirty regions
+    {
+        faabric::util::FullLock lock(threadExecutionMutex);
+
+        // Merge together regions from all threads
+        faabric::util::mergeManyDirtyPages(dirtyRegions,
+                                           threadLocalDirtyRegions);
+
+        // Clear thread-local dirty regions, no longer needed
+        threadLocalDirtyRegions.clear();
+
+        // Merge the globally tracked regions
+        std::vector<char> globalDirtyRegions = tracker->getDirtyPages(memView);
+        faabric::util::mergeDirtyPages(dirtyRegions, globalDirtyRegions);
+    }
+
+    // Fill snapshot gaps with overwrite regions first
+    auto snap = reg.getSnapshot(mainThreadSnapKey);
+    snap->fillGapsWithBytewiseRegions();
+
+    // Compare snapshot with all dirty regions for this executor
+    {
+        // Do the diffing
+        faabric::util::FullLock lock(threadExecutionMutex);
+        diffs = snap->diffWithDirtyRegions(memView, dirtyRegions);
+        dirtyRegions.clear();
+    }
+
+    // If last in batch on this host, clear the merge regions (only
+    // needed for doing the diffing on the current host)
+    SPDLOG_DEBUG("Clearing merge regions for {}", mainThreadSnapKey);
+    snap->clearMergeRegions();
+
+    // FIXME: is it very expensive to return these diffs?
+    return diffs;
 }
 
 std::set<unsigned int> Executor::getChainedMessageIds()

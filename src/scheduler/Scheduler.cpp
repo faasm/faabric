@@ -458,6 +458,7 @@ size_t Scheduler::getCachedMessageCount()
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
     addHostToGlobalSet(thisHost, std::make_shared<faabric::HostResources>(res));
+    conf.overrideCpuCount = res.slots();
 }
 
 // --------------------------------------------
