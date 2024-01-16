@@ -1,7 +1,6 @@
-from subprocess import run
-from os.path import join
-
 from invoke import task
+from os.path import join
+from subprocess import run
 from tasks.util.env import get_version, ACR_NAME, PROJ_ROOT
 
 FAABRIC_IMAGE_NAME = "faabric"
