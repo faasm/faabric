@@ -125,8 +125,8 @@ FetchContent_Declare(zstd_ext
 )
 FetchContent_Declare(nng_ext
     GIT_REPOSITORY "https://github.com/nanomsg/nng"
-    # NNG tagged version 1.6.0
-    GIT_TAG "a6de76c0b1e08ceba5c3e47dd1107f1a09490b0d"
+    # NNG tagged version 1.7.1
+    GIT_TAG "ec4b5722fba105e3b944e3dc0f6b63c941748b3f"
 )
 
 FetchContent_MakeAvailable(zstd_ext)
