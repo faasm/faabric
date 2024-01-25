@@ -25,6 +25,8 @@ jobs:
         username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
         password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
+      - name: "Check-out code"
+        uses: actions/checkout@v4
       - uses: faasm/conan-cache-action@v3
       - name: "Build Conan CMake deps to be shared by all runs"
         run: ./bin/inv_wrapper.sh dev.cmake --build Debug --clean
@@ -79,7 +81,9 @@ jobs:
       redis:
         image: redis
     steps:
-      - uses: faasm/conan-cache-action@v1
+      - name: "Check-out code"
+        uses: actions/checkout@v4
+      - uses: faasm/conan-cache-action@v3
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
@@ -119,7 +123,9 @@ jobs:
       redis:
         image: redis
     steps:
-      - uses: faasm/conan-cache-action@v1
+      - name: "Check-out code"
+        uses: actions/checkout@v4
+      - uses: faasm/conan-cache-action@v3
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
@@ -146,7 +152,7 @@ jobs:
       - name: "Check out code"
         uses: actions/checkout@v4
       - name: "Conan cache"
-        uses: faasm/conan-cache-action@v1
+        uses: faasm/conan-cache-action@v3
       - name: "Build distributed tests"
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
@@ -172,7 +178,9 @@ jobs:
       redis:
         image: redis
     steps:
-      - uses: faasm/conan-cache-action@v1
+      - name: "Check-out code"
+        uses: actions/checkout@v4
+      - uses: faasm/conan-cache-action@v3
         with:
           build-type: "release"
       - name: "Run cmake shared"
