@@ -452,6 +452,26 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
           ber, { "foo", "foo", "foo", "bar", "bar", "foo" });
     }
 
+    // Check we correctly minimise cross-VM links in >2 VM scenarios
+    SECTION("It also minimises cross-VM links with more than 2 VMs")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+            "bat",
+          },
+          { 2, 2, 1, 1 },
+          { 1, 1, 1, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 4, { "foo", "bar", "baz", "bat" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "foo", "bar", "bar", "foo" });
+    }
+
     SECTION("BinPack will minimise the number of messages to migrate")
     {
         config.hostMap =

@@ -102,6 +102,11 @@ bool BinPackScheduler::isFirstDecisionBetter(
   std::shared_ptr<SchedulingDecision> decisionA,
   std::shared_ptr<SchedulingDecision> decisionB)
 {
+    // The locality score is currently the number of cross-VM links. You may
+    // calculate this number as follows:
+    // - If the decision is single host, the number of cross-VM links is zero
+    // - Otherwise, in a fully-connected graph, the number of cross-VM links
+    //   is the sum of edges that cross a VM boundary
     auto getLocalityScore =
       [](std::shared_ptr<SchedulingDecision> decision) -> std::pair<int, int> {
         // First, calculate the host-message histogram (or frequency count)
@@ -115,11 +120,21 @@ bool BinPackScheduler::isFirstDecisionBetter(
             return std::make_pair(1, 0);
         }
 
-        // Else, do the product of all entries
-        int score = 1;
+        // Else, sum all the egressing edges for each element and divide by two
+        int score = 0;
         for (auto [host, freq] : hostFreqCount) {
-            score = score * freq;
+
+            int thisHostScore = 0;
+            for (auto [innerHost, innerFreq] : hostFreqCount) {
+                if (innerHost != host) {
+                    thisHostScore += innerFreq;
+                }
+            }
+
+            score += thisHostScore * freq;
         }
+
+        score = int(score / 2);
 
         return std::make_pair(hostFreqCount.size(), score);
     };
