@@ -25,7 +25,9 @@ jobs:
         username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
         password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
-      - uses: faasm/conan-cache-action@v1
+      - name: "Check-out code"
+        uses: actions/checkout@v4
+      - uses: faasm/conan-cache-action@v3
       - name: "Build Conan CMake deps to be shared by all runs"
         run: ./bin/inv_wrapper.sh dev.cmake --build Debug --clean
 
@@ -39,7 +41,7 @@ jobs:
         password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - name: "Check out code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: "Build docs"
         run: ./bin/inv_wrapper.sh docs
 
@@ -53,7 +55,7 @@ jobs:
         password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - name: "Check out code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         # We need to set the safe git directory as formatting relies on git-ls
         # See actions/checkout#766
       - name: "Set the GH workspace as a safe git directory"
@@ -79,7 +81,9 @@ jobs:
       redis:
         image: redis
     steps:
-      - uses: faasm/conan-cache-action@v1
+      - name: "Check-out code"
+        uses: actions/checkout@v4
+      - uses: faasm/conan-cache-action@v3
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
@@ -119,7 +123,9 @@ jobs:
       redis:
         image: redis
     steps:
-      - uses: faasm/conan-cache-action@v1
+      - name: "Check-out code"
+        uses: actions/checkout@v4
+      - uses: faasm/conan-cache-action@v3
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
@@ -137,16 +143,16 @@ jobs:
       CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
     steps:
       - name: "Log in to ACR"
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: faasm.azurecr.io
           username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
           password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       # --- Code update ---
       - name: "Check out code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: "Conan cache"
-        uses: faasm/conan-cache-action@v1
+        uses: faasm/conan-cache-action@v3
       - name: "Build distributed tests"
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
@@ -172,7 +178,9 @@ jobs:
       redis:
         image: redis
     steps:
-      - uses: faasm/conan-cache-action@v1
+      - name: "Check-out code"
+        uses: actions/checkout@v4
+      - uses: faasm/conan-cache-action@v3
         with:
           build-type: "release"
       - name: "Run cmake shared"
