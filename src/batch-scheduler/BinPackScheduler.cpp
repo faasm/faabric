@@ -162,6 +162,13 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
         sortedHosts.push_back(host);
     }
 
+    std::shared_ptr<SchedulingDecision> oldDecision = nullptr;
+    std::map<std::string, int> hostFreqCount;
+    if (decisionType != DecisionType::NEW) {
+        oldDecision = inFlightReqs.at(req->appid()).second;
+        hostFreqCount = getHostFreqCount(oldDecision);
+    }
+
     auto isFirstHostLarger = [&](const Host& hostA, const Host& hostB) -> bool {
         // The BinPack scheduler sorts hosts by number of available slots
         int nAvailableA = numSlotsAvailable(hostA);
@@ -186,8 +193,6 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
         // DIST_CHANGE), the BinPack scheduler takes into consideration the
         // existing host-message histogram (i.e. how many messages for this app
         // does each host _already_ run)
-        auto oldDecision = inFlightReqs.at(req->appid()).second;
-        auto hostFreqCount = getHostFreqCount(oldDecision);
 
         int numInHostA = hostFreqCount.contains(getIp(hostA))
                            ? hostFreqCount.at(getIp(hostA))
@@ -207,6 +212,23 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
 
         // In case of a tie, use the same criteria than NEW
         return isFirstHostLarger(hostA, hostB);
+    };
+
+    auto isFirstHostLargerWithFreqTaint = [&](const Host& hostA,
+                                              const Host& hostB) -> bool {
+        // In a DIST_CHANGE decision we want to globally minimise the
+        // number of cross-VM links (i.e. best BIN_PACK), but break the ties
+        // with hostFreqCount (i.e. if two hosts have the same number of free
+        // slots, without counting for the to-be-migrated app, prefer the host
+        // that is already running messags for this app)
+        int nAvailableA = numSlotsAvailable(hostA);
+        int nAvailableB = numSlotsAvailable(hostB);
+        if (nAvailableA != nAvailableB) {
+            return nAvailableA > nAvailableB;
+        }
+
+        // In case of a tie, use the same criteria as FREQ count
+        return isFirstHostLargerWithFreq(hostA, hostB);
     };
 
     switch (decisionType) {
@@ -239,18 +261,30 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
             // of cross-vm links can be reduced (i.e. we improve locality)
             auto oldDecision = inFlightReqs.at(req->appid()).second;
             auto hostFreqCount = getHostFreqCount(oldDecision);
-            std::sort(sortedHosts.begin(),
-                      sortedHosts.end(),
-                      isFirstHostLargerWithFreq);
 
-            // Before returning the sorted hosts for dist change, we subtract
-            // all slots occupied by the application we want to migrate (note
-            // that we want to take into account for the sorting)
+            // To decide on a migration opportunity, is like having another
+            // shot at re-scheduling the app from scratch. Thus, we remove
+            // the current slots we occupy, and return the larges slots.
+            // However, in case of a tie, we prefer dist change decisions
+            // that minimise the number of migrations, so we need to sort
+            // hosts in decreasing order of capacity BUT break ties with
+            // frequency
+            // WARNING: this assumes negligible migration costs
+
+            // First remove the slots the app occupies to have a fresh new
+            // shot at the scheduling
             for (auto h : sortedHosts) {
                 if (hostFreqCount.contains(getIp(h))) {
                     freeSlots(h, hostFreqCount.at(getIp(h)));
                 }
             }
+
+            // Now sort the emptied hosts breaking ties with the freq count
+            // criteria
+            std::sort(sortedHosts.begin(),
+                      sortedHosts.end(),
+                      isFirstHostLargerWithFreqTaint);
+
             break;
         }
         default: {
