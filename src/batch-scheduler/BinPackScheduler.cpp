@@ -264,8 +264,8 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
 
             // To decide on a migration opportunity, is like having another
             // shot at re-scheduling the app from scratch. Thus, we remove
-            // the current slots we occupy, and return the larges slots.
-            // However, in case of a tie, we prefer dist change decisions
+            // the current slots we occupy, and return the largest slots.
+            // However, in case of a tie, we prefer DIST_CHANGE decisions
             // that minimise the number of migrations, so we need to sort
             // hosts in decreasing order of capacity BUT break ties with
             // frequency
