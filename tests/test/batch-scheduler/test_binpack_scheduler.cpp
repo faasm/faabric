@@ -398,8 +398,7 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
           buildExpectedDecision(ber, { "foo", "foo", "bar", "foo" });
     }
 
-    SECTION(
-      "BinPack prefers hosts running more messages (even if less free slots)")
+    SECTION("BinPack prefers hosts running more slots (even if less messags)")
     {
         config.hostMap = buildHostMap(
           {
@@ -414,7 +413,7 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
         config.inFlightReqs =
           buildInFlightReqs(ber, 4, { "foo", "foo", "bar", "baz" });
         config.expectedDecision =
-          buildExpectedDecision(ber, { "foo", "foo", "bar", "foo" });
+          buildExpectedDecision(ber, { "bar", "bar", "bar", "bar" });
     }
 
     SECTION("BinPack always prefers consolidating to fewer hosts")
@@ -470,6 +469,43 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
           buildInFlightReqs(ber, 4, { "foo", "bar", "baz", "bat" });
         config.expectedDecision =
           buildExpectedDecision(ber, { "foo", "bar", "bar", "foo" });
+    }
+
+    SECTION("BinPack will migrate to completely different hosts if necessary")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 4, 4, 4 },
+          { 4, 4, 0 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 4, { "foo", "foo", "bar", "bar" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "baz", "baz", "baz", "baz" });
+    }
+
+    SECTION(
+      "But in case of a tie will prefer minimising the number of migrations")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 4, 4, 4 },
+          { 0, 4, 2 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 4, { "baz", "baz", "bar", "bar" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "baz", "baz", "baz", "baz" });
     }
 
     SECTION("BinPack will minimise the number of messages to migrate")
