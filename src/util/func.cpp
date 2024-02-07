@@ -101,9 +101,9 @@ unsigned int setMessageId(faabric::Message& msg)
     }
 
     // Set the timestamp if it doesn't have one
-    if (msg.timestamp() <= 0) {
+    if (msg.starttimestamp() <= 0) {
         Clock& clock = faabric::util::getGlobalClock();
-        msg.set_timestamp(clock.epochMillis());
+        msg.set_starttimestamp(clock.epochMillis());
     }
 
     std::string resultKey = resultKeyFromMessageId(messageId);

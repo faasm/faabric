@@ -477,7 +477,7 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     // If the request is succesful, check that the response has the fields
     // we expect
     if (expectedReturnCode == beast::http::status::ok) {
-        REQUIRE(msgResult.timestamp() > 0);
+        REQUIRE(msgResult.starttimestamp() > 0);
         REQUIRE(msgResult.finishtimestamp() > 0);
         REQUIRE(!msgResult.executedhost().empty());
         REQUIRE(!msgResult.mainhost().empty());

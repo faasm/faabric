@@ -104,23 +104,23 @@ TEST_CASE("Test timestamp added to message")
     SECTION("Existing timestamp")
     {
         long expectedTimestamp = 999888;
-        msg.set_timestamp(expectedTimestamp);
+        msg.set_starttimestamp(expectedTimestamp);
 
         faabric::util::setMessageId(msg);
-        REQUIRE(msg.timestamp() == expectedTimestamp);
+        REQUIRE(msg.starttimestamp() == expectedTimestamp);
     }
 
     SECTION("Zero existing timestamp")
     {
-        msg.set_timestamp(0);
+        msg.set_starttimestamp(0);
         faabric::util::setMessageId(msg);
-        REQUIRE(msg.timestamp() > baselineTimestamp);
+        REQUIRE(msg.starttimestamp() > baselineTimestamp);
     }
 
     SECTION("No existing timestamp")
     {
         faabric::util::setMessageId(msg);
-        REQUIRE(msg.timestamp() > baselineTimestamp);
+        REQUIRE(msg.starttimestamp() > baselineTimestamp);
     }
 }
 

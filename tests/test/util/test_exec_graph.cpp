@@ -141,7 +141,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     for (int rank = 0; rank < worldSize; rank++) {
         messages.at(rank) = faabric::util::messageFactory("mpi", "hellompi");
         messages.at(rank).set_id(0);
-        messages.at(rank).set_timestamp(0);
+        messages.at(rank).set_starttimestamp(0);
         messages.at(rank).set_finishtimestamp(0);
         messages.at(rank).set_resultkey("");
         messages.at(rank).set_statuskey("");
@@ -190,14 +190,14 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     // Unset the fields that we can't recreate
     actual.rootNode.msg.set_id(0);
     actual.rootNode.msg.set_finishtimestamp(0);
-    actual.rootNode.msg.set_timestamp(0);
+    actual.rootNode.msg.set_starttimestamp(0);
     actual.rootNode.msg.set_resultkey("");
     actual.rootNode.msg.set_statuskey("");
     actual.rootNode.msg.set_outputdata("");
     for (auto& node : actual.rootNode.children) {
         node.msg.set_id(0);
         node.msg.set_finishtimestamp(0);
-        node.msg.set_timestamp(0);
+        node.msg.set_starttimestamp(0);
         node.msg.set_resultkey("");
         node.msg.set_statuskey("");
         node.msg.set_outputdata("");
