@@ -43,7 +43,7 @@ class JsonTestFixture
         faabric::util::setMessageId(msg);
 
         REQUIRE(msg.id() > 0);
-        REQUIRE(msg.timestamp() > 0);
+        REQUIRE(msg.starttimestamp() > 0);
     }
 
   protected:
