@@ -1190,6 +1190,14 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                 outBufferCast[slot] =
                   std::max<int>(outBufferCast[slot], inBufferCast[slot]);
             }
+        } else if (datatype->id == FAABRIC_UINT64) {
+            auto inBufferCast = reinterpret_cast<uint64_t*>(inBuffer);
+            auto outBufferCast = reinterpret_cast<uint64_t*>(outBuffer);
+
+            for (int slot = 0; slot < count; slot++) {
+                outBufferCast[slot] =
+                  std::max<uint64_t>(outBufferCast[slot], inBufferCast[slot]);
+            }
         } else if (datatype->id == FAABRIC_DOUBLE) {
             auto inBufferCast = reinterpret_cast<double*>(inBuffer);
             auto outBufferCast = reinterpret_cast<double*>(outBuffer);
@@ -1220,6 +1228,14 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                 outBufferCast[slot] =
                   std::min<int>(outBufferCast[slot], inBufferCast[slot]);
             }
+        } else if (datatype->id == FAABRIC_UINT64) {
+            auto inBufferCast = reinterpret_cast<uint64_t*>(inBuffer);
+            auto outBufferCast = reinterpret_cast<uint64_t*>(outBuffer);
+
+            for (int slot = 0; slot < count; slot++) {
+                outBufferCast[slot] =
+                  std::min<uint64_t>(outBufferCast[slot], inBufferCast[slot]);
+            }
         } else if (datatype->id == FAABRIC_DOUBLE) {
             auto inBufferCast = reinterpret_cast<double*>(inBuffer);
             auto outBufferCast = reinterpret_cast<double*>(outBuffer);
@@ -1245,6 +1261,13 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
         if (datatype->id == FAABRIC_INT) {
             auto inBufferCast = reinterpret_cast<int*>(inBuffer);
             auto outBufferCast = reinterpret_cast<int*>(outBuffer);
+
+            for (int slot = 0; slot < count; slot++) {
+                outBufferCast[slot] += inBufferCast[slot];
+            }
+        } else if (datatype->id == FAABRIC_UINT64) {
+            auto inBufferCast = reinterpret_cast<uint64_t*>(inBuffer);
+            auto outBufferCast = reinterpret_cast<uint64_t*>(outBuffer);
 
             for (int slot = 0; slot < count; slot++) {
                 outBufferCast[slot] += inBufferCast[slot];

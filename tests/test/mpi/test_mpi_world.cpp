@@ -725,6 +725,14 @@ template void doReduceTest<int>(MpiWorld& world,
                                 std::vector<std::vector<int>> rankData,
                                 std::vector<int>& expected);
 
+template void doReduceTest<uint64_t>(
+  MpiWorld& world,
+  int root,
+  MPI_Op op,
+  MPI_Datatype datatype,
+  std::vector<std::vector<uint64_t>> rankData,
+  std::vector<uint64_t>& expected);
+
 template void doReduceTest<double>(MpiWorld& world,
                                    int root,
                                    MPI_Op op,
@@ -787,6 +795,60 @@ TEST_CASE_METHOD(MpiTestFixture, "Test reduce", "[mpi]")
 
             doReduceTest<int>(
               world, root, MPI_MIN, MPI_INT, rankData, expected);
+        }
+    }
+
+    SECTION("UINT 64")
+    {
+        std::vector<std::vector<uint64_t>> rankData(worldSize,
+                                                    std::vector<uint64_t>(3));
+        std::vector<uint64_t> expected(3, 0);
+
+        // Prepare rank data
+        for (int r = 0; r < worldSize; r++) {
+            rankData[r][0] = r;
+            rankData[r][1] = r * 10;
+            rankData[r][2] = r * 100;
+        }
+
+        SECTION("Sum operator")
+        {
+            for (int r = 0; r < worldSize; r++) {
+                expected[0] += rankData[r][0];
+                expected[1] += rankData[r][1];
+                expected[2] += rankData[r][2];
+            }
+
+            doReduceTest<uint64_t>(
+              world, root, MPI_SUM, MPI_UINT64_T, rankData, expected);
+        }
+
+        SECTION("Max operator")
+        {
+            expected[0] = (worldSize - 1);
+            expected[1] = (worldSize - 1) * 10;
+            expected[2] = (worldSize - 1) * 100;
+
+            doReduceTest<uint64_t>(
+              world, root, MPI_MAX, MPI_UINT64_T, rankData, expected);
+        }
+
+        SECTION("Min operator")
+        {
+            // Initialize rankData to non-zero values. This catches faulty
+            // reduce implementations that always return zero
+            for (int r = 0; r < worldSize; r++) {
+                rankData[r][0] = (r + 1);
+                rankData[r][1] = (r + 1) * 10;
+                rankData[r][2] = (r + 1) * 100;
+            }
+
+            expected[0] = 1;
+            expected[1] = 10;
+            expected[2] = 100;
+
+            doReduceTest<uint64_t>(
+              world, root, MPI_MIN, MPI_UINT64_T, rankData, expected);
         }
     }
 
