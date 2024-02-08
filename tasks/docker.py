@@ -6,6 +6,7 @@ from tasks.util.env import get_version, ACR_NAME, PROJ_ROOT
 FAABRIC_IMAGE_NAME = "faabric"
 FAABRIC_BASE_IMAGE_NAME = "faabric-base"
 FAABRIC_PLANNER_IMAGE_NAME = "planner"
+FAABRIC_OPENMPI_WORKER_IMAGE_NAME = "openmpi-worker"
 
 
 def _get_docker_tag(img_name):
@@ -61,6 +62,8 @@ def build(ctx, c, nocache=False, push=False):
             img_name = FAABRIC_BASE_IMAGE_NAME
         elif ctr == "planner":
             img_name = FAABRIC_PLANNER_IMAGE_NAME
+        elif ctr == "openmpi-worker":
+            img_name = FAABRIC_OPENMPI_WORKER_IMAGE_NAME
         else:
             print("Unrecognised container name: {}".format(ctr))
             raise RuntimeError("Unrecognised container name")

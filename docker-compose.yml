@@ -61,3 +61,6 @@ services:
     depends_on:
       - planner
       - redis
+
+  openmpi-worker:
+    image: faasm.azurecr.io/openmpi-worker:${FAABRIC_VERSION}
