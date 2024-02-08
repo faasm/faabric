@@ -130,8 +130,10 @@ void PlannerClient::removeHost(std::shared_ptr<RemoveHostRequest> req)
 
 void PlannerClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
 {
-    // Set finish timestamp
-    msg->set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
+    // Set finish timestamp if not set by downstream callers
+    if (msg->finishtimestamp() == 0) {
+        msg->set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
+    }
 
     // Let the planner know this function has finished execution. This will
     // wake any thread waiting on this result
