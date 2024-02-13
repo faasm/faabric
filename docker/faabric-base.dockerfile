@@ -1,6 +1,7 @@
 FROM ubuntu:22.04
 
 # Configure APT repositories
+ARG LLVM_VERSION_MAJOR
 RUN apt update \
     && apt upgrade -y \
     && apt install -y \
@@ -8,49 +9,35 @@ RUN apt update \
         gpg \
         software-properties-common \
         wget \
-    # apt-key add is now deprecated for security reasons, we add individual
-    # keys manually.
-    # https://askubuntu.com/questions/1286545/what-commands-exactly-should-replace-the-deprecated-apt-key
-    && wget -O /tmp/kitware-archive-latest.asc \
-        https://apt.kitware.com/keys/kitware-archive-latest.asc \
-    && gpg --no-default-keyring \
-        --keyring /tmp/tmp-key.gpg \
-        --import /tmp/kitware-archive-latest.asc \
-    && gpg --no-default-keyring \
-        --keyring /tmp/tmp-key.gpg \
-        --export --output /etc/apt/keyrings/kitware-archive-latest.gpg \
-    && rm /tmp/tmp-key.gpg \
-    && echo \
-        "deb [signed-by=/etc/apt/keyrings/kitware-archive-latest.gpg] https://apt.kitware.com/ubuntu/ jammy main" \
-        >> /etc/apt/sources.list.d/archive_uri-https_apt_kitware_com_ubuntu_jammy_-jammy.list
+    # LLVM APT Repo config
+    && wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc \
+    && add-apt-repository -y "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${LLVM_VERSION_MAJOR} main"
 
 # Install APT packages
 RUN apt update && apt install -y \
     autoconf \
     automake \
     build-essential \
-    clang-13 \
-    clang-format-13 \
-    clang-tidy-13 \
-    clang-tools-13 \
-    cmake \
+    clang-${LLVM_VERSION_MAJOR} \
+    clang-format-${LLVM_VERSION_MAJOR} \
+    clang-tidy-${LLVM_VERSION_MAJOR} \
+    clang-tools-${LLVM_VERSION_MAJOR} \
     doxygen \
     g++-11 \
     git \
-    kitware-archive-keyring \
     libboost-filesystem-dev \
-    libc++-13-dev \
-    libc++abi-13-dev \
+    libc++-${LLVM_VERSION_MAJOR}-dev \
+    libc++abi-${LLVM_VERSION_MAJOR}-dev \
     libcurl4-openssl-dev \
     libhiredis-dev \
     libpython3-dev \
     libssl-dev \
     libstdc++-11-dev \
     libtool \
-    libunwind-13-dev \
+    libunwind-${LLVM_VERSION_MAJOR}-dev \
     libz-dev \
-    lld-13 \
-    lldb-13 \
+    lld-${LLVM_VERSION_MAJOR} \
+    lldb-${LLVM_VERSION_MAJOR} \
     make \
     ninja-build \
     pkg-config \
@@ -60,6 +47,16 @@ RUN apt update && apt install -y \
     redis-tools \
     sudo \
     unzip
+
+# Install up-to-date CMake
+RUN apt remove --purge --auto-remove cmake \
+    && mkdir -p /setup \
+    && cd /setup \
+    && wget -q -O cmake-linux.sh \
+        https://github.com/Kitware/CMake/releases/download/v3.28.0/cmake-3.28.0-linux-x86_64.sh \
+    && sh cmake-linux.sh -- --skip-license --prefix=/usr/local \
+    && apt clean autoclean -y \
+    && apt autoremove -y
 
 # Install Conan
 RUN curl -s -L -o \
