@@ -17,7 +17,7 @@ endif()
 
 include(${CMAKE_CURRENT_BINARY_DIR}/conan.cmake)
 
-conan_check(VERSION 1.53.0 REQUIRED)
+conan_check(VERSION 1.63.0 REQUIRED)
 
 # Enable revisions in the conan config
 execute_process(COMMAND ${CONAN_CMD} config set general.revisions_enabled=1
@@ -35,8 +35,6 @@ conan_cmake_configure(
         "abseil/20220623.0@#732381dc99db29b4cfd293684891da56"
         "boost/1.80.0@#db5db5bd811d23b95089d4a95259d147"
         "catch2/2.13.9@#8793d3e6287d3684201418de556d98fe"
-        "cppcodec/0.2@#f6385611ce2f7cff954ac8b16e25c4fa"
-        "cpprestsdk/2.10.18@#ed9788e9d202d6eadd92581368ddfc2f"
         "flatbuffers/2.0.5@#c6a9508bd476da080f7aecbe7a094b68"
         "hiredis/1.0.2@#370dad964286cadb1f15dc90252e8ef3"
         "openssl/3.0.2@#269fa93e5afe8c34bd9a0030d2b8f0fe"
@@ -64,7 +62,6 @@ conan_cmake_configure(
         boost:without_python=True
         boost:without_test=True
         boost:without_wave=True
-        cpprestsdk:with_websockets=False
 )
 
 conan_cmake_autodetect(FAABRIC_CONAN_SETTINGS)
@@ -83,8 +80,6 @@ include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
 find_package(absl REQUIRED)
 find_package(Boost 1.80.0 REQUIRED)
 find_package(Catch2 REQUIRED)
-find_package(cppcodec REQUIRED)
-find_package(cpprestsdk REQUIRED)
 find_package(FlatBuffers REQUIRED)
 find_package(fmt REQUIRED)
 find_package(hiredis REQUIRED)
@@ -151,8 +146,6 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     Boost::Boost
     Boost::filesystem
     Boost::system
-    cppcodec::cppcodec
-    cpprestsdk::cpprestsdk
     flatbuffers::flatbuffers
     hiredis::hiredis
     nng::nng
