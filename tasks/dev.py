@@ -1,13 +1,13 @@
 from os import makedirs
-from shutil import rmtree
 from os.path import exists, join
+from shutil import rmtree
 from subprocess import run
-
 from tasks.util.env import (
-    PROJ_ROOT,
     FAABRIC_SHARED_BUILD_DIR,
     FAABRIC_STATIC_BUILD_DIR,
     FAABRIC_INSTALL_PREFIX,
+    LLVM_VERSION,
+    PROJ_ROOT,
 )
 
 from invoke import task
@@ -41,14 +41,15 @@ def cmake(
     if build not in build_types:
         raise RuntimeError("Expected build to be in {}".format(build_types))
 
+    llvm_major_version = LLVM_VERSION.split(".")[0]
     cmd = [
         "cmake",
         "-GNinja",
         "-DCMAKE_INSTALL_PREFIX={}".format(FAABRIC_INSTALL_PREFIX),
         "-DCMAKE_BUILD_TYPE={}".format(build),
         "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),
-        "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-13",
-        "-DCMAKE_C_COMPILER=/usr/bin/clang-13",
+        "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-{}".format(llvm_major_version),
+        "-DCMAKE_C_COMPILER=/usr/bin/clang-{}".format(llvm_major_version),
         "-DFAABRIC_USE_SANITISER={}".format(sanitiser),
         "-DFAABRIC_SELF_TRACING=ON" if prof else "",
         "-DFAABRIC_CODE_COVERAGE=ON" if coverage else "",
