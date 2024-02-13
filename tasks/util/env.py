@@ -21,6 +21,7 @@ ACR_NAME = "faasm.azurecr.io"
 # faasm/cpp/faasmtools/env.py. Ideally, both versions will be in sync but it
 # is not strictly necessary.
 LLVM_VERSION = "17.0.6"
+LLVM_VERSION_MAJOR = LLVM_VERSION.split(".")[0]
 
 
 def get_version():
