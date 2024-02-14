@@ -4,10 +4,6 @@
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 
-#include <boost/filesystem.hpp>
-
-using namespace boost::filesystem;
-
 namespace tests {
 TEST_CASE("Test message factory", "[util]")
 {

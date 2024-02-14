@@ -33,7 +33,7 @@ endif()
 conan_cmake_configure(
     REQUIRES
         "abseil/20220623.0@#732381dc99db29b4cfd293684891da56"
-        "boost/1.80.0@#db5db5bd811d23b95089d4a95259d147"
+        "boost/1.84.0@#7604ce1e7485780469dffb6430f232ea"
         "catch2/2.13.9@#8793d3e6287d3684201418de556d98fe"
         "flatbuffers/2.0.5@#c6a9508bd476da080f7aecbe7a094b68"
         "hiredis/1.0.2@#370dad964286cadb1f15dc90252e8ef3"
@@ -51,7 +51,6 @@ conan_cmake_configure(
         flatbuffers:flatbuffers=True
         boost:error_code_header_only=True
         boost:system_no_deprecated=True
-        boost:filesystem_no_deprecated=True
         boost:zlib=False
         boost:bzip2=False
         boost:lzma=False
@@ -99,7 +98,7 @@ find_package(ZLIB REQUIRED)
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
 set(ZSTD_BUILD_PROGRAMS OFF CACHE INTERNAL "")
-set(ZSTD_BUILD_SHARED OFF CACHE INTERNAL "")
+set(ZSTD_BUILD_SHARED ON CACHE INTERNAL "")
 set(ZSTD_BUILD_STATIC ON CACHE INTERNAL "")
 set(ZSTD_BUILD_TESTS OFF CACHE INTERNAL "")
 # This means zstd doesn't use threading internally,
@@ -127,7 +126,9 @@ FetchContent_Declare(nng_ext
 FetchContent_MakeAvailable(zstd_ext)
 # Work around zstd not declaring its targets properly
 target_include_directories(libzstd_static SYSTEM INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
+target_include_directories(libzstd_shared SYSTEM INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
 add_library(zstd::libzstd_static ALIAS libzstd_static)
+add_library(zstd::libzstd_shared ALIAS libzstd_shared)
 
 FetchContent_MakeAvailable(nng_ext)
 add_library(nng::nng ALIAS nng)
@@ -144,7 +145,6 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     absl::flat_hash_map
     absl::strings
     Boost::Boost
-    Boost::filesystem
     Boost::system
     flatbuffers::flatbuffers
     hiredis::hiredis

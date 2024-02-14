@@ -1,5 +1,4 @@
 #include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/util/clock.h>

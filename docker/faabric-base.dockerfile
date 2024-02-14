@@ -30,6 +30,7 @@ RUN apt update && apt install -y \
     libc++abi-${LLVM_VERSION_MAJOR}-dev \
     libcurl4-openssl-dev \
     libhiredis-dev \
+    libpolly-${LLVM_VERSION_MAJOR}-dev \
     libpython3-dev \
     libssl-dev \
     libstdc++-11-dev \
