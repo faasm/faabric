@@ -23,7 +23,7 @@ RUN apt update && apt install -y \
     clang-tidy-${LLVM_VERSION_MAJOR} \
     clang-tools-${LLVM_VERSION_MAJOR} \
     doxygen \
-    g++-12 \
+    g++-11 \
     git \
     libboost-filesystem-dev \
     libc++-${LLVM_VERSION_MAJOR}-dev \
@@ -33,7 +33,7 @@ RUN apt update && apt install -y \
     libpolly-${LLVM_VERSION_MAJOR}-dev \
     libpython3-dev \
     libssl-dev \
-    libstdc++-12-dev \
+    libstdc++-11-dev \
     libtool \
     libunwind-${LLVM_VERSION_MAJOR}-dev \
     libz-dev \
