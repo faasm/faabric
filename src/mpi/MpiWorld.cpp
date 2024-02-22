@@ -505,33 +505,44 @@ void MpiWorld::send(int sendRank,
     // Generate a message ID
     int msgId = (localMsgCount + 1) % INT32_MAX;
 
-    // Create the message
-    auto m = std::make_shared<MPIMessage>();
-    m->set_id(msgId);
-    m->set_worldid(id);
-    m->set_sender(sendRank);
-    m->set_destination(recvRank);
-    m->set_type(dataType->id);
-    m->set_count(count);
-    m->set_messagetype(messageType);
-
-    // Set up message data
-    if (count > 0 && buffer != nullptr) {
-        m->set_buffer(buffer, dataType->size * count);
-    }
-
     // Mock the message sending in tests
+    /*
     if (faabric::util::isMockMode()) {
         mpiMockedMessages[sendRank].push_back(m);
         return;
     }
+    */
 
     // Dispatch the message locally or globally
     if (isLocal) {
+        void* bufferPtr = malloc(count * dataType->size);
+        std::memcpy(bufferPtr, buffer, count* dataType->size);
+
+        auto msg = std::make_unique<MpiMessage>(MpiMessage{
+            .id = msgId, .worldId = id, .sendRank = sendRank,
+            .recvRank = recvRank, .type = dataType->id, .count = count,
+            .buffer = bufferPtr
+        });
+
         SPDLOG_TRACE(
           "MPI - send {} -> {} ({})", sendRank, recvRank, messageType);
-        getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
+        getLocalQueue(sendRank, recvRank)->enqueue(std::move(msg));
     } else {
+        // Create the message
+        auto m = std::make_shared<MPIMessage>();
+        m->set_id(msgId);
+        m->set_worldid(id);
+        m->set_sender(sendRank);
+        m->set_destination(recvRank);
+        m->set_type(dataType->id);
+        m->set_count(count);
+        m->set_messagetype(messageType);
+
+        // Set up message data
+        if (count > 0 && buffer != nullptr) {
+            m->set_buffer(buffer, dataType->size * count);
+        }
+
         SPDLOG_TRACE(
           "MPI - send remote {} -> {} ({})", sendRank, recvRank, messageType);
         sendRemoteMpiMessage(otherHost, sendRank, recvRank, m);
@@ -572,11 +583,54 @@ void MpiWorld::recv(int sendRank,
         return;
     }
 
-    // Recv message from underlying transport
-    std::shared_ptr<MPIMessage> m = recvBatchReturnLast(sendRank, recvRank);
+    bool isLocal = getHostForRank(sendRank) == getHostForRank(recvRank);
 
-    // Do the processing
-    doRecv(m, buffer, dataType, count, status, messageType);
+    if (isLocal) {
+        std::unique_ptr<MpiMessage> m = getLocalQueue(sendRank, recvRank)->dequeue();
+    } else {
+        // Recv message from underlying transport
+        std::shared_ptr<MPIMessage> m = recvBatchReturnLast(sendRank, recvRank);
+
+        // Do the processing
+        doRecv(m, buffer, dataType, count, status, messageType);
+    }
+}
+
+void MpiWorld::doRecv(std::unique_ptr<MpiMessage> m,
+                      uint8_t* buffer,
+                      faabric_datatype_t* dataType,
+                      int count,
+                      MPI_Status* status,
+                      MPIMessage::MPIMessageType messageType)
+{
+    // Assert message integrity
+    // Note - this checks won't happen in Release builds
+    if (m->type != messageType) {
+        SPDLOG_ERROR("Different message types (got: {}, expected: {})",
+                     m->type,
+                     messageType);
+    }
+    assert(m->type == messageType);
+    assert(m->count <= count);
+
+    // TODO - avoid copy here
+    // Copy message data
+    if (m->count > 0) {
+        std::memcpy(buffer, (void*)m->buffer, count * dataType->size);
+        free((void*)m->buffer);
+    }
+
+    // Set status values if required
+    if (status != nullptr) {
+        status->MPI_SOURCE = m->sendRank;
+        status->MPI_ERROR = MPI_SUCCESS;
+
+        // Take the message size here as the receive count may be larger
+        status->bytesSize = m->count * dataType->size;
+
+        // TODO - thread through tag
+        status->MPI_TAG = -1;
+    }
 }
 
 void MpiWorld::doRecv(std::shared_ptr<MPIMessage>& m,
@@ -1395,15 +1449,18 @@ void MpiWorld::allToAll(int rank,
 // queues.
 void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
+    throw std::runtime_error("Probe not implemented!");
+    /*
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
     // 30/12/21 - Peek will throw a runtime error
     std::shared_ptr<MPIMessage> m = *(queue->peek());
 
-    faabric_datatype_t* datatype = getFaabricDatatypeFromId(m->type());
+    // faabric_datatype_t* datatype = getFaabricDatatypeFromId(m->type());
     status->bytesSize = m->count() * datatype->size;
     status->MPI_ERROR = 0;
     status->MPI_SOURCE = m->sender();
+    */
 }
 
 void MpiWorld::barrier(int thisRank)
@@ -1456,6 +1513,7 @@ void MpiWorld::initLocalQueues()
     }
 }
 
+// TODO: double-check that the fast (no-async) path is fast
 std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
                                                           int recvRank,
                                                           int batchSize)
@@ -1482,6 +1540,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
     auto msgIt = umb->getFirstNullMsg();
     if (isLocal) {
         // First receive messages that happened before us
+        /*
         for (int i = 0; i < batchSize - 1; i++) {
             try {
                 SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
@@ -1489,7 +1548,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
 
                 // Put the unacked message in the UMB
                 assert(!msgIt->isAcknowledged());
-                msgIt->acknowledge(pendingMsg);
+                // msgIt->acknowledge(pendingMsg);
                 msgIt++;
             } catch (faabric::util::QueueTimeoutException& e) {
                 SPDLOG_ERROR(
@@ -1516,6 +1575,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
                          recvRank);
             throw e;
         }
+        */
     } else {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {

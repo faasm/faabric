@@ -21,6 +21,16 @@
 
 namespace faabric::mpi {
 
+struct MpiMessage {
+    int32_t id;
+    int32_t worldId;
+    int32_t sendRank;
+    int32_t recvRank;
+    int32_t type;
+    int32_t count;
+    void* buffer;
+};
+
 // -----------------------------------
 // Mocking
 // -----------------------------------
@@ -28,7 +38,7 @@ namespace faabric::mpi {
 // as the broker already has mocking capabilities
 std::vector<std::shared_ptr<MPIMessage>> getMpiMockedMessages(int sendRank);
 
-typedef faabric::util::FixedCapacityQueue<std::shared_ptr<MPIMessage>>
+typedef faabric::util::FixedCapacityQueue<std::unique_ptr<MpiMessage>>
   InMemoryMpiQueue;
 
 class MpiWorld
@@ -259,6 +269,14 @@ class MpiWorld
 
     // Abstraction of the bulk of the recv work, shared among various functions
     void doRecv(std::shared_ptr<MPIMessage>& m,
+                uint8_t* buffer,
+                faabric_datatype_t* dataType,
+                int count,
+                MPI_Status* status,
+                MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
+
+    // Abstraction of the bulk of the recv work, shared among various functions
+    void doRecv(std::unique_ptr<MpiMessage> m,
                 uint8_t* buffer,
                 faabric_datatype_t* dataType,
                 int count,
