@@ -2,9 +2,9 @@
 
 #include <faabric/executor/ExecutorContext.h>
 #include <faabric/mpi/MpiContext.h>
+#include <faabric/mpi/MpiMessage.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/mpi.h>
-#include <faabric/mpi/mpi.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
@@ -126,7 +126,7 @@ int MPI_Send(const void* buf,
                              (uint8_t*)buf,
                              datatype,
                              count,
-                             MPIMessage::NORMAL);
+                             MpiMessageType::NORMAL);
 
     return MPI_SUCCESS;
 }
@@ -159,7 +159,7 @@ int MPI_Recv(void* buf,
                              datatype,
                              count,
                              status,
-                             MPIMessage::NORMAL);
+                             MpiMessageType::NORMAL);
 
     return MPI_SUCCESS;
 }
@@ -245,7 +245,7 @@ int MPI_Bcast(void* buffer,
 
     int rank = executingContext.getRank();
     world.broadcast(
-      root, rank, (uint8_t*)buffer, datatype, count, MPIMessage::BROADCAST);
+      root, rank, (uint8_t*)buffer, datatype, count, MpiMessageType::BROADCAST);
     return MPI_SUCCESS;
 }
 
