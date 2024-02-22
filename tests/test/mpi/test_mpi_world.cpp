@@ -212,23 +212,22 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test local barrier", "[mpi]")
     world.destroy();
 }
 
-void checkMessage(MPIMessage& actualMessage,
+void checkMessage(MpiMessage& actualMessage,
                   int worldId,
                   int senderRank,
                   int destRank,
                   const std::vector<int>& data)
 {
     // Check the message contents
-    REQUIRE(actualMessage.worldid() == worldId);
-    REQUIRE(actualMessage.count() == data.size());
-    REQUIRE(actualMessage.destination() == destRank);
-    REQUIRE(actualMessage.sender() == senderRank);
-    REQUIRE(actualMessage.type() == FAABRIC_INT);
+    REQUIRE(actualMessage.worldId == worldId);
+    REQUIRE(actualMessage.count == data.size());
+    REQUIRE(actualMessage.recvRank == destRank);
+    REQUIRE(actualMessage.sendRank == senderRank);
+    REQUIRE(actualMessage.typeSize == FAABRIC_INT);
 
     // Check data
-    const auto* rawInts =
-      reinterpret_cast<const int*>(actualMessage.buffer().c_str());
-    size_t nInts = actualMessage.buffer().size() / sizeof(int);
+    const auto* rawInts = reinterpret_cast<const int*>(actualMessage.buffer);
+    size_t nInts = payloadSize(actualMessage) / sizeof(int);
     std::vector<int> actualData(rawInts, rawInts + nInts);
     REQUIRE(actualData == data);
 }
@@ -396,10 +395,10 @@ TEST_CASE_METHOD(MpiTestFixture, "Test send/recv message with no data", "[mpi]")
     SECTION("Check on queue")
     {
         // Check message content
-        MPIMessage actualMessage =
-          *(world.getLocalQueue(rankA1, rankA2)->dequeue());
-        REQUIRE(actualMessage.count() == 0);
-        REQUIRE(actualMessage.type() == FAABRIC_INT);
+        MpiMessage actualMessage =
+          world.getLocalQueue(rankA1, rankA2)->dequeue();
+        REQUIRE(actualMessage.count == 0);
+        REQUIRE(actualMessage.typeSize == FAABRIC_INT);
     }
 
     SECTION("Check receiving with null ptr")
@@ -502,7 +501,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
                         BYTES(messageData.data()),
                         MPI_INT,
                         messageData.size(),
-                        MPIMessage::BROADCAST);
+                        MpiMessageType::BROADCAST);
 
         // Recv on all non-root ranks
         for (int rank = 0; rank < worldSize; rank++) {
@@ -515,7 +514,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
                             BYTES(actual.data()),
                             MPI_INT,
                             3,
-                            MPIMessage::BROADCAST);
+                            MpiMessageType::BROADCAST);
             REQUIRE(actual == messageData);
         }
     }
