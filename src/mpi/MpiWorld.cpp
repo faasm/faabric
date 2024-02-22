@@ -8,6 +8,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
 
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
@@ -526,13 +527,12 @@ void MpiWorld::send(int sendRank,
 
     // Dispatch the message locally or globally
     if (isLocal) {
-        void* bufferPtr = malloc(count * dataType->size);
-        std::memcpy(bufferPtr, buffer, count* dataType->size);
-
         if (mustSendData) {
+            void* bufferPtr = faabric::util::malloc(count * dataType->size);
+            std::memcpy(bufferPtr, buffer, count* dataType->size);
+
             m->set_bufferptr((uint64_t)bufferPtr);
         }
-        SPDLOG_INFO("Send (Ptr: {} - Size: {} - Data as int: {})", m->bufferptr(), count * dataType->size, ((int*)m->bufferptr())[0]);
 
         SPDLOG_TRACE(
           "MPI - send {} -> {} ({})", sendRank, recvRank, messageType);
@@ -611,9 +611,8 @@ void MpiWorld::doRecv(std::shared_ptr<MPIMessage>& m,
 
     if (m->count() > 0) {
         if (isLocal) {
-            SPDLOG_INFO("Recv (Ptr: {} - Size: {} - Data as int: {})", m->bufferptr(), count * dataType->size, ((int*)m->bufferptr())[0]);
             std::memcpy(buffer, (void*)m->bufferptr(), count * dataType->size);
-            free((void*)m->bufferptr());
+            faabric::util::free((void*)m->bufferptr());
         } else {
             // TODO - avoid copy here
             std::move(m->buffer().begin(), m->buffer().end(), buffer);
