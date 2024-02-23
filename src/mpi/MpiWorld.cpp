@@ -518,15 +518,22 @@ void MpiWorld::send(int sendRank,
         void* bufferPtr = malloc(count * dataType->size);
         std::memcpy(bufferPtr, buffer, count* dataType->size);
 
+        /*
         auto msg = std::make_unique<MpiMessage>(MpiMessage{
             .id = msgId, .worldId = id, .sendRank = sendRank,
             .recvRank = recvRank, .type = dataType->id, .count = count,
             .buffer = bufferPtr
         });
+        */
+        MpiMessage msg = {
+            .id = msgId, .worldId = id, .sendRank = sendRank,
+            .recvRank = recvRank, .type = dataType->id, .count = count,
+            .buffer = bufferPtr
+        };
 
         SPDLOG_TRACE(
           "MPI - send {} -> {} ({})", sendRank, recvRank, messageType);
-        getLocalQueue(sendRank, recvRank)->enqueue(std::move(msg));
+        getLocalQueue(sendRank, recvRank)->enqueue(msg);
     } else {
         // Create the message
         auto m = std::make_shared<MPIMessage>();
@@ -586,7 +593,10 @@ void MpiWorld::recv(int sendRank,
     bool isLocal = getHostForRank(sendRank) == getHostForRank(recvRank);
 
     if (isLocal) {
-        std::unique_ptr<MpiMessage> m = getLocalQueue(sendRank, recvRank)->dequeue();
+        MpiMessage m = getLocalQueue(sendRank, recvRank)->dequeue();
+
+        // Do the processing
+        doRecv(m, buffer, dataType, count, status, messageType);
     } else {
         // Recv message from underlying transport
         std::shared_ptr<MPIMessage> m = recvBatchReturnLast(sendRank, recvRank);
@@ -596,7 +606,7 @@ void MpiWorld::recv(int sendRank,
     }
 }
 
-void MpiWorld::doRecv(std::unique_ptr<MpiMessage> m,
+void MpiWorld::doRecv(MpiMessage& m,
                       uint8_t* buffer,
                       faabric_datatype_t* dataType,
                       int count,
@@ -605,28 +615,28 @@ void MpiWorld::doRecv(std::unique_ptr<MpiMessage> m,
 {
     // Assert message integrity
     // Note - this checks won't happen in Release builds
-    if (m->type != messageType) {
+    if (m.type != messageType) {
         SPDLOG_ERROR("Different message types (got: {}, expected: {})",
-                     m->type,
+                     m.type,
                      messageType);
     }
-    assert(m->type == messageType);
-    assert(m->count <= count);
+    assert(m.type == messageType);
+    assert(m.count <= count);
 
     // TODO - avoid copy here
     // Copy message data
-    if (m->count > 0) {
-        std::memcpy(buffer, (void*)m->buffer, count * dataType->size);
-        free((void*)m->buffer);
+    if (m.count > 0) {
+        std::memcpy(buffer, (void*)m.buffer, count * dataType->size);
+        free((void*)m.buffer);
     }
 
     // Set status values if required
     if (status != nullptr) {
-        status->MPI_SOURCE = m->sendRank;
+        status->MPI_SOURCE = m.sendRank;
         status->MPI_ERROR = MPI_SUCCESS;
 
         // Take the message size here as the receive count may be larger
-        status->bytesSize = m->count * dataType->size;
+        status->bytesSize = m.count * dataType->size;
 
         // TODO - thread through tag
         status->MPI_TAG = -1;

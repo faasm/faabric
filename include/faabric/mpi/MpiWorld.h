@@ -38,7 +38,7 @@ struct MpiMessage {
 // as the broker already has mocking capabilities
 std::vector<std::shared_ptr<MPIMessage>> getMpiMockedMessages(int sendRank);
 
-typedef faabric::util::Queue<std::unique_ptr<MpiMessage>> InMemoryMpiQueue;
+typedef faabric::util::SpinLockQueue<MpiMessage> InMemoryMpiQueue;
 
 class MpiWorld
 {
@@ -275,7 +275,7 @@ class MpiWorld
                 MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
 
     // Abstraction of the bulk of the recv work, shared among various functions
-    void doRecv(std::unique_ptr<MpiMessage> m,
+    void doRecv(MpiMessage& m,
                 uint8_t* buffer,
                 faabric_datatype_t* dataType,
                 int count,
