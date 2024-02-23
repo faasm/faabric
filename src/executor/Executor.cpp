@@ -183,7 +183,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // one-to-one with thread pool threads. Only once the pool is exhausted
     // do we start overloading
     for (int msgIdx : msgIdxs) {
-        const faabric::Message& msg = req->messages().at(msgIdx);
+        [[maybe_unused]] const faabric::Message& msg =
+          req->messages().at(msgIdx);
 
         if (availablePoolThreads.empty()) {
             SPDLOG_ERROR("No available thread pool threads (size: {})",

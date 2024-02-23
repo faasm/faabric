@@ -194,6 +194,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test local barrier", "[mpi]")
 
         world.barrier(rankA1);
         assert(sendData == recvData);
+        UNUSED(recvData);
     });
 
     world.recv(rankA1,

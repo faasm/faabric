@@ -467,7 +467,8 @@ void PointToPointBroker::sendMappingsFromSchedulingDecision(
         msg.set_appid(decision.appId);
         msg.set_groupid(decision.groupId);
 
-        std::set<int>& indexes = groupIdIdxsMap[decision.groupId];
+        [[maybe_unused]] std::set<int>& indexes =
+          groupIdIdxsMap[decision.groupId];
 
         for (int i = 0; i < decision.nFunctions; i++) {
             auto* mapping = msg.add_mappings();

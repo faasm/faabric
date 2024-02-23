@@ -31,7 +31,8 @@ int handleSimpleThread(tests::DistTestExecutor* exec,
     // Return a distinctive value
     int returnValue = msg.id() / 2;
 
-    const faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    [[maybe_unused]] const faabric::util::SystemConfig& conf =
+      faabric::util::getSystemConfig();
     SPDLOG_DEBUG("Thread {} executed on host {}. Returning {}",
                  msg.id(),
                  conf.endpointHost,

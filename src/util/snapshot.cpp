@@ -421,7 +421,7 @@ void SnapshotData::applyDiff(const SnapshotDiff& diff)
         return;
     }
 
-    uint8_t* copyTarget = validatedOffsetPtr(diff.getOffset());
+    [[maybe_unused]] uint8_t* copyTarget = validatedOffsetPtr(diff.getOffset());
     switch (diff.getDataType()) {
         case (faabric::util::SnapshotDataType::Int): {
             int32_t finalValue =
@@ -762,7 +762,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     bool changed = false;
     switch (dataType) {
         case (SnapshotDataType::Int): {
-            int preUpdate = unalignedRead<int>(updated);
+            [[maybe_unused]] int preUpdate = unalignedRead<int>(updated);
             changed = calculateDiffValue<int>(original, updated, operation);
 
             SPDLOG_TRACE("Calculated int {} merge: {} {} -> {}",
@@ -773,7 +773,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
             break;
         }
         case (SnapshotDataType::Long): {
-            long preUpdate = unalignedRead<long>(updated);
+            [[maybe_unused]] long preUpdate = unalignedRead<long>(updated);
             changed = calculateDiffValue<long>(original, updated, operation);
 
             SPDLOG_TRACE("Calculated long {} merge: {} {} -> {}",
@@ -784,7 +784,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
             break;
         }
         case (SnapshotDataType::Float): {
-            float preUpdate = unalignedRead<float>(updated);
+            [[maybe_unused]] float preUpdate = unalignedRead<float>(updated);
             changed = calculateDiffValue<float>(original, updated, operation);
 
             SPDLOG_TRACE("Calculated float {} merge: {} {} -> {}",
@@ -795,7 +795,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
             break;
         }
         case (SnapshotDataType::Double): {
-            double preUpdate = unalignedRead<double>(updated);
+            [[maybe_unused]] double preUpdate = unalignedRead<double>(updated);
             changed = calculateDiffValue<double>(original, updated, operation);
 
             SPDLOG_TRACE("Calculated double {} merge: {} {} -> {}",
