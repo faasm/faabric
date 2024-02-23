@@ -642,7 +642,8 @@ int MPI_Isend(const void* buf,
     SPDLOG_TRACE("MPI - MPI_Isend {} -> {}", executingContext.getRank(), dest);
 
     MpiWorld& world = getExecutingWorld();
-    (*request) = (faabric_request_t*)faabric::util::malloc(sizeof(faabric_request_t));
+    (*request) =
+      (faabric_request_t*)faabric::util::malloc(sizeof(faabric_request_t));
     int requestId = world.isend(
       executingContext.getRank(), dest, (uint8_t*)buf, datatype, count);
     (*request)->id = requestId;
@@ -662,7 +663,8 @@ int MPI_Irecv(void* buf,
       "MPI - MPI_Irecv {} <- {}", executingContext.getRank(), source);
 
     MpiWorld& world = getExecutingWorld();
-    (*request) = (faabric_request_t*)faabric::util::malloc(sizeof(faabric_request_t));
+    (*request) =
+      (faabric_request_t*)faabric::util::malloc(sizeof(faabric_request_t));
     int requestId = world.irecv(
       source, executingContext.getRank(), (uint8_t*)buf, datatype, count);
     (*request)->id = requestId;

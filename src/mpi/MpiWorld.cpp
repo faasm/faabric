@@ -529,7 +529,7 @@ void MpiWorld::send(int sendRank,
     if (isLocal) {
         if (mustSendData) {
             void* bufferPtr = faabric::util::malloc(count * dataType->size);
-            std::memcpy(bufferPtr, buffer, count* dataType->size);
+            std::memcpy(bufferPtr, buffer, count * dataType->size);
 
             m->set_bufferptr((uint64_t)bufferPtr);
         }

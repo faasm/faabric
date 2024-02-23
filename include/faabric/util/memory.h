@@ -13,9 +13,15 @@ namespace faabric::util {
 // We provide our own namespaced definitions for malloc/free to control the
 // memory allocator we use. For the moment, we just defer to off-the-shelve
 // malloc implementations.
-inline void* malloc(std::size_t size) { return std::malloc(size); }
+inline void* malloc(std::size_t size)
+{
+    return std::malloc(size);
+}
 
-inline void free(void* ptr) { return std::free(ptr); }
+inline void free(void* ptr)
+{
+    return std::free(ptr);
+}
 
 /*
  * Merges all the dirty page flags from the list of vectors into the first
