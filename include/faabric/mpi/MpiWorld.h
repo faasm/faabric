@@ -26,9 +26,9 @@ namespace faabric::mpi {
 // -----------------------------------
 // MPITOPTP - mocking at the MPI level won't be needed when using the PTP broker
 // as the broker already has mocking capabilities
-std::vector<std::shared_ptr<MPIMessage>> getMpiMockedMessages(int sendRank);
+std::vector<MPIMessage> getMpiMockedMessages(int sendRank);
 
-typedef faabric::util::FixedCapacityQueue<std::shared_ptr<MPIMessage>>
+typedef faabric::util::FixedCapacityQueue<std::unique_ptr<MPIMessage>>
   InMemoryMpiQueue;
 
 class MpiWorld
@@ -240,16 +240,16 @@ class MpiWorld
     void sendRemoteMpiMessage(std::string dstHost,
                               int sendRank,
                               int recvRank,
-                              const std::shared_ptr<MPIMessage>& msg);
+                              const std::unique_ptr<MPIMessage>& msg);
 
-    std::shared_ptr<MPIMessage> recvRemoteMpiMessage(int sendRank,
+    std::unique_ptr<MPIMessage> recvRemoteMpiMessage(int sendRank,
                                                      int recvRank);
 
     // Support for asyncrhonous communications
     std::shared_ptr<MpiMessageBuffer> getUnackedMessageBuffer(int sendRank,
                                                               int recvRank);
 
-    std::shared_ptr<MPIMessage> recvBatchReturnLast(int sendRank,
+    std::unique_ptr<MPIMessage> recvBatchReturnLast(int sendRank,
                                                     int recvRank,
                                                     int batchSize = 0);
 
@@ -258,7 +258,7 @@ class MpiWorld
     void checkRanksRange(int sendRank, int recvRank);
 
     // Abstraction of the bulk of the recv work, shared among various functions
-    void doRecv(std::shared_ptr<MPIMessage>& m,
+    void doRecv(std::unique_ptr<MPIMessage> m,
                 uint8_t* buffer,
                 faabric_datatype_t* dataType,
                 int count,

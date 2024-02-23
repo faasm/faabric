@@ -33,10 +33,9 @@ static std::mutex mockMutex;
 
 // The identifier in this map is the sending rank. For the receiver's rank
 // we can inspect the MPIMessage object
-static std::map<int, std::vector<std::shared_ptr<MPIMessage>>>
-  mpiMockedMessages;
+static std::map<int, std::vector<MPIMessage>> mpiMockedMessages;
 
-std::vector<std::shared_ptr<MPIMessage>> getMpiMockedMessages(int sendRank)
+std::vector<MPIMessage> getMpiMockedMessages(int sendRank)
 {
     faabric::util::UniqueLock lock(mockMutex);
     return mpiMockedMessages[sendRank];
@@ -52,7 +51,7 @@ MpiWorld::MpiWorld()
 void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
                                     int sendRank,
                                     int recvRank,
-                                    const std::shared_ptr<MPIMessage>& msg)
+                                    const std::unique_ptr<MPIMessage>& msg)
 {
     std::string serialisedBuffer;
     if (!msg->SerializeToString(&serialisedBuffer)) {
@@ -78,7 +77,7 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
     }
 }
 
-std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
+std::unique_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
                                                            int recvRank)
 {
     std::vector<uint8_t> msg;
@@ -95,7 +94,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
         throw e;
     }
     PARSE_MSG(MPIMessage, msg.data(), msg.size());
-    return std::make_shared<MPIMessage>(parsedMsg);
+    return std::make_unique<MPIMessage>(parsedMsg);
 }
 
 std::shared_ptr<MpiMessageBuffer> MpiWorld::getUnackedMessageBuffer(
@@ -478,7 +477,7 @@ int MpiWorld::irecv(int sendRank,
     assert(!pendingMsg.isAcknowledged());
 
     auto umb = getUnackedMessageBuffer(sendRank, recvRank);
-    umb->addMessage(pendingMsg);
+    umb->addMessage(std::move(pendingMsg));
 
     return requestId;
 }
@@ -506,7 +505,7 @@ void MpiWorld::send(int sendRank,
     int msgId = (localMsgCount + 1) % INT32_MAX;
 
     // Create the message
-    auto m = std::make_shared<MPIMessage>();
+    auto m = std::make_unique<MPIMessage>();
     m->set_id(msgId);
     m->set_worldid(id);
     m->set_sender(sendRank);
@@ -522,7 +521,7 @@ void MpiWorld::send(int sendRank,
 
     // Mock the message sending in tests
     if (faabric::util::isMockMode()) {
-        mpiMockedMessages[sendRank].push_back(m);
+        mpiMockedMessages[sendRank].push_back(*m);
         return;
     }
 
@@ -534,7 +533,7 @@ void MpiWorld::send(int sendRank,
     } else {
         SPDLOG_TRACE(
           "MPI - send remote {} -> {} ({})", sendRank, recvRank, messageType);
-        sendRemoteMpiMessage(otherHost, sendRank, recvRank, m);
+        sendRemoteMpiMessage(otherHost, sendRank, recvRank, std::move(m));
     }
 
     /* 02/05/2022 - The following bit of code fails randomly with a protobuf
@@ -573,13 +572,13 @@ void MpiWorld::recv(int sendRank,
     }
 
     // Recv message from underlying transport
-    std::shared_ptr<MPIMessage> m = recvBatchReturnLast(sendRank, recvRank);
+    auto m = recvBatchReturnLast(sendRank, recvRank);
 
     // Do the processing
-    doRecv(m, buffer, dataType, count, status, messageType);
+    doRecv(std::move(m), buffer, dataType, count, status, messageType);
 }
 
-void MpiWorld::doRecv(std::shared_ptr<MPIMessage>& m,
+void MpiWorld::doRecv(std::unique_ptr<MPIMessage> m,
                       uint8_t* buffer,
                       faabric_datatype_t* dataType,
                       int count,
@@ -1012,10 +1011,10 @@ void MpiWorld::awaitAsyncRequest(int requestId)
     std::list<MpiMessageBuffer::PendingAsyncMpiMessage>::iterator msgIt =
       umb->getRequestPendingMsg(requestId);
 
-    std::shared_ptr<MPIMessage> m;
+    std::unique_ptr<MPIMessage> m;
     if (msgIt->msg != nullptr) {
         // This id has already been acknowledged by a recv call, so do the recv
-        m = msgIt->msg;
+        m = std::move(msgIt->msg);
     } else {
         // We need to acknowledge all messages not acknowledged from the
         // begining until us
@@ -1023,7 +1022,7 @@ void MpiWorld::awaitAsyncRequest(int requestId)
           sendRank, recvRank, umb->getTotalUnackedMessagesUntil(msgIt) + 1);
     }
 
-    doRecv(m,
+    doRecv(std::move(m),
            msgIt->buffer,
            msgIt->dataType,
            msgIt->count,
@@ -1395,15 +1394,18 @@ void MpiWorld::allToAll(int rank,
 // queues.
 void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
+    throw std::runtime_error("MPI probe is not supported!");
+    /*
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
-    // 30/12/21 - Peek will throw a runtime error
+
     std::shared_ptr<MPIMessage> m = *(queue->peek());
 
     faabric_datatype_t* datatype = getFaabricDatatypeFromId(m->type());
     status->bytesSize = m->count() * datatype->size;
     status->MPI_ERROR = 0;
     status->MPI_SOURCE = m->sender();
+    */
 }
 
 void MpiWorld::barrier(int thisRank)
@@ -1456,7 +1458,7 @@ void MpiWorld::initLocalQueues()
     }
 }
 
-std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
+std::unique_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
                                                           int recvRank,
                                                           int batchSize)
 {
@@ -1478,7 +1480,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
     // Recv message: first we receive all messages for which there is an id
     // in the unacknowleged buffer but no msg. Note that these messages
     // (batchSize - 1) were `irecv`-ed before ours.
-    std::shared_ptr<MPIMessage> ourMsg;
+    std::unique_ptr<MPIMessage> ourMsg;
     auto msgIt = umb->getFirstNullMsg();
     if (isLocal) {
         // First receive messages that happened before us
@@ -1489,7 +1491,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
 
                 // Put the unacked message in the UMB
                 assert(!msgIt->isAcknowledged());
-                msgIt->acknowledge(pendingMsg);
+                msgIt->acknowledge(std::move(pendingMsg));
                 msgIt++;
             } catch (faabric::util::QueueTimeoutException& e) {
                 SPDLOG_ERROR(
@@ -1525,7 +1527,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
 
             // Put the unacked message in the UMB
             assert(!msgIt->isAcknowledged());
-            msgIt->acknowledge(pendingMsg);
+            msgIt->acknowledge(std::move(pendingMsg));
             msgIt++;
         }
 

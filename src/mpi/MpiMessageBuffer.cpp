@@ -31,7 +31,7 @@ MpiMessageIterator MpiMessageBuffer::getRequestPendingMsg(int requestId)
     MpiMessageIterator msgIt =
       std::find_if(pendingMsgs.begin(),
                    pendingMsgs.end(),
-                   [requestId](PendingAsyncMpiMessage pendingMsg) {
+                   [requestId](PendingAsyncMpiMessage& pendingMsg) {
                        return pendingMsg.requestId == requestId;
                    });
 
@@ -48,7 +48,7 @@ MpiMessageIterator MpiMessageBuffer::getFirstNullMsgUntil(
   const MpiMessageIterator& msgItEnd)
 {
     return std::find_if(
-      pendingMsgs.begin(), msgItEnd, [](PendingAsyncMpiMessage pendingMsg) {
+      pendingMsgs.begin(), msgItEnd, [](PendingAsyncMpiMessage& pendingMsg) {
           return pendingMsg.msg == nullptr;
       });
 }

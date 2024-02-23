@@ -21,12 +21,11 @@ using namespace faabric::mpi;
 using namespace faabric::scheduler;
 
 namespace tests {
-std::set<int> getReceiversFromMessages(
-  std::vector<std::shared_ptr<MPIMessage>> msgs)
+std::set<int> getReceiversFromMessages(std::vector<MPIMessage> msgs)
 {
     std::set<int> receivers;
     for (const auto& msg : msgs) {
-        receivers.insert(msg->destination());
+        receivers.insert(msg.destination());
     }
 
     return receivers;
@@ -219,12 +218,11 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     thisWorld.destroy();
 }
 
-std::set<int> getMsgCountsFromMessages(
-  std::vector<std::shared_ptr<MPIMessage>> msgs)
+std::set<int> getMsgCountsFromMessages(std::vector<MPIMessage> msgs)
 {
     std::set<int> counts;
     for (const auto& msg : msgs) {
-        counts.insert(msg->count());
+        counts.insert(msg.count());
     }
 
     return counts;

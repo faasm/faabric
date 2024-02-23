@@ -25,7 +25,7 @@ class MpiMessageBuffer
     {
       public:
         int requestId = -1;
-        std::shared_ptr<MPIMessage> msg = nullptr;
+        std::unique_ptr<MPIMessage> msg = nullptr;
         int sendRank = -1;
         int recvRank = -1;
         uint8_t* buffer = nullptr;
@@ -33,9 +33,12 @@ class MpiMessageBuffer
         int count = -1;
         MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL;
 
-        bool isAcknowledged() { return msg != nullptr; }
+        bool isAcknowledged() const { return msg != nullptr; }
 
-        void acknowledge(std::shared_ptr<MPIMessage> msgIn) { msg = msgIn; }
+        void acknowledge(std::unique_ptr<MPIMessage> msgIn)
+        {
+            msg = std::move(msgIn);
+        }
     };
 
     /* Interface to query the buffer size */
