@@ -38,8 +38,7 @@ struct MpiMessage {
 // as the broker already has mocking capabilities
 std::vector<std::shared_ptr<MPIMessage>> getMpiMockedMessages(int sendRank);
 
-typedef faabric::util::FixedCapacityQueue<std::unique_ptr<MpiMessage>>
-  InMemoryMpiQueue;
+typedef faabric::util::Queue<std::unique_ptr<MpiMessage>> InMemoryMpiQueue;
 
 class MpiWorld
 {

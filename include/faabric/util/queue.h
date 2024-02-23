@@ -21,10 +21,22 @@ class QueueTimeoutException : public faabric::util::FaabricException
 };
 
 template<typename T>
-class Queue
+class BaseQueue
+{
+    virtual void enqueue(T value) = 0;
+
+    virtual T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS) = 0;
+
+    virtual void drain() = 0;
+
+    virtual void reset() = 0;
+};
+
+template<typename T>
+class Queue : public BaseQueue<T>
 {
   public:
-    void enqueue(T value)
+    void enqueue(T value) override
     {
         UniqueLock lock(mx);
 
@@ -46,7 +58,7 @@ class Queue
         }
     }
 
-    T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS) override
     {
         UniqueLock lock(mx);
 
@@ -110,7 +122,7 @@ class Queue
         }
     }
 
-    void drain()
+    void drain() override
     {
         UniqueLock lock(mx);
 
@@ -125,7 +137,7 @@ class Queue
         return mq.size();
     }
 
-    void reset()
+    void reset() override
     {
         UniqueLock lock(mx);
 
@@ -144,7 +156,7 @@ class Queue
 // consumer queue
 // https://github.com/cameron314/readerwriterqueue
 template<typename T>
-class FixedCapacityQueue
+class FixedCapacityQueue : public BaseQueue<T>
 {
   public:
     FixedCapacityQueue(int capacity)
@@ -153,7 +165,7 @@ class FixedCapacityQueue
     FixedCapacityQueue()
       : mq(DEFAULT_QUEUE_SIZE){};
 
-    void enqueue(T value, long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    void enqueue(T value, long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS) override
     {
         if (timeoutMs <= 0) {
             SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
@@ -169,7 +181,7 @@ class FixedCapacityQueue
 
     void dequeueIfPresent(T* res) { mq.try_dequeue(*res); }
 
-    T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS) override
     {
         if (timeoutMs <= 0) {
             SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
@@ -190,7 +202,7 @@ class FixedCapacityQueue
         throw std::runtime_error("Peek not implemented");
     }
 
-    void drain(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    void drain(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS) override
     {
         T value;
         bool success;
@@ -204,7 +216,7 @@ class FixedCapacityQueue
 
     long size() { return mq.size_approx(); }
 
-    void reset()
+    void reset() override
     {
         moodycamel::BlockingReaderWriterCircularBuffer<T> empty(
           mq.max_capacity());
