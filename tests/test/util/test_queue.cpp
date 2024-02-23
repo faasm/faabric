@@ -214,7 +214,7 @@ TEST_CASE("Stress test fixed capacity queue", "[util]")
             startLatch->wait();
 
             for (int j = 0; j < numMessages; j++) {
-                int result = queues.at(i)->dequeue();
+                [[maybe_unused]] int result = queues.at(i)->dequeue();
                 assert(result == i * j);
             }
         });

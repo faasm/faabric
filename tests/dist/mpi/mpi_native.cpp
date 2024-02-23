@@ -72,7 +72,7 @@ int MPI_Init(int* argc, char*** argv)
     }
 
     // Initialise MPI-specific logging
-    int thisRank = executingContext.getRank();
+    [[maybe_unused]] int thisRank = executingContext.getRank();
     SPDLOG_DEBUG(
       "Initialised world (id: {}) for rank: {}", call->mpiworldid(), thisRank);
 
@@ -98,7 +98,7 @@ int MPI_Comm_size(MPI_Comm comm, int* size)
 
 int MPI_Finalize()
 {
-    int rank = executingContext.getRank();
+    [[maybe_unused]] int rank = executingContext.getRank();
     SPDLOG_DEBUG("MPI - MPI_Finalize (rank: {})", rank);
 
     return terminateMpi();
