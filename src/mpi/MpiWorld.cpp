@@ -1,6 +1,6 @@
 #include <faabric/batch-scheduler/SchedulingDecision.h>
+#include <faabric/mpi/MpiMessage.h>
 #include <faabric/mpi/MpiWorld.h>
-#include <faabric/mpi/mpi.pb.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/ExecGraph.h>
@@ -34,10 +34,9 @@ static std::mutex mockMutex;
 
 // The identifier in this map is the sending rank. For the receiver's rank
 // we can inspect the MPIMessage object
-static std::map<int, std::vector<std::shared_ptr<MPIMessage>>>
-  mpiMockedMessages;
+static std::map<int, std::vector<MpiMessage>> mpiMockedMessages;
 
-std::vector<std::shared_ptr<MPIMessage>> getMpiMockedMessages(int sendRank)
+std::vector<MpiMessage> getMpiMockedMessages(int sendRank)
 {
     faabric::util::UniqueLock lock(mockMutex);
     return mpiMockedMessages[sendRank];
@@ -53,12 +52,12 @@ MpiWorld::MpiWorld()
 void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
                                     int sendRank,
                                     int recvRank,
-                                    const std::shared_ptr<MPIMessage>& msg)
+                                    const MpiMessage& msg)
 {
-    std::string serialisedBuffer;
-    if (!msg->SerializeToString(&serialisedBuffer)) {
-        throw std::runtime_error("Error serialising message");
-    }
+    // Serialise
+    std::vector<uint8_t> serialisedBuffer(msgSize(msg));
+    serializeMpiMsg(serialisedBuffer, msg);
+
     try {
         broker.sendMessage(
           thisRankMsg->groupid(),
@@ -79,8 +78,7 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
     }
 }
 
-std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
-                                                           int recvRank)
+MpiMessage MpiWorld::recvRemoteMpiMessage(int sendRank, int recvRank)
 {
     std::vector<uint8_t> msg;
     try {
@@ -95,8 +93,12 @@ std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
                      recvRank);
         throw e;
     }
-    PARSE_MSG(MPIMessage, msg.data(), msg.size());
-    return std::make_shared<MPIMessage>(parsedMsg);
+
+    // TODO(mpi-opt): make sure we minimze copies here
+    MpiMessage parsedMsg;
+    parseMpiMsg(msg, &parsedMsg);
+
+    return parsedMsg;
 }
 
 std::shared_ptr<MpiMessageBuffer> MpiWorld::getUnackedMessageBuffer(
@@ -447,7 +449,7 @@ int MpiWorld::isend(int sendRank,
                     const uint8_t* buffer,
                     faabric_datatype_t* dataType,
                     int count,
-                    MPIMessage::MPIMessageType messageType)
+                    MpiMessageType messageType)
 {
     int requestId = (int)faabric::util::generateGid();
     iSendRequests.insert(requestId);
@@ -462,7 +464,7 @@ int MpiWorld::irecv(int sendRank,
                     uint8_t* buffer,
                     faabric_datatype_t* dataType,
                     int count,
-                    MPIMessage::MPIMessageType messageType)
+                    MpiMessageType messageType)
 {
     int requestId = (int)faabric::util::generateGid();
     reqIdToRanks.try_emplace(requestId, sendRank, recvRank);
@@ -489,7 +491,7 @@ void MpiWorld::send(int sendRank,
                     const uint8_t* buffer,
                     faabric_datatype_t* dataType,
                     int count,
-                    MPIMessage::MPIMessageType messageType)
+                    MpiMessageType messageType)
 {
     // Sanity-check input parameters
     checkRanksRange(sendRank, recvRank);
@@ -506,45 +508,39 @@ void MpiWorld::send(int sendRank,
     // Generate a message ID
     int msgId = (localMsgCount + 1) % INT32_MAX;
 
-    // Create the message
-    auto m = std::make_shared<MPIMessage>();
-    m->set_id(msgId);
-    m->set_worldid(id);
-    m->set_sender(sendRank);
-    m->set_destination(recvRank);
-    m->set_type(dataType->id);
-    m->set_count(count);
-    m->set_messagetype(messageType);
-
-    // Set up message data
-    bool mustSendData = count > 0 && buffer != nullptr;
+    MpiMessage msg = { .id = msgId,
+                       .worldId = id,
+                       .sendRank = sendRank,
+                       .recvRank = recvRank,
+                       .typeSize = dataType->size,
+                       .count = count,
+                       .messageType = messageType,
+                       .buffer = (void*)buffer };
 
     // Mock the message sending in tests
     if (faabric::util::isMockMode()) {
-        mpiMockedMessages[sendRank].push_back(m);
+        mpiMockedMessages[sendRank].push_back(msg);
         return;
     }
 
     // Dispatch the message locally or globally
     if (isLocal) {
-        if (mustSendData) {
+        // Take control over the buffer data if we are gonna move it to
+        // the in-memory queues for local messaging
+        if (count > 0 && buffer != nullptr) {
             void* bufferPtr = faabric::util::malloc(count * dataType->size);
             std::memcpy(bufferPtr, buffer, count * dataType->size);
 
-            m->set_bufferptr((uint64_t)bufferPtr);
+            msg.buffer = bufferPtr;
         }
 
         SPDLOG_TRACE(
           "MPI - send {} -> {} ({})", sendRank, recvRank, messageType);
-        getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
+        getLocalQueue(sendRank, recvRank)->enqueue(msg);
     } else {
-        if (mustSendData) {
-            m->set_buffer(buffer, dataType->size * count);
-        }
-
         SPDLOG_TRACE(
           "MPI - send remote {} -> {} ({})", sendRank, recvRank, messageType);
-        sendRemoteMpiMessage(otherHost, sendRank, recvRank, m);
+        sendRemoteMpiMessage(otherHost, sendRank, recvRank, msg);
     }
 
     /* 02/05/2022 - The following bit of code fails randomly with a protobuf
@@ -572,7 +568,7 @@ void MpiWorld::recv(int sendRank,
                     faabric_datatype_t* dataType,
                     int count,
                     MPI_Status* status,
-                    MPIMessage::MPIMessageType messageType)
+                    MpiMessageType messageType)
 {
     // Sanity-check input parameters
     checkRanksRange(sendRank, recvRank);
@@ -582,54 +578,47 @@ void MpiWorld::recv(int sendRank,
         return;
     }
 
-    // Recv message from underlying transport
-    std::shared_ptr<MPIMessage> m = recvBatchReturnLast(sendRank, recvRank);
+    auto msg = recvBatchReturnLast(sendRank, recvRank);
 
-    // Do the processing
-    doRecv(m, buffer, dataType, count, status, messageType);
+    doRecv(std::move(msg), buffer, dataType, count, status, messageType);
 }
 
-void MpiWorld::doRecv(std::shared_ptr<MPIMessage>& m,
+void MpiWorld::doRecv(const MpiMessage& m,
                       uint8_t* buffer,
                       faabric_datatype_t* dataType,
                       int count,
                       MPI_Status* status,
-                      MPIMessage::MPIMessageType messageType)
+                      MpiMessageType messageType)
 {
     // Assert message integrity
     // Note - this checks won't happen in Release builds
-    if (m->messagetype() != messageType) {
+    if (m.messageType != messageType) {
         SPDLOG_ERROR("Different message types (got: {}, expected: {})",
-                     m->messagetype(),
+                     m.messageType,
                      messageType);
     }
-    assert(m->messagetype() == messageType);
-    assert(m->count() <= count);
+    assert(m.messageType == messageType);
+    assert(m.count <= count);
 
-    const std::string otherHost = getHostForRank(m->destination());
-    bool isLocal =
-      getHostForRank(m->destination()) == getHostForRank(m->sender());
+    // We must copy the data into the application-provided buffer
+    if (m.count > 0 && m.buffer != nullptr) {
+        // Make sure we do not overflow the recepient buffer
+        auto bytesToCopy =
+          std::min<size_t>(m.count * dataType->size, count * dataType->size);
+        std::memcpy(buffer, m.buffer, bytesToCopy);
 
-    if (m->count() > 0) {
-        if (isLocal) {
-            // Make sure we do not overflow the recepient buffer
-            auto bytesToCopy = std::min<size_t>(m->count() * dataType->size,
-                                                count * dataType->size);
-            std::memcpy(buffer, (void*)m->bufferptr(), bytesToCopy);
-            faabric::util::free((void*)m->bufferptr());
-        } else {
-            // TODO - avoid copy here
-            std::move(m->buffer().begin(), m->buffer().end(), buffer);
-        }
+        // This buffer has been malloc-ed either as part of a local `send`
+        // or as part of a remote `parseMpiMsg`
+        faabric::util::free((void*)m.buffer);
     }
 
     // Set status values if required
     if (status != nullptr) {
-        status->MPI_SOURCE = m->sender();
+        status->MPI_SOURCE = m.sendRank;
         status->MPI_ERROR = MPI_SUCCESS;
 
         // Take the message size here as the receive count may be larger
-        status->bytesSize = m->count() * dataType->size;
+        status->bytesSize = m.count * dataType->size;
 
         // TODO - thread through tag
         status->MPI_TAG = -1;
@@ -667,14 +656,14 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
                        recvBuffer,
                        recvDataType,
                        recvCount,
-                       MPIMessage::SENDRECV);
+                       MpiMessageType::SENDRECV);
     // Then send the message
     send(myRank,
          sendRank,
          sendBuffer,
          sendDataType,
          sendCount,
-         MPIMessage::SENDRECV);
+         MpiMessageType::SENDRECV);
     // And wait
     awaitAsyncRequest(recvId);
 }
@@ -684,7 +673,7 @@ void MpiWorld::broadcast(int sendRank,
                          uint8_t* buffer,
                          faabric_datatype_t* dataType,
                          int count,
-                         MPIMessage::MPIMessageType messageType)
+                         MpiMessageType messageType)
 {
     SPDLOG_TRACE("MPI - bcast {} -> {}", sendRank, recvRank);
 
@@ -795,7 +784,7 @@ void MpiWorld::scatter(int sendRank,
                      startPtr,
                      sendType,
                      sendCount,
-                     MPIMessage::SCATTER);
+                     MpiMessageType::SCATTER);
             }
         }
     } else {
@@ -806,7 +795,7 @@ void MpiWorld::scatter(int sendRank,
              recvType,
              recvCount,
              nullptr,
-             MPIMessage::SCATTER);
+             MpiMessageType::SCATTER);
     }
 }
 
@@ -880,7 +869,7 @@ void MpiWorld::gather(int sendRank,
                              recvType,
                              recvCount,
                              nullptr,
-                             MPIMessage::GATHER);
+                             MpiMessageType::GATHER);
                     }
                 }
             } else {
@@ -894,7 +883,7 @@ void MpiWorld::gather(int sendRank,
                      recvType,
                      recvCount * it.second.size(),
                      nullptr,
-                     MPIMessage::GATHER);
+                     MpiMessageType::GATHER);
 
                 // Copy each received chunk to its offset
                 for (int r = 0; r < it.second.size(); r++) {
@@ -924,7 +913,7 @@ void MpiWorld::gather(int sendRank,
                      sendType,
                      sendCount,
                      nullptr,
-                     MPIMessage::GATHER);
+                     MpiMessageType::GATHER);
             }
         }
 
@@ -934,7 +923,7 @@ void MpiWorld::gather(int sendRank,
              rankData.get(),
              sendType,
              sendCount * ranksForHost[thisHost].size(),
-             MPIMessage::GATHER);
+             MpiMessageType::GATHER);
 
     } else if (isLocalLeader && isLocalGather) {
         // Scenario 3
@@ -943,7 +932,7 @@ void MpiWorld::gather(int sendRank,
              sendBuffer + sendBufferOffset,
              sendType,
              sendCount,
-             MPIMessage::GATHER);
+             MpiMessageType::GATHER);
     } else if (!isLocalLeader && !isLocalGather) {
         // Scenario 4
         send(sendRank,
@@ -951,7 +940,7 @@ void MpiWorld::gather(int sendRank,
              sendBuffer + sendBufferOffset,
              sendType,
              sendCount,
-             MPIMessage::GATHER);
+             MpiMessageType::GATHER);
     } else if (!isLocalLeader && isLocalGather) {
         // Scenario 5
         send(sendRank,
@@ -959,7 +948,7 @@ void MpiWorld::gather(int sendRank,
              sendBuffer + sendBufferOffset,
              sendType,
              sendCount,
-             MPIMessage::GATHER);
+             MpiMessageType::GATHER);
     } else {
         SPDLOG_ERROR("Don't know how to gather rank's data.");
         SPDLOG_ERROR("- sendRank: {}\n- recvRank: {}\n- isGatherReceiver: "
@@ -1001,7 +990,7 @@ void MpiWorld::allGather(int rank,
 
     // Do a broadcast with a hard-coded root
     broadcast(
-      root, rank, recvBuffer, recvType, fullCount, MPIMessage::ALLGATHER);
+      root, rank, recvBuffer, recvType, fullCount, MpiMessageType::ALLGATHER);
 }
 
 void MpiWorld::awaitAsyncRequest(int requestId)
@@ -1033,10 +1022,10 @@ void MpiWorld::awaitAsyncRequest(int requestId)
     std::list<MpiMessageBuffer::PendingAsyncMpiMessage>::iterator msgIt =
       umb->getRequestPendingMsg(requestId);
 
-    std::shared_ptr<MPIMessage> m;
+    MpiMessage m;
     if (msgIt->msg != nullptr) {
         // This id has already been acknowledged by a recv call, so do the recv
-        m = msgIt->msg;
+        m = *(msgIt->msg);
     } else {
         // We need to acknowledge all messages not acknowledged from the
         // begining until us
@@ -1094,7 +1083,7 @@ void MpiWorld::reduce(int sendRank,
                          datatype,
                          count,
                          nullptr,
-                         MPIMessage::REDUCE);
+                         MpiMessageType::REDUCE);
 
                     op_reduce(
                       operation, datatype, count, rankData.get(), recvBuffer);
@@ -1108,7 +1097,7 @@ void MpiWorld::reduce(int sendRank,
                      datatype,
                      count,
                      nullptr,
-                     MPIMessage::REDUCE);
+                     MpiMessageType::REDUCE);
 
                 op_reduce(
                   operation, datatype, count, rankData.get(), recvBuffer);
@@ -1138,7 +1127,7 @@ void MpiWorld::reduce(int sendRank,
                      datatype,
                      count,
                      nullptr,
-                     MPIMessage::REDUCE);
+                     MpiMessageType::REDUCE);
 
                 op_reduce(operation,
                           datatype,
@@ -1152,7 +1141,7 @@ void MpiWorld::reduce(int sendRank,
                  sendBufferCopy.get(),
                  datatype,
                  count,
-                 MPIMessage::REDUCE);
+                 MpiMessageType::REDUCE);
         } else {
             // Send to the receiver rank
             send(sendRank,
@@ -1160,7 +1149,7 @@ void MpiWorld::reduce(int sendRank,
                  sendBuffer,
                  datatype,
                  count,
-                 MPIMessage::REDUCE);
+                 MpiMessageType::REDUCE);
         }
     } else {
         // If we are neither the receiver of the reduce nor a local leader, we
@@ -1175,7 +1164,7 @@ void MpiWorld::reduce(int sendRank,
              sendBuffer,
              datatype,
              count,
-             MPIMessage::REDUCE);
+             MpiMessageType::REDUCE);
     }
 }
 
@@ -1191,7 +1180,7 @@ void MpiWorld::allReduce(int rank,
     reduce(rank, 0, sendBuffer, recvBuffer, datatype, count, operation);
 
     // Second, 0 broadcasts the result to all ranks
-    broadcast(0, rank, recvBuffer, datatype, count, MPIMessage::ALLREDUCE);
+    broadcast(0, rank, recvBuffer, datatype, count, MpiMessageType::ALLREDUCE);
 }
 
 void MpiWorld::op_reduce(faabric_op_t* operation,
@@ -1350,14 +1339,14 @@ void MpiWorld::scan(int rank,
              datatype,
              count,
              nullptr,
-             MPIMessage::SCAN);
+             MpiMessageType::SCAN);
         // Reduce with our own value
         op_reduce(operation, datatype, count, currentAcc.get(), recvBuffer);
     }
 
     // If not the last process, send to the next one
     if (rank < this->size - 1) {
-        send(rank, rank + 1, recvBuffer, MPI_INT, count, MPIMessage::SCAN);
+        send(rank, rank + 1, recvBuffer, MPI_INT, count, MpiMessageType::SCAN);
     }
 }
 
@@ -1385,7 +1374,12 @@ void MpiWorld::allToAll(int rank,
               sendChunk, sendChunk + sendOffset, recvBuffer + rankOffset);
         } else {
             // Send message to other rank
-            send(rank, r, sendChunk, sendType, sendCount, MPIMessage::ALLTOALL);
+            send(rank,
+                 r,
+                 sendChunk,
+                 sendType,
+                 sendCount,
+                 MpiMessageType::ALLTOALL);
         }
     }
 
@@ -1405,7 +1399,7 @@ void MpiWorld::allToAll(int rank,
              recvType,
              recvCount,
              nullptr,
-             MPIMessage::ALLTOALL);
+             MpiMessageType::ALLTOALL);
     }
 }
 
@@ -1416,15 +1410,17 @@ void MpiWorld::allToAll(int rank,
 // queues.
 void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
+    throw std::runtime_error("MPI_Probe not supported!");
+    /*
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
-    // 30/12/21 - Peek will throw a runtime error
     std::shared_ptr<MPIMessage> m = *(queue->peek());
 
     faabric_datatype_t* datatype = getFaabricDatatypeFromId(m->type());
     status->bytesSize = m->count() * datatype->size;
     status->MPI_ERROR = 0;
     status->MPI_SOURCE = m->sender();
+    */
 }
 
 void MpiWorld::barrier(int thisRank)
@@ -1437,17 +1433,17 @@ void MpiWorld::barrier(int thisRank)
         // Await messages from all others
         for (int r = 1; r < size; r++) {
             MPI_Status s{};
-            recv(r, 0, nullptr, MPI_INT, 0, &s, MPIMessage::BARRIER_JOIN);
+            recv(r, 0, nullptr, MPI_INT, 0, &s, MpiMessageType::BARRIER_JOIN);
             SPDLOG_TRACE("MPI - recv barrier join {}", s.MPI_SOURCE);
         }
     } else {
         // Tell the root that we're waiting
         SPDLOG_TRACE("MPI - barrier join {}", thisRank);
-        send(thisRank, 0, nullptr, MPI_INT, 0, MPIMessage::BARRIER_JOIN);
+        send(thisRank, 0, nullptr, MPI_INT, 0, MpiMessageType::BARRIER_JOIN);
     }
 
     // Rank 0 broadcasts that the barrier is done (the others block here)
-    broadcast(0, thisRank, nullptr, MPI_INT, 0, MPIMessage::BARRIER_DONE);
+    broadcast(0, thisRank, nullptr, MPI_INT, 0, MpiMessageType::BARRIER_DONE);
     SPDLOG_TRACE("MPI - barrier done {}", thisRank);
 }
 
@@ -1477,9 +1473,10 @@ void MpiWorld::initLocalQueues()
     }
 }
 
-std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
-                                                          int recvRank,
-                                                          int batchSize)
+// TODO(mpi-opt): double-check that the fast (no-async) path is fast
+MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
+                                         int recvRank,
+                                         int batchSize)
 {
     std::shared_ptr<MpiMessageBuffer> umb =
       getUnackedMessageBuffer(sendRank, recvRank);
@@ -1499,7 +1496,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
     // Recv message: first we receive all messages for which there is an id
     // in the unacknowleged buffer but no msg. Note that these messages
     // (batchSize - 1) were `irecv`-ed before ours.
-    std::shared_ptr<MPIMessage> ourMsg;
+    MpiMessage ourMsg;
     auto msgIt = umb->getFirstNullMsg();
     if (isLocal) {
         // First receive messages that happened before us
@@ -1563,13 +1560,6 @@ int MpiWorld::getIndexForRanks(int sendRank, int recvRank) const
     int index = sendRank * size + recvRank;
     assert(index >= 0 && index < size * size);
     return index;
-}
-
-long MpiWorld::getLocalQueueSize(int sendRank, int recvRank)
-{
-    const std::shared_ptr<InMemoryMpiQueue>& queue =
-      getLocalQueue(sendRank, recvRank);
-    return queue->size();
 }
 
 double MpiWorld::getWTime()
