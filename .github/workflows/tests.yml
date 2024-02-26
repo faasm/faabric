@@ -119,12 +119,16 @@ jobs:
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
       - name: "Run tests"
         run: ./bin/inv_wrapper.sh tests
+        timeout-minutes: 10
 
   dist-tests:
     if: github.event.pull_request.draft == false
     needs: [conan-cache]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
+      # Make a unique per-job cluster name, so that different instances can
+      # run in parallel
+      COMPOSE_PROJECT_NAME: faabric-gha-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
       CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
     steps:
       # --- Code update ---
@@ -136,9 +140,13 @@ jobs:
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
         run: ./dist-test/run.sh
+        timeout-minutes: 10
       - name: "Print planner logs"
         if: always()
         run: docker compose logs planner
+      - name: "Chown all files to avoid docker-related root-owned files"
+        if: always()
+        run: sudo chown -R $(id -u):$(id -g) .
 
   examples:
     if: github.event.pull_request.draft == false
