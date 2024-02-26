@@ -612,7 +612,12 @@ void MpiWorld::doRecv(std::shared_ptr<MPIMessage>& m,
 
     if (m->count() > 0) {
         if (isLocal) {
-            std::memcpy(buffer, (void*)m->bufferptr(), count * dataType->size);
+            // Make sure we do not overflow the recepient buffer
+            auto bytesToCopy = std::min<size_t>(
+                m->count() * dataType->size,
+                count * dataType->size
+            );
+            std::memcpy(buffer, (void*)m->bufferptr(), bytesToCopy);
             faabric::util::free((void*)m->bufferptr());
         } else {
             // TODO - avoid copy here
