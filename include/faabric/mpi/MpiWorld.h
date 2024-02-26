@@ -26,7 +26,7 @@ namespace faabric::mpi {
 // as the broker already has mocking capabilities
 std::vector<MpiMessage> getMpiMockedMessages(int sendRank);
 
-typedef faabric::util::FixedCapacityQueue<MpiMessage> InMemoryMpiQueue;
+typedef faabric::util::SpinLockQueue<MpiMessage> InMemoryMpiQueue;
 
 class MpiWorld
 {
@@ -185,8 +185,6 @@ class MpiWorld
     void barrier(int thisRank);
 
     std::shared_ptr<InMemoryMpiQueue> getLocalQueue(int sendRank, int recvRank);
-
-    long getLocalQueueSize(int sendRank, int recvRank);
 
     void overrideHost(const std::string& newHost);
 
