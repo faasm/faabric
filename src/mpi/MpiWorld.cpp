@@ -607,7 +607,8 @@ void MpiWorld::doRecv(std::shared_ptr<MPIMessage>& m,
     assert(m->count() <= count);
 
     const std::string otherHost = getHostForRank(m->destination());
-    bool isLocal = otherHost == thisHost;
+    bool isLocal =
+      getHostForRank(m->destination()) == getHostForRank(m->sender());
 
     if (m->count() > 0) {
         if (isLocal) {

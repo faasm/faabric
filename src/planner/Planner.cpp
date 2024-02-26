@@ -240,7 +240,7 @@ bool Planner::registerHost(const Host& hostIn, bool overwrite)
 
 void Planner::removeHost(const Host& hostIn)
 {
-    SPDLOG_DEBUG("Planner received request to remove host {}", hostIn.ip());
+    SPDLOG_INFO("Planner received request to remove host {}", hostIn.ip());
 
     // We could acquire first a read lock to see if the host is in the host
     // map, and then acquire a write lock to remove it, but we don't do it
@@ -290,7 +290,10 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
 
     // Release the slot only once
     if (!state.hostMap.contains(msg->executedhost())) {
-        SPDLOG_ERROR("Host Map does not contain: {}", msg->executedhost());
+        SPDLOG_ERROR("Host Map does not contain: {}. We have:", msg->executedhost());
+        for (auto [ip, host] : state.hostMap) {
+            SPDLOG_ERROR("{} ({}/{})", ip, host->usedslots(), host->slots());
+        }
     }
     assert(state.hostMap.contains(msg->executedhost()));
     if (!state.appResults[appId].contains(msgId)) {

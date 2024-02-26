@@ -624,8 +624,8 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     // executed in "otherHost" (executed as part of createExecutor) as well
     // as the one we are setting the result for
     faabric::HostResources res;
-    res.set_slots(1);
-    res.set_usedslots(1);
+    res.set_slots(2);
+    res.set_usedslots(2);
     sch.setThisHostResources(res);
     // Resources for the background task
     sch.addHostToGlobalSet(otherHost, std::make_shared<HostResources>(res));
