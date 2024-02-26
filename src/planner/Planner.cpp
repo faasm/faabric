@@ -289,12 +289,6 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
                  msg->groupidx());
 
     // Release the slot only once
-    if (!state.hostMap.contains(msg->executedhost())) {
-        SPDLOG_ERROR("Host Map does not contain: {}. We have:", msg->executedhost());
-        for (auto [ip, host] : state.hostMap) {
-            SPDLOG_ERROR("{} ({}/{})", ip, host->usedslots(), host->slots());
-        }
-    }
     assert(state.hostMap.contains(msg->executedhost()));
     if (!state.appResults[appId].contains(msgId)) {
         releaseHostSlots(state.hostMap.at(msg->executedhost()));
