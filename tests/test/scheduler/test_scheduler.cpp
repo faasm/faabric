@@ -611,19 +611,24 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 {
     faabric::util::setMockMode(true);
 
+    const std::string otherHost = "otherHost";
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    msg.set_mainhost("otherHost");
+    msg.set_mainhost(otherHost);
     msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
 
     auto fac = faabric::executor::getExecutorFactory();
     auto exec = fac->createExecutor(msg);
 
     // If we want to set a function result, the planner must see at least one
-    // slot, and at least one used slot in this host
+    // slot, and at least one used slot in this host. Both for the task
+    // executed in "otherHost" (executed as part of createExecutor) as well
+    // as the one we are setting the result for
     faabric::HostResources res;
     res.set_slots(1);
     res.set_usedslots(1);
     sch.setThisHostResources(res);
+    // Resources for the background task
+    sch.addHostToGlobalSet(otherHost, std::make_shared<HostResources>(res));
 
     // Set the thread result
     int returnValue = 123;
@@ -656,6 +661,8 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     REQUIRE(actualRes.res == returnValue);
     REQUIRE(actualRes.key == snapKey);
     REQUIRE(actualRes.diffs.size() == diffs.size());
+
+    exec->shutdown();
 }
 
 TEST_CASE_METHOD(DummyExecutorTestFixture, "Test executor reuse", "[scheduler]")
