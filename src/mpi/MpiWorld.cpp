@@ -527,8 +527,8 @@ void MpiWorld::send(int sendRank,
         */
         MpiMessage msg = {
             .id = msgId, .worldId = id, .sendRank = sendRank,
-            .recvRank = recvRank, .type = dataType->id, .count = count,
-            .buffer = bufferPtr
+            .recvRank = recvRank, .dataType = dataType->id, .count = count,
+            .messageType = (int) messageType, .buffer = bufferPtr
         };
 
         SPDLOG_TRACE(
@@ -615,12 +615,12 @@ void MpiWorld::doRecv(MpiMessage& m,
 {
     // Assert message integrity
     // Note - this checks won't happen in Release builds
-    if (m.type != messageType) {
+    if (m.messageType != messageType) {
         SPDLOG_ERROR("Different message types (got: {}, expected: {})",
-                     m.type,
+                     m.messageType,
                      messageType);
     }
-    assert(m.type == messageType);
+    assert(m.messageType == messageType);
     assert(m.count <= count);
 
     // TODO - avoid copy here

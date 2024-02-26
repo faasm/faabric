@@ -26,8 +26,10 @@ struct MpiMessage {
     int32_t worldId;
     int32_t sendRank;
     int32_t recvRank;
-    int32_t type;
+    int32_t dataType;
     int32_t count;
+    // TODO: this should be an int enum
+    int32_t messageType;
     void* buffer;
 };
 
