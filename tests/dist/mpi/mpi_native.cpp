@@ -14,6 +14,7 @@
 #include <faabric/util/compare.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/memory.h>
 
 using namespace faabric::mpi;
 
@@ -508,7 +509,7 @@ int MPI_Alloc_mem(MPI_Aint size, MPI_Info info, void* baseptr)
         throw std::runtime_error("Non-null info not supported");
     }
 
-    *((void**)baseptr) = malloc(size);
+    *((void**)baseptr) = faabric::util::malloc(size);
 
     return MPI_SUCCESS;
 }
@@ -641,7 +642,8 @@ int MPI_Isend(const void* buf,
     SPDLOG_TRACE("MPI - MPI_Isend {} -> {}", executingContext.getRank(), dest);
 
     MpiWorld& world = getExecutingWorld();
-    (*request) = (faabric_request_t*)malloc(sizeof(faabric_request_t));
+    (*request) =
+      (faabric_request_t*)faabric::util::malloc(sizeof(faabric_request_t));
     int requestId = world.isend(
       executingContext.getRank(), dest, (uint8_t*)buf, datatype, count);
     (*request)->id = requestId;
@@ -661,7 +663,8 @@ int MPI_Irecv(void* buf,
       "MPI - MPI_Irecv {} <- {}", executingContext.getRank(), source);
 
     MpiWorld& world = getExecutingWorld();
-    (*request) = (faabric_request_t*)malloc(sizeof(faabric_request_t));
+    (*request) =
+      (faabric_request_t*)faabric::util::malloc(sizeof(faabric_request_t));
     int requestId = world.irecv(
       source, executingContext.getRank(), (uint8_t*)buf, datatype, count);
     (*request)->id = requestId;

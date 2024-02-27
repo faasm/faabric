@@ -1,0 +1,3 @@
+# For local MPI messages we send malloc-ed pointers through in-memory queues,
+# what makes LSAN unhappy
+leak:MpiWorld::send

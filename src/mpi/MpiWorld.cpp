@@ -8,6 +8,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
 
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
@@ -516,9 +517,7 @@ void MpiWorld::send(int sendRank,
     m->set_messagetype(messageType);
 
     // Set up message data
-    if (count > 0 && buffer != nullptr) {
-        m->set_buffer(buffer, dataType->size * count);
-    }
+    bool mustSendData = count > 0 && buffer != nullptr;
 
     // Mock the message sending in tests
     if (faabric::util::isMockMode()) {
@@ -528,10 +527,21 @@ void MpiWorld::send(int sendRank,
 
     // Dispatch the message locally or globally
     if (isLocal) {
+        if (mustSendData) {
+            void* bufferPtr = faabric::util::malloc(count * dataType->size);
+            std::memcpy(bufferPtr, buffer, count * dataType->size);
+
+            m->set_bufferptr((uint64_t)bufferPtr);
+        }
+
         SPDLOG_TRACE(
           "MPI - send {} -> {} ({})", sendRank, recvRank, messageType);
         getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
     } else {
+        if (mustSendData) {
+            m->set_buffer(buffer, dataType->size * count);
+        }
+
         SPDLOG_TRACE(
           "MPI - send remote {} -> {} ({})", sendRank, recvRank, messageType);
         sendRemoteMpiMessage(otherHost, sendRank, recvRank, m);
@@ -596,10 +606,21 @@ void MpiWorld::doRecv(std::shared_ptr<MPIMessage>& m,
     assert(m->messagetype() == messageType);
     assert(m->count() <= count);
 
-    // TODO - avoid copy here
-    // Copy message data
+    const std::string otherHost = getHostForRank(m->destination());
+    bool isLocal =
+      getHostForRank(m->destination()) == getHostForRank(m->sender());
+
     if (m->count() > 0) {
-        std::move(m->buffer().begin(), m->buffer().end(), buffer);
+        if (isLocal) {
+            // Make sure we do not overflow the recepient buffer
+            auto bytesToCopy = std::min<size_t>(m->count() * dataType->size,
+                                                count * dataType->size);
+            std::memcpy(buffer, (void*)m->bufferptr(), bytesToCopy);
+            faabric::util::free((void*)m->bufferptr());
+        } else {
+            // TODO - avoid copy here
+            std::move(m->buffer().begin(), m->buffer().end(), buffer);
+        }
     }
 
     // Set status values if required

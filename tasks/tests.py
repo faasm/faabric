@@ -12,7 +12,10 @@ TEST_ENV = {
     "REDIS_QUEUE_HOST": "redis",
     "REDIS_STATE_HOST": "redis",
     "TERM": "xterm-256color",
-    "ASAN_OPTIONS": "verbosity=1:halt_on_error=1",
+    "ASAN_OPTIONS": "verbosity=1:halt_on_error=1:",
+    "LSAN_OPTIONS": "suppressions={}/leak-sanitizer-ignorelist.txt".format(
+        PROJ_ROOT
+    ),
     "TSAN_OPTIONS": " ".join(
         [
             "verbosity=1 halt_on_error=1",

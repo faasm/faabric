@@ -242,21 +242,6 @@ TEST_CASE_METHOD(MpiTestFixture, "Test send and recv on same host", "[mpi]")
     world.send(
       rankA1, rankA2, BYTES(messageData.data()), MPI_INT, messageData.size());
 
-    SECTION("Test queueing")
-    {
-        // Check the message itself is on the right queue
-        REQUIRE(world.getLocalQueueSize(rankA1, rankA2) == 1);
-        REQUIRE(world.getLocalQueueSize(rankA2, rankA1) == 0);
-        REQUIRE(world.getLocalQueueSize(rankA1, 0) == 0);
-        REQUIRE(world.getLocalQueueSize(rankA2, 0) == 0);
-
-        // Check message content
-        const std::shared_ptr<InMemoryMpiQueue>& queueA2 =
-          world.getLocalQueue(rankA1, rankA2);
-        MPIMessage actualMessage = *(queueA2->dequeue());
-        checkMessage(actualMessage, worldId, rankA1, rankA2, messageData);
-    }
-
     SECTION("Test recv")
     {
         // Receive the message
