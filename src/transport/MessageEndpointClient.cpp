@@ -36,6 +36,7 @@ void MessageEndpointClient::asyncSend(int header,
               sequenceNum);
 }
 
+// TODO: consider making an iovec-style scatter/gather alternative signature
 void MessageEndpointClient::asyncSend(int header,
                                       const uint8_t* buffer,
                                       size_t bufferSize,

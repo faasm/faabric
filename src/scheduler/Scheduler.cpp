@@ -459,12 +459,32 @@ Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
         auto groupIdxs = broker.getIdxsRegisteredForGroup(groupId);
         groupIdxs.erase(0);
         for (const auto& recvIdx : groupIdxs) {
-            broker.sendMessage(
-              groupId, 0, recvIdx, BYTES_CONST(&newGroupId), sizeof(int));
+            // It is safe to send a pointer to the stack, because the
+            // transport layer will perform an additional copy of the PTP
+            // message to put it in the message body
+            // TODO(no-inproc): this may not be true once we move the inproc
+            // sockets to in-memory queues
+            faabric::transport::PointToPointMessage msg(
+              { .groupId = groupId,
+                .sendIdx = 0,
+                .recvIdx = recvIdx,
+                .dataSize = sizeof(int),
+                .dataPtr = &newGroupId });
+
+            broker.sendMessage(msg);
         }
     } else if (overwriteNewGroupId == 0) {
-        std::vector<uint8_t> bytes = broker.recvMessage(groupId, 0, groupIdx);
+        faabric::transport::PointToPointMessage msg(
+          { .groupId = groupId, .sendIdx = 0, .recvIdx = groupIdx });
+        // TODO(no-order): when we remove the need to order ptp messages we
+        // should be able to call recv giving it a pre-allocated buffer,
+        // avoiding the hassle of malloc-ing and free-ing
+        broker.recvMessage(msg);
+        std::vector<uint8_t> bytes((uint8_t*)msg.dataPtr,
+                                   (uint8_t*)msg.dataPtr + msg.dataSize);
         newGroupId = faabric::util::bytesToInt(bytes);
+        // The previous call makes a copy, so safe to free now
+        faabric::util::free(msg.dataPtr);
     } else {
         // In some settings, like tests, we already know the new group id, so
         // we can set it here (and in fact, we need to do so when faking two

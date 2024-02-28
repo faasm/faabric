@@ -2,6 +2,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointCall.h>
 #include <faabric/transport/PointToPointClient.h>
+#include <faabric/transport/PointToPointMessage.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/testing.h>
@@ -13,12 +14,11 @@ static std::mutex mockMutex;
 static std::vector<std::pair<std::string, faabric::PointToPointMappings>>
   sentMappings;
 
-static std::vector<std::pair<std::string, faabric::PointToPointMessage>>
-  sentMessages;
+static std::vector<std::pair<std::string, PointToPointMessage>> sentMessages;
 
 static std::vector<std::tuple<std::string,
                               faabric::transport::PointToPointCall,
-                              faabric::PointToPointMessage>>
+                              PointToPointMessage>>
   sentLockMessages;
 
 std::vector<std::pair<std::string, faabric::PointToPointMappings>>
@@ -27,7 +27,7 @@ getSentMappings()
     return sentMappings;
 }
 
-std::vector<std::pair<std::string, faabric::PointToPointMessage>>
+std::vector<std::pair<std::string, PointToPointMessage>>
 getSentPointToPointMessages()
 {
     return sentMessages;
@@ -35,7 +35,7 @@ getSentPointToPointMessages()
 
 std::vector<std::tuple<std::string,
                        faabric::transport::PointToPointCall,
-                       faabric::PointToPointMessage>>
+                       PointToPointMessage>>
 getSentLockMessages()
 {
     return sentLockMessages;
@@ -64,13 +64,18 @@ void PointToPointClient::sendMappings(faabric::PointToPointMappings& mappings)
     }
 }
 
-void PointToPointClient::sendMessage(faabric::PointToPointMessage& msg,
+void PointToPointClient::sendMessage(const PointToPointMessage& msg,
                                      int sequenceNum)
 {
     if (faabric::util::isMockMode()) {
         sentMessages.emplace_back(host, msg);
     } else {
-        asyncSend(PointToPointCall::MESSAGE, &msg, sequenceNum);
+        // TODO(FIXME): consider how we can avoid serialising once, and then
+        // copying again into NNG's buffer
+        std::vector<uint8_t> buffer(sizeof(msg) + msg.dataSize);
+        serializePtpMsg(buffer, msg);
+        asyncSend(
+          PointToPointCall::MESSAGE, buffer.data(), buffer.size(), sequenceNum);
     }
 }
 
@@ -80,11 +85,12 @@ void PointToPointClient::makeCoordinationRequest(
   int groupIdx,
   faabric::transport::PointToPointCall call)
 {
-    faabric::PointToPointMessage req;
-    req.set_appid(appId);
-    req.set_groupid(groupId);
-    req.set_sendidx(groupIdx);
-    req.set_recvidx(POINT_TO_POINT_MAIN_IDX);
+    PointToPointMessage req({ .appId = appId,
+                              .groupId = groupId,
+                              .sendIdx = groupIdx,
+                              .recvIdx = POINT_TO_POINT_MAIN_IDX,
+                              .dataSize = 0,
+                              .dataPtr = nullptr });
 
     switch (call) {
         case (faabric::transport::PointToPointCall::LOCK_GROUP): {
@@ -115,7 +121,11 @@ void PointToPointClient::makeCoordinationRequest(
         faabric::util::UniqueLock lock(mockMutex);
         sentLockMessages.emplace_back(host, call, req);
     } else {
-        asyncSend(call, &req);
+        // TODO(FIXME): consider how we can avoid serialising once, and then
+        // copying again into NNG's buffer
+        std::vector<uint8_t> buffer(sizeof(PointToPointMessage) + req.dataSize);
+        serializePtpMsg(buffer, req);
+        asyncSend(call, buffer.data(), buffer.size());
     }
 }
 

@@ -199,14 +199,6 @@ message StateAppendedResponse {
 // POINT-TO-POINT
 // ---------------------------------------------
 
-message PointToPointMessage {
-    int32 appId = 1;
-    int32 groupId = 2;
-    int32 sendIdx = 3;
-    int32 recvIdx = 4;
-    bytes data = 5;
-}
-
 message PointToPointMappings {
     int32 appId = 1;
     int32 groupId = 2;
