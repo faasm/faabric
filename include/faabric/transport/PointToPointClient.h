@@ -3,18 +3,19 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/transport/PointToPointCall.h>
+#include <faabric/transport/PointToPointMessage.h>
 
 namespace faabric::transport {
 
 std::vector<std::pair<std::string, faabric::PointToPointMappings>>
 getSentMappings();
 
-std::vector<std::pair<std::string, faabric::PointToPointMessage>>
+std::vector<std::pair<std::string, PointToPointMessage>>
 getSentPointToPointMessages();
 
 std::vector<std::tuple<std::string,
                        faabric::transport::PointToPointCall,
-                       faabric::PointToPointMessage>>
+                       PointToPointMessage>>
 getSentLockMessages();
 
 void clearSentMessages();
@@ -26,7 +27,7 @@ class PointToPointClient : public faabric::transport::MessageEndpointClient
 
     void sendMappings(faabric::PointToPointMappings& mappings);
 
-    void sendMessage(faabric::PointToPointMessage& msg,
+    void sendMessage(const PointToPointMessage& msg,
                      int sequenceNum = NO_SEQUENCE_NUM);
 
     void groupLock(int appId,

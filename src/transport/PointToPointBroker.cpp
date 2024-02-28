@@ -53,7 +53,8 @@ thread_local std::vector<int> sentMsgCount;
 
 thread_local std::vector<int> recvMsgCount;
 
-thread_local std::vector<std::list<Message>> outOfOrderMsgs;
+thread_local std::vector<std::list<std::pair<int, PointToPointMessage>>>
+  outOfOrderMsgs;
 
 static std::shared_ptr<PointToPointClient> getClient(const std::string& host)
 {
@@ -202,8 +203,12 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
                   groupId,
                   recursive);
 
-                ptpBroker.recvMessage(
-                  groupId, POINT_TO_POINT_MAIN_IDX, groupIdx);
+                PointToPointMessage msg({ .groupId = groupId,
+                                          .sendIdx = POINT_TO_POINT_MAIN_IDX,
+                                          .recvIdx = groupIdx,
+                                          .dataSize = 0,
+                                          .dataPtr = nullptr });
+                ptpBroker.recvMessage(msg);
             } else {
                 // Notify remote locker that they've acquired the lock
                 SPDLOG_TRACE(
@@ -217,10 +222,6 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
         }
     } else {
         auto cli = getClient(mainHost);
-        faabric::PointToPointMessage msg;
-        msg.set_groupid(groupId);
-        msg.set_sendidx(groupIdx);
-        msg.set_recvidx(POINT_TO_POINT_MAIN_IDX);
 
         SPDLOG_TRACE("Remote lock {}:{}:{} to {}",
                      groupId,
@@ -232,7 +233,12 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
         // acquired
         cli->groupLock(appId, groupId, groupIdx, recursive);
 
-        ptpBroker.recvMessage(groupId, POINT_TO_POINT_MAIN_IDX, groupIdx);
+        PointToPointMessage msg({ .groupId = groupId,
+                                  .sendIdx = POINT_TO_POINT_MAIN_IDX,
+                                  .recvIdx = groupIdx,
+                                  .dataSize = 0,
+                                  .dataPtr = nullptr });
+        ptpBroker.recvMessage(msg);
     }
 }
 
@@ -285,10 +291,6 @@ void PointToPointGroup::unlock(int groupIdx, bool recursive)
         }
     } else {
         auto cli = getClient(host);
-        faabric::PointToPointMessage msg;
-        msg.set_groupid(groupId);
-        msg.set_sendidx(groupIdx);
-        msg.set_recvidx(POINT_TO_POINT_MAIN_IDX);
 
         SPDLOG_TRACE("Remote unlock {}:{}:{} to {}",
                      groupId,
@@ -308,9 +310,13 @@ void PointToPointGroup::localUnlock()
 void PointToPointGroup::notifyLocked(int groupIdx)
 {
     std::vector<uint8_t> data(1, 0);
-
-    ptpBroker.sendMessage(
-      groupId, POINT_TO_POINT_MAIN_IDX, groupIdx, data.data(), data.size());
+    PointToPointMessage msg = { .appId = 0,
+                                .groupId = groupId,
+                                .sendIdx = POINT_TO_POINT_MAIN_IDX,
+                                .recvIdx = groupIdx,
+                                .dataSize = 0,
+                                .dataPtr = nullptr };
+    ptpBroker.sendMessage(msg);
 }
 
 void PointToPointGroup::barrier(int groupIdx)
@@ -324,23 +330,40 @@ void PointToPointGroup::barrier(int groupIdx)
     if (groupIdx == POINT_TO_POINT_MAIN_IDX) {
         // Receive from all
         for (int i = 1; i < groupSize; i++) {
-            ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MAIN_IDX);
+            PointToPointMessage msg({ .groupId = groupId,
+                                      .sendIdx = i,
+                                      .recvIdx = POINT_TO_POINT_MAIN_IDX,
+                                      .dataSize = 0,
+                                      .dataPtr = nullptr });
+            ptpBroker.recvMessage(msg);
         }
 
         // Reply to all
         std::vector<uint8_t> data(1, 0);
         for (int i = 1; i < groupSize; i++) {
-            ptpBroker.sendMessage(
-              groupId, POINT_TO_POINT_MAIN_IDX, i, data.data(), data.size());
+            PointToPointMessage msg({ .groupId = groupId,
+                                      .sendIdx = POINT_TO_POINT_MAIN_IDX,
+                                      .recvIdx = i,
+                                      .dataSize = 0,
+                                      .dataPtr = nullptr });
+            ptpBroker.sendMessage(msg);
         }
     } else {
         // Do the send
-        std::vector<uint8_t> data(1, 0);
-        ptpBroker.sendMessage(
-          groupId, groupIdx, POINT_TO_POINT_MAIN_IDX, data.data(), data.size());
+        PointToPointMessage msg({ .groupId = groupId,
+                                  .sendIdx = groupIdx,
+                                  .recvIdx = POINT_TO_POINT_MAIN_IDX,
+                                  .dataSize = 0,
+                                  .dataPtr = nullptr });
+        ptpBroker.sendMessage(msg);
 
         // Await the response
-        ptpBroker.recvMessage(groupId, POINT_TO_POINT_MAIN_IDX, groupIdx);
+        PointToPointMessage response({ .groupId = groupId,
+                                       .sendIdx = POINT_TO_POINT_MAIN_IDX,
+                                       .recvIdx = groupIdx,
+                                       .dataSize = 0,
+                                       .dataPtr = nullptr });
+        ptpBroker.recvMessage(response);
     }
 }
 
@@ -351,15 +374,23 @@ void PointToPointGroup::notify(int groupIdx)
             SPDLOG_TRACE(
               "Master group {} waiting for notify from index {}", groupId, i);
 
-            ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MAIN_IDX);
+            PointToPointMessage msg({ .groupId = groupId,
+                                      .sendIdx = i,
+                                      .recvIdx = POINT_TO_POINT_MAIN_IDX,
+                                      .dataSize = 0,
+                                      .dataPtr = nullptr });
+            ptpBroker.recvMessage(msg);
 
             SPDLOG_TRACE("Master group {} notified by index {}", groupId, i);
         }
     } else {
-        std::vector<uint8_t> data(1, 0);
         SPDLOG_TRACE("Notifying group {} from index {}", groupId, groupIdx);
-        ptpBroker.sendMessage(
-          groupId, groupIdx, POINT_TO_POINT_MAIN_IDX, data.data(), data.size());
+        PointToPointMessage msg({ .groupId = groupId,
+                                  .sendIdx = groupIdx,
+                                  .recvIdx = POINT_TO_POINT_MAIN_IDX,
+                                  .dataSize = 0,
+                                  .dataPtr = nullptr });
+        ptpBroker.sendMessage(msg);
     }
 }
 
@@ -581,22 +612,11 @@ void PointToPointBroker::updateHostForIdx(int groupId,
     mappings[key] = newHost;
 }
 
-void PointToPointBroker::sendMessage(int groupId,
-                                     int sendIdx,
-                                     int recvIdx,
-                                     const uint8_t* buffer,
-                                     size_t bufferSize,
+void PointToPointBroker::sendMessage(const PointToPointMessage& msg,
                                      std::string hostHint,
                                      bool mustOrderMsg)
 {
-    sendMessage(groupId,
-                sendIdx,
-                recvIdx,
-                buffer,
-                bufferSize,
-                mustOrderMsg,
-                NO_SEQUENCE_NUM,
-                hostHint);
+    sendMessage(msg, mustOrderMsg, NO_SEQUENCE_NUM, hostHint);
 }
 
 // Gets or creates a pair of inproc endpoints (recv&send) in the endpoints map.
@@ -634,11 +654,7 @@ auto getEndpointPtrs(const std::string& label)
     return endpointPtrs;
 }
 
-void PointToPointBroker::sendMessage(int groupId,
-                                     int sendIdx,
-                                     int recvIdx,
-                                     const uint8_t* buffer,
-                                     size_t bufferSize,
+void PointToPointBroker::sendMessage(const PointToPointMessage& msg,
                                      bool mustOrderMsg,
                                      int sequenceNum,
                                      std::string hostHint)
@@ -647,19 +663,21 @@ void PointToPointBroker::sendMessage(int groupId,
     // sender thread, and another time from the point-to-point server to route
     // it to the receiver thread
 
-    waitForMappingsOnThisHost(groupId);
+    waitForMappingsOnThisHost(msg.groupId);
 
     // If the application code knows which host does the receiver live in
     // (cached for performance) we allow it to provide a hint to avoid
     // acquiring a shared lock here
-    std::string host =
-      hostHint.empty() ? getHostForReceiver(groupId, recvIdx) : hostHint;
+    std::string host = hostHint.empty()
+                         ? getHostForReceiver(msg.groupId, msg.recvIdx)
+                         : hostHint;
 
     // Set the sequence number if we need ordering and one is not provided
     bool mustSetSequenceNum = mustOrderMsg && sequenceNum == NO_SEQUENCE_NUM;
 
     if (host == conf.endpointHost) {
-        std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
+        std::string label =
+          getPointToPointKey(msg.groupId, msg.sendIdx, msg.recvIdx);
 
         auto endpointPtrs = getEndpointPtrs(label);
         auto& endpoint =
@@ -671,46 +689,49 @@ void PointToPointBroker::sendMessage(int groupId,
         // the sender thread we add a sequence number (if needed)
         int localSendSeqNum = sequenceNum;
         if (mustSetSequenceNum) {
-            localSendSeqNum = getAndIncrementSentMsgCount(groupId, recvIdx);
+            localSendSeqNum =
+              getAndIncrementSentMsgCount(msg.groupId, msg.recvIdx);
         }
 
         SPDLOG_TRACE("Local point-to-point message {}:{}:{} (seq: {}) to {}",
-                     groupId,
-                     sendIdx,
-                     recvIdx,
+                     msg.groupId,
+                     msg.sendIdx,
+                     msg.recvIdx,
                      localSendSeqNum,
                      endpoint.getAddress());
 
         try {
-            endpoint.send(NO_HEADER, buffer, bufferSize, localSendSeqNum);
+            // TODO(no-inproc): once we convert the inproc endpoints to a queue
+            // we should be able to just push the whole message to the queue
+            std::vector<uint8_t> buffer(sizeof(PointToPointMessage) +
+                                        msg.dataSize);
+            serializePtpMsg(buffer, msg);
+            endpoint.send(
+              NO_HEADER, buffer.data(), buffer.size(), localSendSeqNum);
         } catch (std::runtime_error& e) {
             SPDLOG_ERROR("Timed-out with local point-to-point message {}:{}:{} "
                          "(seq: {}) to {}",
-                         groupId,
-                         sendIdx,
-                         recvIdx,
+                         msg.groupId,
+                         msg.sendIdx,
+                         msg.recvIdx,
                          localSendSeqNum,
                          endpoint.getAddress());
             throw e;
         }
     } else {
         auto cli = getClient(host);
-        faabric::PointToPointMessage msg;
-        msg.set_groupid(groupId);
-        msg.set_sendidx(sendIdx);
-        msg.set_recvidx(recvIdx);
-        msg.set_data(buffer, bufferSize);
 
         // When sending a remote message, we set a sequence number if required
         int remoteSendSeqNum = NO_SEQUENCE_NUM;
         if (mustSetSequenceNum) {
-            remoteSendSeqNum = getAndIncrementSentMsgCount(groupId, recvIdx);
+            remoteSendSeqNum =
+              getAndIncrementSentMsgCount(msg.groupId, msg.recvIdx);
         }
 
         SPDLOG_TRACE("Remote point-to-point message {}:{}:{} (seq: {}) to {}",
-                     groupId,
-                     sendIdx,
-                     recvIdx,
+                     msg.groupId,
+                     msg.sendIdx,
+                     msg.recvIdx,
                      remoteSendSeqNum,
                      host);
 
@@ -719,59 +740,81 @@ void PointToPointBroker::sendMessage(int groupId,
         } catch (std::runtime_error& e) {
             SPDLOG_TRACE("Timed-out with remote point-to-point message "
                          "{}:{}:{} (seq: {}) to {}",
-                         groupId,
-                         sendIdx,
-                         recvIdx,
+                         msg.groupId,
+                         msg.sendIdx,
+                         msg.recvIdx,
                          remoteSendSeqNum,
                          host);
         }
     }
 }
 
-Message PointToPointBroker::doRecvMessage(int groupId, int sendIdx, int recvIdx)
+std::pair<MessageResponseCode, int> PointToPointBroker::doRecvMessage(
+  PointToPointMessage& msg)
 {
-    std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
+    std::string label =
+      getPointToPointKey(msg.groupId, msg.sendIdx, msg.recvIdx);
 
     auto endpointPtrs = getEndpointPtrs(label);
     auto& endpoint =
       *std::get<std::unique_ptr<AsyncInternalRecvMessageEndpoint>>(
         *endpointPtrs);
 
-    return endpoint.recv();
+    // TODO(no-inproc): this will become a pop from a queue, not a read from
+    // an in-proc socket
+    Message bytes = endpoint.recv();
+
+    // WARNING: this call mallocs
+    parsePtpMsg(bytes.udata(), &msg);
+
+    /* TODO(no-order): for the moment always parse and malloc memory, as it is
+     * not easy to track when did we malloc or not. This is gonna become
+     * simpler once we remove the need to order messages in the PTP layer
+     *
+    if (hasPreAllocBuffer) {
+        std::span<uint8_t> msgDataSpan((uint8_t*) msg.dataPtr, msg.dataSize);
+        parsePtpMsg(bytes.udata(), &msg, msgDataSpan);
+    } else {
+        parsePtpMsg(bytes.udata(), &msg);
+    }
+    */
+
+    assert(getPointToPointKey(msg.groupId, msg.sendIdx, msg.recvIdx) == label);
+
+    return std::make_pair<MessageResponseCode, int>(bytes.getResponseCode(),
+                                                    bytes.getSequenceNum());
 }
 
-std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
-                                                     int sendIdx,
-                                                     int recvIdx,
-                                                     bool mustOrderMsg)
+void PointToPointBroker::recvMessage(PointToPointMessage& msg,
+                                     bool mustOrderMsg)
 {
     // If we don't need to receive messages in order, return here
     if (!mustOrderMsg) {
-        // TODO - can we avoid this copy?
-        return doRecvMessage(groupId, sendIdx, recvIdx).dataCopy();
+        doRecvMessage(msg);
+        return;
     }
 
     // Get the sequence number we expect to receive
-    int expectedSeqNum = getExpectedSeqNum(groupId, sendIdx);
+    int expectedSeqNum = getExpectedSeqNum(msg.groupId, msg.sendIdx);
 
     // We first check if we have already received the message. We only need to
     // check this once.
-    auto foundIterator =
-      std::find_if(outOfOrderMsgs.at(sendIdx).begin(),
-                   outOfOrderMsgs.at(sendIdx).end(),
-                   [expectedSeqNum](const Message& msg) {
-                       return msg.getSequenceNum() == expectedSeqNum;
-                   });
-    if (foundIterator != outOfOrderMsgs.at(sendIdx).end()) {
+    auto foundIterator = std::find_if(
+      outOfOrderMsgs.at(msg.sendIdx).begin(),
+      outOfOrderMsgs.at(msg.sendIdx).end(),
+      [expectedSeqNum](const std::pair<int, PointToPointMessage>& pair) {
+          return pair.first == expectedSeqNum;
+      });
+    if (foundIterator != outOfOrderMsgs.at(msg.sendIdx).end()) {
         SPDLOG_TRACE("Retrieved the expected message ({}:{} seq: {}) from the "
                      "out-of-order buffer",
-                     sendIdx,
-                     recvIdx,
+                     msg.sendIdx,
+                     msg.recvIdx,
                      expectedSeqNum);
-        incrementRecvMsgCount(groupId, sendIdx);
-        Message returnMsg = std::move(*foundIterator);
-        outOfOrderMsgs.at(sendIdx).erase(foundIterator);
-        return returnMsg.dataCopy();
+        incrementRecvMsgCount(msg.groupId, msg.sendIdx);
+        msg = foundIterator->second;
+        outOfOrderMsgs.at(msg.sendIdx).erase(foundIterator);
+        return;
     }
 
     // Given that we don't have the message, we query the transport layer until
@@ -779,47 +822,52 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
     while (true) {
         SPDLOG_TRACE(
           "Entering loop to query transport layer for msg ({}:{} seq: {})",
-          sendIdx,
-          recvIdx,
+          msg.sendIdx,
+          msg.recvIdx,
           expectedSeqNum);
-        // Receive from the transport layer
-        Message recvMsg = doRecvMessage(groupId, sendIdx, recvIdx);
+
+        // Receive from the transport layer with the same group id and
+        // send/recv indexes
+        PointToPointMessage tmpMsg({ .groupId = msg.groupId,
+                                     .sendIdx = msg.sendIdx,
+                                     .recvIdx = msg.recvIdx });
+        auto [responseCode, seqNum] = doRecvMessage(tmpMsg);
 
         // If the receive was not successful, exit the loop
-        if (recvMsg.getResponseCode() !=
-            faabric::transport::MessageResponseCode::SUCCESS) {
+        if (responseCode != faabric::transport::MessageResponseCode::SUCCESS) {
             SPDLOG_WARN(
               "Error {} ({}) when awaiting a message ({}:{} seq: {} label: {})",
-              static_cast<int>(recvMsg.getResponseCode()),
-              MessageResponseCodeText.at(recvMsg.getResponseCode()),
-              sendIdx,
-              recvIdx,
+              static_cast<int>(responseCode),
+              MessageResponseCodeText.at(responseCode),
+              msg.sendIdx,
+              msg.recvIdx,
               expectedSeqNum,
-              getPointToPointKey(groupId, sendIdx, recvIdx));
+              getPointToPointKey(msg.groupId, msg.sendIdx, msg.recvIdx));
             throw std::runtime_error("Error when awaiting a PTP message");
         }
 
         // If the sequence numbers match, exit the loop
-        int seqNum = recvMsg.getSequenceNum();
         if (seqNum == expectedSeqNum) {
             SPDLOG_TRACE("Received the expected message ({}:{} seq: {})",
-                         sendIdx,
-                         recvIdx,
+                         msg.sendIdx,
+                         msg.recvIdx,
                          expectedSeqNum);
-            incrementRecvMsgCount(groupId, sendIdx);
-            return recvMsg.dataCopy();
+            incrementRecvMsgCount(msg.groupId, msg.sendIdx);
+
+            msg = tmpMsg;
+            return;
         }
 
         // If not, we must insert the received message in the out of order
         // received messages
         SPDLOG_TRACE("Received out-of-order message ({}:{} seq: {}) (expected: "
                      "{} - got: {})",
-                     sendIdx,
-                     recvIdx,
+                     tmpMsg.sendIdx,
+                     tmpMsg.recvIdx,
                      seqNum,
                      expectedSeqNum,
                      seqNum);
-        outOfOrderMsgs.at(sendIdx).emplace_back(std::move(recvMsg));
+        outOfOrderMsgs.at(tmpMsg.sendIdx).emplace_back(seqNum, tmpMsg);
     }
 }
 
@@ -874,10 +922,10 @@ void PointToPointBroker::resetThreadLocalCache()
 
 void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
 {
+    /*
     int postMigrationOkCode = 1337;
     int recvCode = 0;
 
-    // TODO: implement this as a broadcast in the PTP broker
     int mainIdx = 0;
     if (groupIdx == mainIdx) {
         auto groupIdxs = getIdxsRegisteredForGroup(groupId);
@@ -902,6 +950,8 @@ void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
                      recvCode);
         throw std::runtime_error("Error in post-migration hook");
     }
+    */
+    PointToPointGroup::getGroup(groupId)->barrier(groupIdx);
 
     SPDLOG_DEBUG("{}:{} exiting post-migration hook", groupId, groupIdx);
 }

@@ -2,6 +2,7 @@
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/mpi.pb.h>
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/transport/PointToPointMessage.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/batch.h>
@@ -60,14 +61,16 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
         throw std::runtime_error("Error serialising message");
     }
     try {
-        broker.sendMessage(
-          thisRankMsg->groupid(),
-          sendRank,
-          recvRank,
-          reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
-          serialisedBuffer.size(),
-          dstHost,
-          true);
+        // It is safe to send a pointer to a stack-allocated object
+        // because the broker will make an additional copy (and so will NNG!)
+        faabric::transport::PointToPointMessage msg(
+          { .groupId = thisRankMsg->groupid(),
+            .sendIdx = sendRank,
+            .recvIdx = recvRank,
+            .dataSize = serialisedBuffer.size(),
+            .dataPtr = (void*)serialisedBuffer.data() });
+
+        broker.sendMessage(msg, dstHost, true);
     } catch (std::runtime_error& e) {
         SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - send {} -> {}",
                      thisRankMsg->appid(),
@@ -82,10 +85,12 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
 std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
                                                            int recvRank)
 {
-    std::vector<uint8_t> msg;
+    faabric::transport::PointToPointMessage msg(
+      { .groupId = thisRankMsg->groupid(),
+        .sendIdx = sendRank,
+        .recvIdx = recvRank });
     try {
-        msg =
-          broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
+        broker.recvMessage(msg, true);
     } catch (std::runtime_error& e) {
         SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - recv (remote) {} -> {}",
                      thisRankMsg->appid(),
@@ -95,7 +100,12 @@ std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
                      recvRank);
         throw e;
     }
-    PARSE_MSG(MPIMessage, msg.data(), msg.size());
+
+    // Parsing into the protobuf makes a copy of the message, so we can
+    // free the heap pointer after
+    PARSE_MSG(MPIMessage, msg.dataPtr, msg.dataSize);
+    faabric::util::free(msg.dataPtr);
+
     return std::make_shared<MPIMessage>(parsedMsg);
 }
 
@@ -599,7 +609,10 @@ void MpiWorld::doRecv(std::shared_ptr<MPIMessage>& m,
     // Assert message integrity
     // Note - this checks won't happen in Release builds
     if (m->messagetype() != messageType) {
-        SPDLOG_ERROR("Different message types (got: {}, expected: {})",
+        SPDLOG_ERROR("{}:{}:{} Different message types (got: {}, expected: {})",
+                     m->worldid(),
+                     m->sender(),
+                     m->destination(),
                      m->messagetype(),
                      messageType);
     }
