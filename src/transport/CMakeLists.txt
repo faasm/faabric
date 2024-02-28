@@ -9,6 +9,7 @@ faabric_lib(transport
     MessageEndpointServer.cpp
     PointToPointBroker.cpp
     PointToPointClient.cpp
+    PointToPointMessage.cpp
     PointToPointServer.cpp
 )
 

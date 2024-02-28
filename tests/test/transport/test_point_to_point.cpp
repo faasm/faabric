@@ -120,9 +120,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     std::vector<uint8_t> sentDataA = { 0, 1, 2, 3 };
     std::vector<uint8_t> receivedDataA;
     std::vector<uint8_t> sentDataB = { 3, 4, 5 };
-    std::vector<uint8_t> receivedDataB;
     std::vector<uint8_t> sentDataC = { 6, 7, 8 };
-    std::vector<uint8_t> receivedDataC;
 
     std::shared_ptr msgLatch = std::make_shared<faabric::util::Latch>(2, 1000);
 
@@ -131,34 +129,60 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
           PointToPointBroker& broker = getPointToPointBroker();
 
           // Receive the first message
-          receivedDataA = broker.recvMessage(groupId, idxA, idxB);
+          PointToPointMessage msgAB(
+            { .groupId = groupId, .sendIdx = idxA, .recvIdx = idxB });
+          broker.recvMessage(msgAB);
+          receivedDataA.resize(msgAB.dataSize);
+          std::memcpy(receivedDataA.data(), msgAB.dataPtr, msgAB.dataSize);
+          faabric::util::free(msgAB.dataPtr);
 
           msgLatch->wait();
 
           // Send a message back
-          broker.sendMessage(
-            groupId, idxB, idxA, sentDataB.data(), sentDataB.size());
+          PointToPointMessage msgBA({ .groupId = groupId,
+                                      .sendIdx = idxB,
+                                      .recvIdx = idxA,
+                                      .dataSize = sentDataB.size(),
+                                      .dataPtr = sentDataB.data() });
+          broker.sendMessage(msgBA);
 
           // Lastly, send another message specifying the recepient host to avoid
           // an extra check in the broker
-          broker.sendMessage(groupId,
-                             idxB,
-                             idxA,
-                             sentDataC.data(),
-                             sentDataC.size(),
-                             std::string(LOCALHOST));
+          PointToPointMessage msgBA2({ .groupId = groupId,
+                                       .sendIdx = idxB,
+                                       .recvIdx = idxA,
+                                       .dataSize = sentDataC.size(),
+                                       .dataPtr = sentDataC.data() });
+          broker.sendMessage(msgBA2, std::string(LOCALHOST));
 
           broker.resetThreadLocalCache();
       });
 
     // Only send the message after the thread creates a receiving socket to
     // avoid deadlock
-    broker.sendMessage(groupId, idxA, idxB, sentDataA.data(), sentDataA.size());
+    PointToPointMessage msgAB({ .groupId = groupId,
+                                .sendIdx = idxA,
+                                .recvIdx = idxB,
+                                .dataSize = sentDataA.size(),
+                                .dataPtr = sentDataA.data() });
+    broker.sendMessage(msgAB);
     // Wait for the thread to handle the message
     msgLatch->wait();
     // Receive the two messages sent back
-    receivedDataB = broker.recvMessage(groupId, idxB, idxA);
-    receivedDataC = broker.recvMessage(groupId, idxB, idxA);
+
+    PointToPointMessage msgBA1(
+      { .groupId = groupId, .sendIdx = idxB, .recvIdx = idxA });
+    broker.recvMessage(msgBA1);
+    std::vector<uint8_t> receivedDataB(
+      (uint8_t*)msgBA1.dataPtr, (uint8_t*)msgBA1.dataPtr + msgBA1.dataSize);
+    faabric::util::free(msgBA1.dataPtr);
+
+    PointToPointMessage msgBA2(
+      { .groupId = groupId, .sendIdx = idxB, .recvIdx = idxA });
+    broker.recvMessage(msgBA2);
+    std::vector<uint8_t> receivedDataC(
+      (uint8_t*)msgBA2.dataPtr, (uint8_t*)msgBA2.dataPtr + msgBA2.dataSize);
+    faabric::util::free(msgBA2.dataPtr);
 
     if (t.joinable()) {
         t.join();
@@ -236,22 +260,28 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
           std::vector<uint8_t> recvData;
 
           for (int i = 0; i < numMsg; i++) {
-              recvData =
-                broker.recvMessage(groupId, idxA, idxB, isMessageOrderingOn);
               sendData = std::vector<uint8_t>(3, i);
+              PointToPointMessage msg(
+                { .groupId = groupId, .sendIdx = idxB, .recvIdx = idxA });
+              broker.recvMessage(msg, isMessageOrderingOn);
+              recvData.resize(msg.dataSize);
+              // TODO(no-order): when we remove the need to order PTP messages
+              // we will be able to provide a buffer to receive the message into
+              std::memcpy(recvData.data(), msg.dataPtr, msg.dataSize);
               REQUIRE(recvData == sendData);
+              faabric::util::free(msg.dataPtr);
           }
 
           msgLatch->wait();
 
           for (int i = 0; i < numMsg; i++) {
               sendData = std::vector<uint8_t>(3, i);
-              broker.sendMessage(groupId,
-                                 idxB,
-                                 idxA,
-                                 sendData.data(),
-                                 sendData.size(),
-                                 isMessageOrderingOn);
+              PointToPointMessage msg({ .groupId = groupId,
+                                        .sendIdx = idxB,
+                                        .recvIdx = idxA,
+                                        .dataSize = sendData.size(),
+                                        .dataPtr = sendData.data() });
+              broker.sendMessage(msg, isMessageOrderingOn);
           }
 
           broker.resetThreadLocalCache();
@@ -262,20 +292,26 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     for (int i = 0; i < numMsg; i++) {
         sendData = std::vector<uint8_t>(3, i);
-        broker.sendMessage(groupId,
-                           idxA,
-                           idxB,
-                           sendData.data(),
-                           sendData.size(),
-                           isMessageOrderingOn);
+        PointToPointMessage msg({ .groupId = groupId,
+                                  .sendIdx = idxB,
+                                  .recvIdx = idxA,
+                                  .dataSize = sendData.size(),
+                                  .dataPtr = sendData.data() });
+        broker.sendMessage(msg, isMessageOrderingOn);
     }
 
     msgLatch->wait();
 
     for (int i = 0; i < numMsg; i++) {
         sendData = std::vector<uint8_t>(3, i);
-        recvData = broker.recvMessage(groupId, idxB, idxA, isMessageOrderingOn);
+        PointToPointMessage msg(
+          { .groupId = groupId, .sendIdx = idxB, .recvIdx = idxA });
+        broker.recvMessage(msg, isMessageOrderingOn);
+        recvData.resize(msg.dataSize);
+        // REQUIRE(msg.dataSize == recvData.size());
+        std::memcpy(recvData.data(), msg.dataPtr, msg.dataSize);
         REQUIRE(sendData == recvData);
+        faabric::util::free(msg.dataPtr);
     }
 
     if (t.joinable()) {

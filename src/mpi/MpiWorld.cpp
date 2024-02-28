@@ -2,6 +2,7 @@
 #include <faabric/mpi/MpiMessage.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/transport/PointToPointMessage.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/batch.h>
@@ -59,14 +60,16 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
     serializeMpiMsg(serialisedBuffer, msg);
 
     try {
-        broker.sendMessage(
-          thisRankMsg->groupid(),
-          sendRank,
-          recvRank,
-          reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
-          serialisedBuffer.size(),
-          dstHost,
-          true);
+        // It is safe to send a pointer to a stack-allocated object
+        // because the broker will make an additional copy (and so will NNG!)
+        faabric::transport::PointToPointMessage msg(
+          { .groupId = thisRankMsg->groupid(),
+            .sendIdx = sendRank,
+            .recvIdx = recvRank,
+            .dataSize = serialisedBuffer.size(),
+            .dataPtr = (void*)serialisedBuffer.data() });
+
+        broker.sendMessage(msg, dstHost, true);
     } catch (std::runtime_error& e) {
         SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - send {} -> {}",
                      thisRankMsg->appid(),
@@ -80,10 +83,12 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
 
 MpiMessage MpiWorld::recvRemoteMpiMessage(int sendRank, int recvRank)
 {
-    std::vector<uint8_t> msg;
+    faabric::transport::PointToPointMessage msg(
+      { .groupId = thisRankMsg->groupid(),
+        .sendIdx = sendRank,
+        .recvIdx = recvRank });
     try {
-        msg =
-          broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
+        broker.recvMessage(msg, true);
     } catch (std::runtime_error& e) {
         SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - recv (remote) {} -> {}",
                      thisRankMsg->appid(),
@@ -595,7 +600,6 @@ void MpiWorld::doRecv(const MpiMessage& m,
     if (m.messageType != messageType) {
         SPDLOG_ERROR("Different message types (got: {}, expected: {})",
                      m.messageType,
-                     messageType);
     }
     assert(m.messageType == messageType);
     assert(m.count <= count);
