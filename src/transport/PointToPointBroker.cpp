@@ -746,7 +746,7 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
                                                      bool mustOrderMsg)
 {
     // If we don't need to receive messages in order, return here
-    if (!mustOrderMsg) {
+    if (!mustOrderMsg || isServerSingleThreaded) {
         // TODO - can we avoid this copy?
         return doRecvMessage(groupId, sendIdx, recvIdx).dataCopy();
     }
