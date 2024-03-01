@@ -51,11 +51,8 @@ jobs:
         # See actions/checkout#766
       - name: "Set the GH workspace as a safe git directory"
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          # FIXME: clang-format-17 introduces a new policy regarding braces
-          # that introduces a lot of changes in the source tree. We skip
-          # the formatting checks until the LLVM 17 PR is merged in
-          # - name: "Code formatting checks"
-          # run: ./bin/inv_wrapper.sh format-code --check
+      - name: "Code formatting checks"
+        run: ./bin/inv_wrapper.sh format-code --check
 
   code-coverage:
     if: github.event.pull_request.draft == false

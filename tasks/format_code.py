@@ -54,6 +54,7 @@ def format(ctx, check=False):
     clang_cmd = [
         "clang-format-{}".format(LLVM_VERSION_MAJOR),
         "--dry-run --Werror" if check else "-i",
+        "-style=file",
         " ".join(files_to_check),
     ]
     clang_cmd = " ".join(clang_cmd)
