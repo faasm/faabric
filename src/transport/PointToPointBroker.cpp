@@ -788,8 +788,7 @@ std::pair<MessageResponseCode, int> PointToPointBroker::doRecvMessage(
 void PointToPointBroker::recvMessage(PointToPointMessage& msg,
                                      bool mustOrderMsg)
 {
-    // If we don't need to receive messages in order, return here
-    if (!mustOrderMsg) {
+    if (!mustOrderMsg || isServerSingleThreaded) {
         doRecvMessage(msg);
         return;
     }

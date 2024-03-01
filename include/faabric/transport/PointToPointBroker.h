@@ -143,6 +143,10 @@ class PointToPointBroker
   private:
     faabric::util::SystemConfig& conf;
 
+    // If the PTP server is single-threaded, we can shortcut a lot of the
+    // complexity associated with ordering messages
+    const bool isServerSingleThreaded = true;
+
     std::shared_mutex brokerMutex;
 
     std::unordered_map<int, std::set<int>> groupIdIdxsMap;
