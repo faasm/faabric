@@ -128,7 +128,7 @@ def coverage_report(ctx, file_in, file_out):
 
     # Second, generate the coverage report
     llvm_cmd = [
-        "llvm-cov-13 show",
+        "llvm-cov-{} show".format(LLVM_VERSION_MAJOR),
         "--ignore-filename-regex=/code/faabric/tests/*",
         join(FAABRIC_STATIC_BUILD_DIR, "bin", "faabric_tests"),
         "-instr-profile={}".format(tmp_file),
