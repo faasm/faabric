@@ -66,8 +66,14 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
 
     // Request different sizes
     int requestedWorldSize;
-    SECTION("Under zero") { requestedWorldSize = -1; }
-    SECTION("Zero") { requestedWorldSize = 0; }
+    SECTION("Under zero")
+    {
+        requestedWorldSize = -1;
+    }
+    SECTION("Zero")
+    {
+        requestedWorldSize = 0;
+    }
 
     // Create the world
     MpiContext c;

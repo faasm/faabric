@@ -19,19 +19,40 @@ TEST_CASE_METHOD(DirtyTrackingFixture,
 {
     std::string mode;
 
-    SECTION("Segfaults") { mode = "segfault"; }
+    SECTION("Segfaults")
+    {
+        mode = "segfault";
+    }
 
-    SECTION("Soft PTEs") { mode = "softpte"; }
+    SECTION("Soft PTEs")
+    {
+        mode = "softpte";
+    }
 
-    SECTION("None") { mode = "none"; }
+    SECTION("None")
+    {
+        mode = "none";
+    }
 
-    SECTION("Uffd") { mode = "uffd"; }
+    SECTION("Uffd")
+    {
+        mode = "uffd";
+    }
 
-    SECTION("Uffd write-protect") { mode = "uffd-wp"; }
+    SECTION("Uffd write-protect")
+    {
+        mode = "uffd-wp";
+    }
 
-    SECTION("Uffd threaded") { mode = "uffd-thread"; }
+    SECTION("Uffd threaded")
+    {
+        mode = "uffd-thread";
+    }
 
-    SECTION("Uffd threaded write-protect") { mode = "uffd-thread-wp"; }
+    SECTION("Uffd threaded write-protect")
+    {
+        mode = "uffd-thread-wp";
+    }
 
     // Set the conf, reset the tracker and check
     setTrackingMode(mode);
@@ -61,9 +82,15 @@ TEST_CASE_METHOD(DirtyTrackingFixture,
         checkPostReset = true;
         dirtyReads = false;
 
-        SECTION("Shared") { sharedMemory = true; }
+        SECTION("Shared")
+        {
+            sharedMemory = true;
+        }
 
-        SECTION("Private") { sharedMemory = false; }
+        SECTION("Private")
+        {
+            sharedMemory = false;
+        }
 
         SECTION("Mapped shared")
         {
@@ -84,9 +111,15 @@ TEST_CASE_METHOD(DirtyTrackingFixture,
         checkPostReset = true;
         dirtyReads = false;
 
-        SECTION("Shared") { sharedMemory = true; }
+        SECTION("Shared")
+        {
+            sharedMemory = true;
+        }
 
-        SECTION("Private") { sharedMemory = false; }
+        SECTION("Private")
+        {
+            sharedMemory = false;
+        }
 
         SECTION("Mapped shared")
         {
@@ -107,9 +140,15 @@ TEST_CASE_METHOD(DirtyTrackingFixture,
         checkPostReset = false;
         dirtyReads = true;
 
-        SECTION("Shared") { sharedMemory = true; }
+        SECTION("Shared")
+        {
+            sharedMemory = true;
+        }
 
-        SECTION("Private") { sharedMemory = false; }
+        SECTION("Private")
+        {
+            sharedMemory = false;
+        }
 
         SECTION("Mapped shared")
         {
@@ -132,7 +171,10 @@ TEST_CASE_METHOD(DirtyTrackingFixture,
 
         // Neither shared nor mapped mem works with write-protection
 
-        SECTION("Private") { sharedMemory = false; }
+        SECTION("Private")
+        {
+            sharedMemory = false;
+        }
     }
 
     SECTION("Userfaultfd thread")
@@ -141,9 +183,15 @@ TEST_CASE_METHOD(DirtyTrackingFixture,
         checkPostReset = false;
         dirtyReads = false;
 
-        SECTION("Shared") { sharedMemory = true; }
+        SECTION("Shared")
+        {
+            sharedMemory = true;
+        }
 
-        SECTION("Private") { sharedMemory = false; }
+        SECTION("Private")
+        {
+            sharedMemory = false;
+        }
 
         SECTION("Mapped shared")
         {
@@ -166,7 +214,10 @@ TEST_CASE_METHOD(DirtyTrackingFixture,
 
         // Neither shared nor mapped mem works with write-protection
 
-        SECTION("Private") { sharedMemory = false; }
+        SECTION("Private")
+        {
+            sharedMemory = false;
+        }
     }
 
     // Create several pages of memory

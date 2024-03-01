@@ -447,14 +447,20 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
         expectedReturnCode = beast::http::status::bad_request;
         expectedResponseBody = "Bad BatchExecRequest";
 
-        SECTION("Bad ber id") { ber->set_appid(1337); }
+        SECTION("Bad ber id")
+        {
+            ber->set_appid(1337);
+        }
 
         SECTION("App ID mismatch")
         {
             ber->mutable_messages(0)->set_appid(1337);
         }
 
-        SECTION("Empty user") { ber->mutable_messages(0)->set_user(""); }
+        SECTION("Empty user")
+        {
+            ber->mutable_messages(0)->set_user("");
+        }
 
         SECTION("Empty function")
         {
@@ -570,7 +576,10 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     REQUIRE(boost::beast::http::int_to_status(result.first) ==
             beast::http::status::ok);
 
-    SECTION("Flush via reset") { resetPlanner(); }
+    SECTION("Flush via reset")
+    {
+        resetPlanner();
+    }
 
     SECTION("Flush via specific flush message")
     {

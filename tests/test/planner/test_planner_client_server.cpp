@@ -209,7 +209,10 @@ TEST_CASE_METHOD(PlannerClientServerExecTestFixture,
         faabric::util::updateBatchExecAppId(req, 1337);
     }
 
-    SECTION("App registered") { appExists = true; }
+    SECTION("App registered")
+    {
+        appExists = true;
+    }
 
     auto actualDecision = plannerCli.getSchedulingDecision(req);
 

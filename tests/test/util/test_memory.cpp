@@ -324,9 +324,15 @@ TEST_CASE("Test mapping memory fails with invalid fd", "[util][memory]")
     MemoryRegion mem = allocatePrivateMemory(memSize);
 
     int fd = 0;
-    SECTION("Zero fd") { fd = 0; }
+    SECTION("Zero fd")
+    {
+        fd = 0;
+    }
 
-    SECTION("Negative fd") { fd = -2; }
+    SECTION("Negative fd")
+    {
+        fd = -2;
+    }
 
     REQUIRE_THROWS(mapMemoryPrivate({ mem.get(), memSize }, fd));
 }

@@ -735,7 +735,10 @@ TEST_CASE_METHOD(StateServerTestFixture,
     State& s = getGlobalState();
     std::shared_ptr<StateKeyValue> kv;
 
-    SECTION("Sizeless") { kv = s.getKV("demo", "appending_test"); }
+    SECTION("Sizeless")
+    {
+        kv = s.getKV("demo", "appending_test");
+    }
 
     SECTION("With size")
     {

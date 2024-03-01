@@ -144,7 +144,10 @@ TEST_CASE("Test format byte array to string", "[util]")
     std::vector<uint8_t> bytesIn;
     std::string expectedString;
 
-    SECTION("Empty") { expectedString = "[]"; }
+    SECTION("Empty")
+    {
+        expectedString = "[]";
+    }
 
     SECTION("Non-empty")
     {
@@ -223,9 +226,15 @@ TEST_CASE("Test converting a byte array to an int")
 {
     int value;
 
-    SECTION("Test case 1") { value = 38; }
+    SECTION("Test case 1")
+    {
+        value = 38;
+    }
 
-    SECTION("Test case 2") { value = faabric::util::generateGid(); }
+    SECTION("Test case 2")
+    {
+        value = faabric::util::generateGid();
+    }
 
     uint8_t* bytePtr = BYTES(&value);
     std::vector<uint8_t> valueInBytes(bytePtr, bytePtr + sizeof(int));

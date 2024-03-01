@@ -82,7 +82,10 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
     REQUIRE(broker.getIdxsRegisteredForGroup(groupId).size() == groupSize);
 
-    SECTION("Clear through broker") { broker.clear(); }
+    SECTION("Clear through broker")
+    {
+        broker.clear();
+    }
 
     SECTION("Clear through scheduler reset")
     {
@@ -198,7 +201,10 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
     bool useLocal = false;
     bool recursive = false;
-    SECTION("Local-only") { useLocal = true; }
+    SECTION("Local-only")
+    {
+        useLocal = true;
+    }
 
     SECTION("Distributed version non-recursive")
     {
@@ -273,7 +279,10 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     auto group = setUpGroup(appId, groupId, nThreads);
 
     int nSums = 2;
-    SECTION("Single operation") { nSums = 1; }
+    SECTION("Single operation")
+    {
+        nSums = 1;
+    }
 
     SECTION("Lots of operations")
     {

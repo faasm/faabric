@@ -15,6 +15,11 @@ DerivePointerAlignment: false
 BreakBeforeBraces: Custom
 BraceWrapping:
     AfterClass: true
+    AfterEnum: true
+    AfterExternBlock: true
+    AfterFunction: true
+    AfterStruct: true
+    AfterUnion: true
     SplitEmptyFunction: false
     SplitEmptyRecord: false
 ---

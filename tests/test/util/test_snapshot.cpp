@@ -166,9 +166,15 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test mapping editing and remapping memory",
                  "[snapshot][util]")
 {
-    SECTION("Soft PTEs") { setTrackingMode("softpte"); }
+    SECTION("Soft PTEs")
+    {
+        setTrackingMode("softpte");
+    }
 
-    SECTION("Segfaults") { setTrackingMode("segfault"); }
+    SECTION("Segfaults")
+    {
+        setTrackingMode("segfault");
+    }
 
     int snapPages = 4;
     size_t snapSize = snapPages * HOST_PAGE_SIZE;
@@ -1552,7 +1558,10 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
           std::span<uint8_t>(data.data(), data.size()));
     }
 
-    SECTION("From vector") { snap = std::make_shared<SnapshotData>(data); }
+    SECTION("From vector")
+    {
+        snap = std::make_shared<SnapshotData>(data);
+    }
 
     REQUIRE(snap->getSize() == data.size());
     REQUIRE(snap->getMaxSize() == expectedMaxSize);
@@ -1906,9 +1915,15 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 {
     setTrackingMode("none");
 
-    SECTION("XOR diffs") { conf.diffingMode = "xor"; }
+    SECTION("XOR diffs")
+    {
+        conf.diffingMode = "xor";
+    }
 
-    SECTION("Bytewise diffs") { conf.diffingMode = "bytewise"; }
+    SECTION("Bytewise diffs")
+    {
+        conf.diffingMode = "bytewise";
+    }
 
     // Create snapshot
     int snapPages = 4;
