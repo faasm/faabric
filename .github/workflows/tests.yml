@@ -21,9 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: faasm.azurecr.io/faabric:0.14.0
-      credentials:
-        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
-        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
@@ -36,9 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: faasm.azurecr.io/faabric:0.14.0
-      credentials:
-        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
-        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - name: "Check out code"
         uses: actions/checkout@v4
@@ -50,9 +44,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: faasm.azurecr.io/faabric:0.14.0
-      credentials:
-        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
-        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - name: "Check out code"
         uses: actions/checkout@v4
@@ -73,9 +64,6 @@ jobs:
       REDIS_STATE_HOST: redis
     container:
       image: faasm.azurecr.io/faabric:0.14.0
-      credentials:
-        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
-        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       options: --privileged
     services:
       redis:
@@ -115,9 +103,6 @@ jobs:
       REDIS_STATE_HOST: redis
     container:
       image: faasm.azurecr.io/faabric:0.14.0
-      credentials:
-        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
-        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       options: --privileged
     services:
       redis:
@@ -171,9 +156,6 @@ jobs:
       REDIS_STATE_HOST: redis
     container:
       image: faasm.azurecr.io/faabric:0.14.0
-      credentials:
-        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
-        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     services:
       redis:
         image: redis
