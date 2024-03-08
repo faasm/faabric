@@ -127,12 +127,6 @@ jobs:
     env:
       CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
     steps:
-      - name: "Log in to ACR"
-        uses: docker/login-action@v3
-        with:
-          registry: faasm.azurecr.io
-          username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
-          password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       # --- Code update ---
       - name: "Check out code"
         uses: actions/checkout@v4
