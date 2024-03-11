@@ -69,5 +69,7 @@ int winCreate();
 // Other helper functions
 int doAllToAll(int rank, int worldSize, int i);
 
+int bench_allreduce();
+
 void mpiMigrationPoint(int entrypointFuncArg);
 }
