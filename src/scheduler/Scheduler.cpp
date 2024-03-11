@@ -332,6 +332,7 @@ std::shared_ptr<faabric::executor::Executor> Scheduler::claimExecutor(
     for (auto& e : thisExecutors) {
         if (e->tryClaim()) {
             claimed = e;
+            claimed->reset(msg);
             SPDLOG_DEBUG(
               "Reusing warm executor {} for {}", claimed->id, funcStr);
             break;
