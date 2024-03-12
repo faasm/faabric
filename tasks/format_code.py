@@ -1,5 +1,5 @@
 from invoke import task
-from tasks.util.env import PROJ_ROOT
+from tasks.util.env import LLVM_VERSION_MAJOR, PROJ_ROOT
 from subprocess import run
 
 
@@ -21,21 +21,23 @@ def format(ctx, check=False):
         .stdout.decode("utf-8")
         .split("\n")[:-1]
     )
-    black_cmd = [
-        "python3 -m black",
-        "{}".format("--check" if check else ""),
-        " ".join(files_to_check),
-    ]
-    black_cmd = " ".join(black_cmd)
-    run(black_cmd, shell=True, check=True, cwd=PROJ_ROOT)
 
-    flake8_cmd = [
-        "python3 -m flake8",
-        "{}".format("--format" if not check else ""),
-        " ".join(files_to_check),
-    ]
-    flake8_cmd = " ".join(flake8_cmd)
-    run(flake8_cmd, shell=True, check=True, cwd=PROJ_ROOT)
+    if len(files_to_check) > 0:
+        black_cmd = [
+            "python3 -m black",
+            "{}".format("--check" if check else ""),
+            " ".join(files_to_check),
+        ]
+        black_cmd = " ".join(black_cmd)
+        run(black_cmd, shell=True, check=True, cwd=PROJ_ROOT)
+
+        flake8_cmd = [
+            "python3 -m flake8",
+            "{}".format("--format" if not check else ""),
+            " ".join(files_to_check),
+        ]
+        flake8_cmd = " ".join(flake8_cmd)
+        run(flake8_cmd, shell=True, check=True, cwd=PROJ_ROOT)
 
     # ---- C/C++ formatting ----
 
@@ -51,13 +53,15 @@ def format(ctx, check=False):
         .split("\n")[:-1]
     )
 
-    clang_cmd = [
-        "clang-format-13",
-        "--dry-run --Werror" if check else "-i",
-        " ".join(files_to_check),
-    ]
-    clang_cmd = " ".join(clang_cmd)
-    run(clang_cmd, shell=True, check=True, cwd=PROJ_ROOT)
+    if len(files_to_check) > 0:
+        clang_cmd = [
+            "clang-format-{}".format(LLVM_VERSION_MAJOR),
+            "--dry-run --Werror" if check else "-i",
+            "-style=file",
+            " ".join(files_to_check),
+        ]
+        clang_cmd = " ".join(clang_cmd)
+        run(clang_cmd, shell=True, check=True, cwd=PROJ_ROOT)
 
     # ---- Append newlines to C/C++ files if not there ----
 

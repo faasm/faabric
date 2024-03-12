@@ -449,7 +449,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
         req->set_singlehost(true);
     }
 
-    SECTION("Non-single host") { expectedRestoreCount = 1; }
+    SECTION("Non-single host")
+    {
+        expectedRestoreCount = 1;
+    }
 
     std::vector<std::string> expectedHosts;
     for (int i = 0; i < nThreads; i++) {
@@ -490,7 +493,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
 {
     int nThreads = 0;
 
-    SECTION("Underloaded") { nThreads = 10; }
+    SECTION("Underloaded")
+    {
+        nThreads = 10;
+    }
 
     // Set resources
     HostResources localHost;
@@ -818,9 +824,15 @@ TEST_CASE_METHOD(TestExecutorFixture,
     thisResources.set_usedslots(nThreads);
     sch.setThisHostResources(thisResources);
 
-    SECTION("XOR diffs") { conf.diffingMode = "xor"; }
+    SECTION("XOR diffs")
+    {
+        conf.diffingMode = "xor";
+    }
 
-    SECTION("Bytewise diffs") { conf.diffingMode = "bytewise"; }
+    SECTION("Bytewise diffs")
+    {
+        conf.diffingMode = "bytewise";
+    }
 
     // Sanity check memory size
     REQUIRE(TEST_EXECUTOR_DEFAULT_MEMORY_SIZE > nThreads * HOST_PAGE_SIZE);
@@ -1048,7 +1060,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     SECTION("Simple function") {}
 
-    SECTION("Function that spawns threads") { function = "thread-check"; }
+    SECTION("Function that spawns threads")
+    {
+        function = "thread-check";
+    }
 
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, nMessages);
@@ -1237,7 +1252,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
         size_t expectedSize = memSize;
         size_t expectedMaxSize = memSize;
 
-        SECTION("No max mem size") { testExec->maxMemorySize = 0; }
+        SECTION("No max mem size")
+        {
+            testExec->maxMemorySize = 0;
+        }
 
         SECTION("Max mem size")
         {
@@ -1259,9 +1277,15 @@ TEST_CASE_METHOD(TestExecutorFixture,
         reg.registerSnapshot(snapKey, existingSnap);
 
         bool requestCreate = false;
-        SECTION("Request create if not exist") { requestCreate = true; }
+        SECTION("Request create if not exist")
+        {
+            requestCreate = true;
+        }
 
-        SECTION("No request create if not exist") { requestCreate = false; }
+        SECTION("No request create if not exist")
+        {
+            requestCreate = false;
+        }
 
         std::shared_ptr<SnapshotData> actualSnap =
           exec->getMainThreadSnapshot(m, requestCreate);

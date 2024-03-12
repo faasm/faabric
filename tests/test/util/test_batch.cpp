@@ -86,7 +86,10 @@ TEST_CASE("Test batch. exec request sanity checks")
     }
 
     // BERs constructed with the default factory are valid
-    SECTION("Valid BER") { isBerValid = true; }
+    SECTION("Valid BER")
+    {
+        isBerValid = true;
+    }
 
     REQUIRE(isBerValid == isBatchExecRequestValid(ber));
 }

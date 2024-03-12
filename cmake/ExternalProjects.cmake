@@ -17,7 +17,7 @@ endif()
 
 include(${CMAKE_CURRENT_BINARY_DIR}/conan.cmake)
 
-conan_check(VERSION 1.53.0 REQUIRED)
+conan_check(VERSION 1.63.0 REQUIRED)
 
 # Enable revisions in the conan config
 execute_process(COMMAND ${CONAN_CMD} config set general.revisions_enabled=1
@@ -33,11 +33,9 @@ endif()
 conan_cmake_configure(
     REQUIRES
         "abseil/20220623.0@#732381dc99db29b4cfd293684891da56"
-        "boost/1.80.0@#db5db5bd811d23b95089d4a95259d147"
+        "boost/1.84.0@#7604ce1e7485780469dffb6430f232ea"
         "catch2/2.13.9@#8793d3e6287d3684201418de556d98fe"
-        "cppcodec/0.2@#f6385611ce2f7cff954ac8b16e25c4fa"
-        "cpprestsdk/2.10.18@#ed9788e9d202d6eadd92581368ddfc2f"
-        "flatbuffers/2.0.5@#c6a9508bd476da080f7aecbe7a094b68"
+        "flatbuffers/23.5.26@#b153646f6546daab4c7326970b6cd89c"
         "hiredis/1.0.2@#370dad964286cadb1f15dc90252e8ef3"
         "openssl/3.0.2@#269fa93e5afe8c34bd9a0030d2b8f0fe"
         "protobuf/3.20.0@#8e4de7081bea093469c9e6076149b2b4"
@@ -48,12 +46,8 @@ conan_cmake_configure(
         cmake_find_package
         cmake_paths
     OPTIONS
-        flatbuffers:options_from_context=False
-        flatbuffers:flatc=True
-        flatbuffers:flatbuffers=True
         boost:error_code_header_only=True
         boost:system_no_deprecated=True
-        boost:filesystem_no_deprecated=True
         boost:zlib=False
         boost:bzip2=False
         boost:lzma=False
@@ -64,7 +58,6 @@ conan_cmake_configure(
         boost:without_python=True
         boost:without_test=True
         boost:without_wave=True
-        cpprestsdk:with_websockets=False
 )
 
 conan_cmake_autodetect(FAABRIC_CONAN_SETTINGS)
@@ -83,9 +76,7 @@ include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
 find_package(absl REQUIRED)
 find_package(Boost 1.80.0 REQUIRED)
 find_package(Catch2 REQUIRED)
-find_package(cppcodec REQUIRED)
-find_package(cpprestsdk REQUIRED)
-find_package(FlatBuffers REQUIRED)
+find_package(flatbuffers REQUIRED)
 find_package(fmt REQUIRED)
 find_package(hiredis REQUIRED)
 # 27/01/2023 - Pin OpenSSL to a specific version to avoid incompatibilities
@@ -104,7 +95,7 @@ find_package(ZLIB REQUIRED)
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
 set(ZSTD_BUILD_PROGRAMS OFF CACHE INTERNAL "")
-set(ZSTD_BUILD_SHARED OFF CACHE INTERNAL "")
+set(ZSTD_BUILD_SHARED ON CACHE INTERNAL "")
 set(ZSTD_BUILD_STATIC ON CACHE INTERNAL "")
 set(ZSTD_BUILD_TESTS OFF CACHE INTERNAL "")
 # This means zstd doesn't use threading internally,
@@ -132,7 +123,9 @@ FetchContent_Declare(nng_ext
 FetchContent_MakeAvailable(zstd_ext)
 # Work around zstd not declaring its targets properly
 target_include_directories(libzstd_static SYSTEM INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
+target_include_directories(libzstd_shared SYSTEM INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
 add_library(zstd::libzstd_static ALIAS libzstd_static)
+add_library(zstd::libzstd_shared ALIAS libzstd_shared)
 
 FetchContent_MakeAvailable(nng_ext)
 add_library(nng::nng ALIAS nng)
@@ -149,10 +142,7 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     absl::flat_hash_map
     absl::strings
     Boost::Boost
-    Boost::filesystem
     Boost::system
-    cppcodec::cppcodec
-    cpprestsdk::cpprestsdk
     flatbuffers::flatbuffers
     hiredis::hiredis
     nng::nng

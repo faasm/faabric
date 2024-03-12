@@ -149,9 +149,15 @@ TEMPLATE_TEST_CASE("Test queue timeout must be positive",
 {
     int timeoutValueMs;
 
-    SECTION("Zero timeout") { timeoutValueMs = 0; }
+    SECTION("Zero timeout")
+    {
+        timeoutValueMs = 0;
+    }
 
-    SECTION("Negative timeout") { timeoutValueMs = -1; }
+    SECTION("Negative timeout")
+    {
+        timeoutValueMs = -1;
+    }
 
     TestType q;
     q.enqueue(10);

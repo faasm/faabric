@@ -94,7 +94,10 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
         updateLocalResources(2, 1);
     }
 
-    SECTION("Must not migrate") { mustMigrate = false; }
+    SECTION("Must not migrate")
+    {
+        mustMigrate = false;
+    }
 
     // The group leader (message with index 0) will detect the migration, but
     // does not have to migrate
@@ -191,7 +194,10 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
         updateLocalResources(4, 2);
     }
 
-    SECTION("Must not migrate") { mustMigrate = false; }
+    SECTION("Must not migrate")
+    {
+        mustMigrate = false;
+    }
 
     // The group leader (message with index 0) will detect the migration, but
     // does not have to migrate

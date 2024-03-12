@@ -212,9 +212,15 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     bool isMessageOrderingOn;
 
-    SECTION("Ordering on") { isMessageOrderingOn = true; }
+    SECTION("Ordering on")
+    {
+        isMessageOrderingOn = true;
+    }
 
-    SECTION("Ordering off") { isMessageOrderingOn = false; }
+    SECTION("Ordering off")
+    {
+        isMessageOrderingOn = false;
+    }
 
     int numMsg = 1e3;
 

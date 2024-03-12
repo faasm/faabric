@@ -514,9 +514,15 @@ TEST_CASE("Test dequeue after enqueue", "[redis]")
     redisQueue.enqueue("foobar", "baz");
 
     int timeout;
-    SECTION("Zero timeout") { timeout = 0; }
+    SECTION("Zero timeout")
+    {
+        timeout = 0;
+    }
 
-    SECTION("Nonzero timeout") { timeout = 500; }
+    SECTION("Nonzero timeout")
+    {
+        timeout = 500;
+    }
 
     std::jthread t([&redisQueue, &success, &timeout] {
         std::string res = redisQueue.dequeue("foobar", timeout);

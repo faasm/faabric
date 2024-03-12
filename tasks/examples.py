@@ -1,16 +1,18 @@
-from os import makedirs, environ
-from shutil import rmtree
-from os.path import join, exists
 from copy import copy
-from subprocess import run
-
-from tasks.util.env import PROJ_ROOT, FAABRIC_INSTALL_PREFIX
-
 from invoke import task
+from os import makedirs, environ
+from os.path import join, exists
+from shutil import rmtree
+from subprocess import run
+from tasks.util.env import (
+    FAABRIC_INSTALL_PREFIX,
+    LLVM_VERSION_MAJOR,
+    PROJ_ROOT,
+)
+
 
 EXAMPLES_DIR = join(PROJ_ROOT, "examples")
 BUILD_DIR = join(EXAMPLES_DIR, "build")
-
 INCLUDE_DIR = "{}/include".format(FAABRIC_INSTALL_PREFIX)
 LIB_DIR = "{}/lib".format(FAABRIC_INSTALL_PREFIX)
 
@@ -34,8 +36,10 @@ def build(ctx, clean=False):
             "-DCMAKE_BUILD_TYPE=Release",
             "-DCMAKE_CXX_FLAGS=-I{}".format(INCLUDE_DIR),
             "-DCMAKE_EXE_LINKER_FLAGS=-L{}".format(LIB_DIR),
-            "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-13",
-            "-DCMAKE_C_COMPILER=/usr/bin/clang-13",
+            "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-{}".format(
+                LLVM_VERSION_MAJOR
+            ),
+            "-DCMAKE_C_COMPILER=/usr/bin/clang-{}".format(LLVM_VERSION_MAJOR),
             EXAMPLES_DIR,
         ]
     )

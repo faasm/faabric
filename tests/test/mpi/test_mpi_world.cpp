@@ -629,9 +629,15 @@ void doReduceTest(MpiWorld& world,
     int thisWorldSize = world.getSize();
 
     bool inPlace;
-    SECTION("In place") { inPlace = true; }
+    SECTION("In place")
+    {
+        inPlace = true;
+    }
 
-    SECTION("Not in place") { inPlace = false; }
+    SECTION("Not in place")
+    {
+        inPlace = false;
+    }
 
     // ---- Reduce ----
     // Call on all but the root first
@@ -1180,9 +1186,15 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
     {
         bool isInPlace;
 
-        SECTION("In place") { isInPlace = true; }
+        SECTION("In place")
+        {
+            isInPlace = true;
+        }
 
-        SECTION("Not in place") { isInPlace = false; }
+        SECTION("Not in place")
+        {
+            isInPlace = false;
+        }
 
         // Run allgather in threads
         std::vector<std::jthread> threads;
@@ -1252,8 +1264,14 @@ TEST_CASE_METHOD(MpiTestFixture, "Test scan", "[mpi]")
     }
 
     bool inPlace;
-    SECTION("In place") { inPlace = true; }
-    SECTION("Not in place") { inPlace = false; }
+    SECTION("In place")
+    {
+        inPlace = true;
+    }
+    SECTION("Not in place")
+    {
+        inPlace = false;
+    }
 
     // Run the scan operation
     std::vector<std::vector<int>> result(worldSize, std::vector<int>(count));

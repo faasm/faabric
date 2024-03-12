@@ -16,6 +16,13 @@ FAABRIC_CONFIG_FILE = join(PROJ_ROOT, "faabric.ini")
 
 ACR_NAME = "faasm.azurecr.io"
 
+# This LLVM version is for the LLVM that we use to compile regular C/C++ code
+# to x86. For the LLVM version to cross-compile code to WebAssembly see
+# faasm/cpp/faasmtools/env.py. Ideally, both versions will be in sync but it
+# is not strictly necessary.
+LLVM_VERSION = "17.0.6"
+LLVM_VERSION_MAJOR = LLVM_VERSION.split(".")[0]
+
 
 def get_version():
     ver_file = join(PROJ_ROOT, "VERSION")

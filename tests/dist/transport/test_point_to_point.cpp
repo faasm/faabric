@@ -163,9 +163,15 @@ TEST_CASE_METHOD(DistTestsFixture,
     sch.addHostToGlobalSet(getWorkerIP(), std::make_shared<HostResources>(res));
 
     std::string function;
-    SECTION("Barrier") { function = "barrier"; }
+    SECTION("Barrier")
+    {
+        function = "barrier";
+    }
 
-    SECTION("Notify") { function = "notify"; }
+    SECTION("Notify")
+    {
+        function = "notify";
+    }
 
     // Set up the message
     std::shared_ptr<faabric::BatchExecuteRequest> req =

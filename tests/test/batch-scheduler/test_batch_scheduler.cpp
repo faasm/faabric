@@ -14,7 +14,10 @@ TEST_CASE_METHOD(ConfFixture,
 {
     resetBatchScheduler();
 
-    SECTION("Bin-pack mode") { conf.batchSchedulerMode = "bin-pack"; }
+    SECTION("Bin-pack mode")
+    {
+        conf.batchSchedulerMode = "bin-pack";
+    }
 
     // Do it twice so that we check the cold and hot path
     std::shared_ptr<BatchScheduler> batchScheduler = nullptr;

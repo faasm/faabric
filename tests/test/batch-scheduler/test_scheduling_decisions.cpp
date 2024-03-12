@@ -23,7 +23,10 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
     std::set<std::string> expectedUniqueHosts;
 
     bool expectSingleHost = false;
-    SECTION("Multi-host") { expectedUniqueHosts = { hostA, hostB, hostC }; }
+    SECTION("Multi-host")
+    {
+        expectedUniqueHosts = { hostA, hostB, hostC };
+    }
 
     SECTION("Only remote hosts")
     {

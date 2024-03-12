@@ -1,13 +1,13 @@
 from os import makedirs
-from shutil import rmtree
 from os.path import exists, join
+from shutil import rmtree
 from subprocess import run
-
 from tasks.util.env import (
-    PROJ_ROOT,
     FAABRIC_SHARED_BUILD_DIR,
     FAABRIC_STATIC_BUILD_DIR,
     FAABRIC_INSTALL_PREFIX,
+    LLVM_VERSION_MAJOR,
+    PROJ_ROOT,
 )
 
 from invoke import task
@@ -47,8 +47,8 @@ def cmake(
         "-DCMAKE_INSTALL_PREFIX={}".format(FAABRIC_INSTALL_PREFIX),
         "-DCMAKE_BUILD_TYPE={}".format(build),
         "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),
-        "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-13",
-        "-DCMAKE_C_COMPILER=/usr/bin/clang-13",
+        "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-{}".format(LLVM_VERSION_MAJOR),
+        "-DCMAKE_C_COMPILER=/usr/bin/clang-{}".format(LLVM_VERSION_MAJOR),
         "-DFAABRIC_USE_SANITISER={}".format(sanitiser),
         "-DFAABRIC_SELF_TRACING=ON" if prof else "",
         "-DFAABRIC_CODE_COVERAGE=ON" if coverage else "",
@@ -119,7 +119,7 @@ def coverage_report(ctx, file_in, file_out):
 
     # First, merge in the raw profiling data
     llvm_cmd = [
-        "llvm-profdata-13",
+        "llvm-profdata-{}".format(LLVM_VERSION_MAJOR),
         "merge -sparse {}".format(file_in),
         "-o {}".format(tmp_file),
     ]
@@ -128,7 +128,7 @@ def coverage_report(ctx, file_in, file_out):
 
     # Second, generate the coverage report
     llvm_cmd = [
-        "llvm-cov-13 show",
+        "llvm-cov-{} show".format(LLVM_VERSION_MAJOR),
         "--ignore-filename-regex=/code/faabric/tests/*",
         join(FAABRIC_STATIC_BUILD_DIR, "bin", "faabric_tests"),
         "-instr-profile={}".format(tmp_file),

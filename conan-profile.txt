@@ -4,12 +4,12 @@ os_build=Linux
 arch=x86_64
 arch_build=x86_64
 compiler=clang
-compiler.version=13
+compiler.version=17
 compiler.libcxx=libstdc++11
 compiler.cppstd=20
 build_type=Release
 [options]
 [build_requires]
 [env]
-CC=/usr/bin/clang-13
-CXX=/usr/bin/clang++-13
+CC=/usr/bin/clang-17
+CXX=/usr/bin/clang++-17
