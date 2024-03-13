@@ -4,9 +4,9 @@
 #include "faabric_utils.h"
 #include "init.h"
 
-#include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/transport/PointToPointMessage.h>
 #include <faabric/util/batch.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/gids.h>
@@ -43,12 +43,25 @@ int handlePointToPointFunction(
     std::vector<uint8_t> expectedRecvData(10, recvFromIdx);
 
     // Do the sending
-    broker.sendMessage(
-      groupId, groupIdx, sendToIdx, sendData.data(), sendData.size());
+    PointToPointMessage sendMsg({ .groupId = groupId,
+                                  .sendIdx = groupIdx,
+                                  .recvIdx = sendToIdx,
+                                  .dataSize = sendData.size(),
+                                  .dataPtr = sendData.data() });
+    broker.sendMessage(sendMsg);
 
     // Do the receiving
-    std::vector<uint8_t> actualRecvData =
-      broker.recvMessage(groupId, recvFromIdx, groupIdx);
+    PointToPointMessage recvMsg({ .groupId = groupId,
+                                  .sendIdx = recvFromIdx,
+                                  .recvIdx = groupIdx,
+                                  .dataSize = 0,
+                                  .dataPtr = nullptr });
+    broker.recvMessage(recvMsg);
+    std::vector<uint8_t> actualRecvData(recvMsg.dataSize);
+    std::memcpy(actualRecvData.data(), recvMsg.dataPtr, recvMsg.dataSize);
+    // TODO(no-order): we will be able to change the signature of recvMessage
+    // to take in a pre-allocated buffer to read into
+    faabric::util::free(recvMsg.dataPtr);
 
     // Check data is as expected
     if (actualRecvData != expectedRecvData) {
@@ -82,19 +95,31 @@ int handleManyPointToPointMsgFunction(
         // Send loop
         for (int i = 0; i < numMsg; i++) {
             std::vector<uint8_t> sendData(5, i);
-            broker.sendMessage(groupId,
-                               sendIdx,
-                               recvIdx,
-                               sendData.data(),
-                               sendData.size(),
-                               true);
+            PointToPointMessage sendMsg({ .groupId = groupId,
+                                          .sendIdx = sendIdx,
+                                          .recvIdx = recvIdx,
+                                          .dataSize = sendData.size(),
+                                          .dataPtr = sendData.data() });
+            broker.sendMessage(sendMsg, true);
         }
     } else if (groupIdx == recvIdx) {
         // Recv loop
         for (int i = 0; i < numMsg; i++) {
             std::vector<uint8_t> expectedData(5, i);
-            auto actualData =
-              broker.recvMessage(groupId, sendIdx, recvIdx, true);
+
+            PointToPointMessage recvMsg({ .groupId = groupId,
+                                          .sendIdx = sendIdx,
+                                          .recvIdx = recvIdx,
+                                          .dataSize = 0,
+                                          .dataPtr = nullptr });
+            broker.recvMessage(recvMsg, true);
+
+            std::vector<uint8_t> actualData(recvMsg.dataSize);
+            std::memcpy(actualData.data(), recvMsg.dataPtr, recvMsg.dataSize);
+            // TODO(no-order): we will be able to change the signature of
+            // recvMessage to take in a pre-allocated buffer to read into
+            faabric::util::free(recvMsg.dataPtr);
+
             if (actualData != expectedData) {
                 SPDLOG_ERROR(
                   "Out-of-order message reception (got: {}, expected: {})",

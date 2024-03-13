@@ -5,7 +5,6 @@
 #include "init.h"
 
 #include <faabric/batch-scheduler/SchedulingDecision.h>
-#include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>

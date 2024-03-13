@@ -1,12 +1,14 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointCall.h>
+#include <faabric/transport/PointToPointMessage.h>
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/memory.h>
 
 namespace faabric::transport {
 
@@ -25,9 +27,11 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
     int sequenceNum = message.getSequenceNum();
     switch (header) {
         case (faabric::transport::PointToPointCall::MESSAGE): {
-            PARSE_MSG(faabric::PointToPointMessage,
-                      message.udata().data(),
-                      message.udata().size())
+            // Here we are copying the message from the transport layer (NNG)
+            // into our PTP message structure
+            // NOTE: this mallocs
+            PointToPointMessage parsedMsg;
+            parsePtpMsg(message.udata(), &parsedMsg);
 
             // If the sequence number is set, we must also set the ordering
             // flag
@@ -35,13 +39,15 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
 
             // Send the message locally to the downstream socket, add the
             // sequence number for in-order reception
-            broker.sendMessage(parsedMsg.groupid(),
-                               parsedMsg.sendidx(),
-                               parsedMsg.recvidx(),
-                               BYTES_CONST(parsedMsg.data().c_str()),
-                               parsedMsg.data().size(),
-                               mustOrderMsg,
-                               sequenceNum);
+            broker.sendMessage(parsedMsg, mustOrderMsg, sequenceNum);
+
+            // TODO(no-inproc): for the moment, the downstream (inproc)
+            // socket makes a copy of this message, so we can free it now
+            // after sending. This will not be the case once we move to
+            // in-memory queues
+            if (parsedMsg.dataPtr != nullptr) {
+                faabric::util::free(parsedMsg.dataPtr);
+            }
             break;
         }
         case faabric::transport::PointToPointCall::LOCK_GROUP: {
@@ -101,28 +107,33 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
 void PointToPointServer::recvGroupLock(std::span<const uint8_t> buffer,
                                        bool recursive)
 {
-    PARSE_MSG(faabric::PointToPointMessage, buffer.data(), buffer.size())
+    PointToPointMessage parsedMsg;
+    parsePtpMsg(buffer, &parsedMsg);
+    assert(parsedMsg.dataPtr == nullptr && parsedMsg.dataSize == 0);
+
     SPDLOG_TRACE("Receiving lock on {} for idx {} (recursive {})",
-                 parsedMsg.groupid(),
-                 parsedMsg.sendidx(),
+                 parsedMsg.groupId,
+                 parsedMsg.sendIdx,
                  recursive);
 
-    PointToPointGroup::getGroup(parsedMsg.groupid())
-      ->lock(parsedMsg.sendidx(), recursive);
+    PointToPointGroup::getGroup(parsedMsg.groupId)
+      ->lock(parsedMsg.sendIdx, recursive);
 }
 
 void PointToPointServer::recvGroupUnlock(std::span<const uint8_t> buffer,
                                          bool recursive)
 {
-    PARSE_MSG(faabric::PointToPointMessage, buffer.data(), buffer.size())
+    PointToPointMessage parsedMsg;
+    parsePtpMsg(buffer, &parsedMsg);
+    assert(parsedMsg.dataPtr == nullptr && parsedMsg.dataSize == 0);
 
     SPDLOG_TRACE("Receiving unlock on {} for idx {} (recursive {})",
-                 parsedMsg.groupid(),
-                 parsedMsg.sendidx(),
+                 parsedMsg.groupId,
+                 parsedMsg.sendIdx,
                  recursive);
 
-    PointToPointGroup::getGroup(parsedMsg.groupid())
-      ->unlock(parsedMsg.sendidx(), recursive);
+    PointToPointGroup::getGroup(parsedMsg.groupId)
+      ->unlock(parsedMsg.sendIdx, recursive);
 }
 
 void PointToPointServer::onWorkerStop()

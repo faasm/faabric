@@ -135,8 +135,12 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
         op = PointToPointCall::LOCK_GROUP;
 
         // Prepare response
-        broker.sendMessage(
-          groupId, POINT_TO_POINT_MAIN_IDX, groupIdx, data.data(), data.size());
+        PointToPointMessage msg({ .groupId = groupId,
+                                  .sendIdx = POINT_TO_POINT_MAIN_IDX,
+                                  .recvIdx = groupIdx,
+                                  .dataSize = 0,
+                                  .dataPtr = nullptr });
+        broker.sendMessage(msg);
 
         group->lock(groupIdx, false);
     }
@@ -147,8 +151,12 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
         recursive = true;
 
         // Prepare response
-        broker.sendMessage(
-          groupId, POINT_TO_POINT_MAIN_IDX, groupIdx, data.data(), data.size());
+        PointToPointMessage msg({ .groupId = groupId,
+                                  .sendIdx = POINT_TO_POINT_MAIN_IDX,
+                                  .recvIdx = groupIdx,
+                                  .dataSize = 0,
+                                  .dataPtr = nullptr });
+        broker.sendMessage(msg);
 
         group->lock(groupIdx, recursive);
     }
@@ -166,8 +174,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
         group->unlock(groupIdx, recursive);
     }
 
-    std::vector<
-      std::tuple<std::string, PointToPointCall, faabric::PointToPointMessage>>
+    std::vector<std::tuple<std::string, PointToPointCall, PointToPointMessage>>
       actualRequests = getSentLockMessages();
 
     REQUIRE(actualRequests.size() == 1);
@@ -176,11 +183,11 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     PointToPointCall actualOp = std::get<1>(actualRequests.at(0));
     REQUIRE(actualOp == op);
 
-    faabric::PointToPointMessage req = std::get<2>(actualRequests.at(0));
-    REQUIRE(req.appid() == appId);
-    REQUIRE(req.groupid() == groupId);
-    REQUIRE(req.sendidx() == groupIdx);
-    REQUIRE(req.recvidx() == POINT_TO_POINT_MAIN_IDX);
+    PointToPointMessage req = std::get<2>(actualRequests.at(0));
+    REQUIRE(req.appId == appId);
+    REQUIRE(req.groupId == groupId);
+    REQUIRE(req.sendIdx == groupIdx);
+    REQUIRE(req.recvIdx == POINT_TO_POINT_MAIN_IDX);
 }
 
 TEST_CASE_METHOD(PointToPointGroupFixture,

@@ -2,6 +2,7 @@
 
 #include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/transport/PointToPointClient.h>
+#include <faabric/transport/PointToPointMessage.h>
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 
@@ -120,27 +121,16 @@ class PointToPointBroker
 
     void updateHostForIdx(int groupId, int groupIdx, std::string newHost);
 
-    void sendMessage(int groupId,
-                     int sendIdx,
-                     int recvIdx,
-                     const uint8_t* buffer,
-                     size_t bufferSize,
+    void sendMessage(const PointToPointMessage& msg,
                      std::string hostHint,
                      bool mustOrderMsg = false);
 
-    void sendMessage(int groupId,
-                     int sendIdx,
-                     int recvIdx,
-                     const uint8_t* buffer,
-                     size_t bufferSize,
+    void sendMessage(const PointToPointMessage& msg,
                      bool mustOrderMsg = false,
                      int sequenceNum = NO_SEQUENCE_NUM,
                      std::string hostHint = "");
 
-    std::vector<uint8_t> recvMessage(int groupId,
-                                     int sendIdx,
-                                     int recvIdx,
-                                     bool mustOrderMsg = false);
+    void recvMessage(PointToPointMessage& msg, bool mustOrderMsg = false);
 
     void clearGroup(int groupId);
 
@@ -163,7 +153,8 @@ class PointToPointBroker
 
     std::shared_ptr<faabric::util::FlagWaiter> getGroupFlag(int groupId);
 
-    Message doRecvMessage(int groupId, int sendIdx, int recvIdx);
+    // Returns the message response code and the sequence number
+    std::pair<MessageResponseCode, int> doRecvMessage(PointToPointMessage& msg);
 
     void initSequenceCounters(int groupId);
 
