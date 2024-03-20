@@ -164,7 +164,7 @@ TEST_CASE_METHOD(MultiWorldMpiTestFixture,
         REQUIRE(worldA.getLocalQueueSize(rankA2, 0) == 0);
         const std::shared_ptr<InMemoryMpiQueue>& queueA2 =
           worldA.getLocalQueue(rankA1, rankA2);
-        MPIMessage actualMessage = *(queueA2->dequeue());
+        MpiMessage actualMessage = queueA2->dequeue();
         // checkMessage(actualMessage, worldId, rankA1, rankA2, messageData);
 
         // Check for world B
@@ -174,7 +174,7 @@ TEST_CASE_METHOD(MultiWorldMpiTestFixture,
         REQUIRE(worldB.getLocalQueueSize(rankA2, 0) == 0);
         const std::shared_ptr<InMemoryMpiQueue>& queueA2B =
           worldB.getLocalQueue(rankA1, rankA2);
-        actualMessage = *(queueA2B->dequeue());
+        actualMessage = queueA2B->dequeue();
         // checkMessage(actualMessage, worldId, rankA1, rankA2, messageData);
     }
 
