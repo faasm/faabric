@@ -41,7 +41,6 @@ if (NOT ("${CMAKE_PROJECT_NAME}" STREQUAL "faabricmpi"))
     faabric_lib(mpi
         MpiContext.cpp
         MpiMessage.cpp
-        MpiMessageBuffer.cpp
         MpiWorld.cpp
         MpiWorldRegistry.cpp
     )

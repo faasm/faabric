@@ -1390,16 +1390,5 @@ TEST_CASE_METHOD(MpiTestFixture,
         REQUIRE(actual == data);
         REQUIRE(actual2 == data2);
     }
-
-    SECTION("Outstanding isend")
-    {
-        int sendId = world.isend(rankA, rankB, BYTES(&data), MPI_INT, 1);
-        world.recv(rankA, rankB, BYTES(&actual), MPI_INT, 1, MPI_STATUS_IGNORE);
-
-        REQUIRE_THROWS(world.destroy());
-
-        world.awaitAsyncRequest(sendId);
-        REQUIRE(actual == data);
-    }
 }
 }

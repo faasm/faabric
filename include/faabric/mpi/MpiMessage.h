@@ -19,6 +19,8 @@ enum MpiMessageType : int32_t
     ALLTOALL = 9,
     SENDRECV = 10,
     BROADCAST = 11,
+    // Special message type for async messages that have not been unacked yet
+    UNACKED_MPI_MESSAGE = 12,
 };
 
 /* Simple fixed-size C-struct to capture the state of an MPI message moving
@@ -41,8 +43,10 @@ struct MpiMessage
     int32_t recvRank;
     int32_t typeSize;
     int32_t count;
+    // This field is only used for async messages, but it helps making the
+    // struct 8-aligned
+    int32_t requestId;
     MpiMessageType messageType;
-    int32_t __make_8_byte_aligned;
     void* buffer;
 };
 static_assert((sizeof(MpiMessage) % 8) == 0, "MPI message must be 8-aligned!");

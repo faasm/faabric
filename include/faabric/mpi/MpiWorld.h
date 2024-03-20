@@ -1,7 +1,6 @@
 #pragma once
 
 #include <faabric/mpi/MpiMessage.h>
-#include <faabric/mpi/MpiMessageBuffer.h>
 #include <faabric/mpi/mpi.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
@@ -10,7 +9,6 @@
 #include <faabric/util/timing.h>
 
 #include <atomic>
-#include <unordered_map>
 
 // Constants for profiling MPI parameters like number of messages sent or
 // message breakdown by type in the execution graph. Remember to increase the
@@ -190,10 +188,6 @@ class MpiWorld
 
     double getWTime();
 
-    std::vector<bool> getInitedRemoteMpiEndpoints();
-
-    std::vector<bool> getInitedUMB();
-
     /* Profiling */
 
     void setMsgForRank(faabric::Message& msg);
@@ -244,12 +238,11 @@ class MpiWorld
     MpiMessage recvRemoteMpiMessage(int sendRank, int recvRank);
 
     // Support for asyncrhonous communications
-    std::shared_ptr<MpiMessageBuffer> getUnackedMessageBuffer(int sendRank,
-                                                              int recvRank);
+    int getUnackedMessageBuffer(int sendRank, int recvRank);
 
     MpiMessage recvBatchReturnLast(int sendRank,
                                    int recvRank,
-                                   int batchSize = 0);
+                                   int requestId = 0);
 
     /* Helper methods */
 
@@ -264,11 +257,14 @@ class MpiWorld
                 MpiMessageType messageType = MpiMessageType::NORMAL);
 
     // Abstraction of the bulk of the recv work, shared among various functions
+    // TODO: can we remove this?
     void doRecv(std::unique_ptr<MpiMessage> m,
                 uint8_t* buffer,
                 faabric_datatype_t* dataType,
                 int count,
                 MPI_Status* status,
                 MpiMessageType messageType = MpiMessageType::NORMAL);
+
+    MpiMessage internalRecv(int sendRank, int recvRank, bool isLocal);
 };
 }

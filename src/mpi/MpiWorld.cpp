@@ -11,14 +11,18 @@
 #include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
 
+#include <list>
+#include <map>
+
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
 // per-rank data structures
-static thread_local std::vector<std::shared_ptr<faabric::mpi::MpiMessageBuffer>>
+
+// This data structure contains one list for each <send, recv> pair containing
+// all the MPI messages for which we have posted an `irecv` but have not
+// `wait`ed on yet.
+static thread_local std::vector<
+  std::unique_ptr<std::list<faabric::mpi::MpiMessage>>>
   unackedMessageBuffers;
-
-static thread_local std::set<int> iSendRequests;
-
-static thread_local std::map<int, std::pair<int, int>> reqIdToRanks;
 
 static thread_local int localMsgCount = 1;
 
@@ -101,15 +105,17 @@ MpiMessage MpiWorld::recvRemoteMpiMessage(int sendRank, int recvRank)
     return parsedMsg;
 }
 
-std::shared_ptr<MpiMessageBuffer> MpiWorld::getUnackedMessageBuffer(
-  int sendRank,
-  int recvRank)
+// This method lazily initialises the unacked message buffer's and returns
+// an index to the one we want
+int MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
 {
     // We want to lazily initialise this data structure because, given its
     // thread local nature, we expect it to be quite sparse (i.e. filled with
     // nullptr).
     if (unackedMessageBuffers.empty()) {
-        unackedMessageBuffers.resize(size * size, nullptr);
+        unackedMessageBuffers.clear();
+        unackedMessageBuffers =
+          std::vector<std::unique_ptr<std::list<MpiMessage>>>(size * size);
     }
 
     // Get the index for the rank-host pair
@@ -117,10 +123,11 @@ std::shared_ptr<MpiMessageBuffer> MpiWorld::getUnackedMessageBuffer(
     assert(index >= 0 && index < size * size);
 
     if (unackedMessageBuffers[index] == nullptr) {
-        unackedMessageBuffers.at(index) = std::make_shared<MpiMessageBuffer>();
+        unackedMessageBuffers.at(index) =
+          std::make_unique<std::list<MpiMessage>>();
     }
 
-    return unackedMessageBuffers[index];
+    return index;
 }
 
 void MpiWorld::create(faabric::Message& call, int newId, int newSize)
@@ -204,7 +211,7 @@ void MpiWorld::destroy()
     if (!unackedMessageBuffers.empty()) {
         for (auto& umb : unackedMessageBuffers) {
             if (umb != nullptr) {
-                if (!umb->isEmpty()) {
+                if (!umb->empty()) {
                     SPDLOG_ERROR("Destroying the MPI world with outstanding {}"
                                  " messages in the message buffer",
                                  umb->size());
@@ -214,22 +221,6 @@ void MpiWorld::destroy()
             }
         }
         unackedMessageBuffers.clear();
-    }
-
-    // Request to rank map should be empty
-    if (!reqIdToRanks.empty()) {
-        SPDLOG_ERROR(
-          "Destroying the MPI world with {} outstanding irecv requests",
-          reqIdToRanks.size());
-        throw std::runtime_error("Destroying world with outstanding requests");
-    }
-
-    // iSend set should be empty
-    if (!iSendRequests.empty()) {
-        SPDLOG_ERROR(
-          "Destroying the MPI world with {} outstanding isend requests",
-          iSendRequests.size());
-        throw std::runtime_error("Destroying world with outstanding requests");
     }
 
     // Lastly, clear-out the rank message
@@ -440,8 +431,58 @@ void MpiWorld::shiftCartesianCoords(int rank,
     getRankFromCoords(source, dispCoordsBwd.data());
 }
 
+const uint8_t iSendMagic = 0xFF;
+const uint8_t iRecvMagic = 0x00;
+
+// Helper method to generate an async. request id. We encode the ranks, a
+// unique id, and wether it is an isend or an irecv request on an int32_t
+// as follows:
+// - First byte corresponds to isend (
+static int32_t getAsyncRequestId(int sendRank, int recvRank, bool isSend)
+{
+    // WARNING: this method assumes that all ranks actually fit in a single
+    // byte
+    assert(sendRank < 256);
+    assert(recvRank < 256);
+
+    // We operate on an unsigned integer to avoid undefined behaviour
+    uint32_t requestId = 0;
+
+    // First add the magic in the leftmost byte
+    if (isSend) {
+        requestId |= (iSendMagic << 24);
+    } else {
+        requestId |= (iRecvMagic << 24);
+    }
+
+    // Second, add a unique id for the async request. Note that we never have
+    // hundreds of outstanding requests for the same (send, recv) pair
+    uint8_t uniqueId = (faabric::util::generateGid() & 0xFF);
+    requestId |= (uniqueId << 16);
+
+    // Third add the send rank
+    requestId |= ((sendRank & 0xFF) << 8);
+
+    // Lastly, add the recv rank
+    requestId |= (recvRank & 0xFF);
+
+    return (int32_t)requestId;
+}
+
+static std::tuple<int, int, bool> getRanksFromRequestId(int32_t requestId)
+{
+    uint32_t reqId = (uint32_t)requestId;
+
+    int32_t recvRank = reqId & 0xFF;
+    int32_t sendRank = (reqId >> 8) & 0xFF;
+
+    bool isSend = ((reqId >> 24) & 0xFF) == iSendMagic;
+
+    return { sendRank, recvRank, isSend };
+}
+
 // Sending is already asynchronous in both transport layers we use: in-memory
-// queues for local messages, and ZeroMQ sockets for remote messages. Thus,
+// queues for local messages, and TCP sockets for remote messages. Thus,
 // we can just send normally and return a requestId. Upon await, we'll return
 // immediately.
 int MpiWorld::isend(int sendRank,
@@ -451,8 +492,9 @@ int MpiWorld::isend(int sendRank,
                     int count,
                     MpiMessageType messageType)
 {
-    int requestId = (int)faabric::util::generateGid();
-    iSendRequests.insert(requestId);
+    // int requestId = (int)faabric::util::generateGid();
+    // iSendRequests.insert(requestId);
+    int32_t requestId = getAsyncRequestId(sendRank, recvRank, true);
 
     send(sendRank, recvRank, buffer, dataType, count, messageType);
 
@@ -466,22 +508,28 @@ int MpiWorld::irecv(int sendRank,
                     int count,
                     MpiMessageType messageType)
 {
-    int requestId = (int)faabric::util::generateGid();
-    reqIdToRanks.try_emplace(requestId, sendRank, recvRank);
+    // int requestId = (int)faabric::util::generateGid();
+    // TODO: encode the send, recv rank in the request id
+    // reqIdToRanks.try_emplace(requestId, sendRank, recvRank);
+    int32_t requestId = getAsyncRequestId(sendRank, recvRank, false);
 
-    // Enqueue an unacknowleged request (no message)
-    MpiMessageBuffer::PendingAsyncMpiMessage pendingMsg;
-    pendingMsg.requestId = requestId;
-    pendingMsg.sendRank = sendRank;
-    pendingMsg.recvRank = recvRank;
-    pendingMsg.buffer = buffer;
-    pendingMsg.dataType = dataType;
-    pendingMsg.count = count;
-    pendingMsg.messageType = messageType;
-    assert(!pendingMsg.isAcknowledged());
+    SPDLOG_TRACE(
+      "MPI - irecv {} -> {} (reqId: {})", sendRank, recvRank, requestId);
 
-    auto umb = getUnackedMessageBuffer(sendRank, recvRank);
-    umb->addMessage(pendingMsg);
+    // Note that when we call `irecv` we can use the provided buffer until
+    // we call wait, so we do not need to malloc memory here
+    MpiMessage msg = { .id = 0,
+                       .worldId = id,
+                       .sendRank = sendRank,
+                       .recvRank = recvRank,
+                       .typeSize = dataType->size,
+                       .count = count,
+                       .requestId = requestId,
+                       .messageType = MpiMessageType::UNACKED_MPI_MESSAGE,
+                       .buffer = (void*)buffer };
+
+    auto index = getUnackedMessageBuffer(sendRank, recvRank);
+    unackedMessageBuffers.at(index)->push_back(msg);
 
     return requestId;
 }
@@ -578,6 +626,10 @@ void MpiWorld::recv(int sendRank,
         return;
     }
 
+    // Given that we share the same in-memory queues for async and non-async
+    // messages, when we call MPI_Recv and dequeue from the queue, we will
+    // first receive all the messages that we have MPI_Irecv-ed first
+
     auto msg = recvBatchReturnLast(sendRank, recvRank);
 
     doRecv(std::move(msg), buffer, dataType, count, status, messageType);
@@ -640,15 +692,6 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
                  myRank,
                  sendRank,
                  recvRank);
-
-    if (recvRank > this->size - 1) {
-        throw std::runtime_error(fmt::format(
-          "Receive rank {} bigger than world size {}", recvRank, this->size));
-    }
-    if (sendRank > this->size - 1) {
-        throw std::runtime_error(fmt::format(
-          "Send rank {} bigger than world size {}", sendRank, this->size));
-    }
 
     // Post async recv
     int recvId = irecv(recvRank,
@@ -997,51 +1040,14 @@ void MpiWorld::awaitAsyncRequest(int requestId)
 {
     SPDLOG_TRACE("MPI - await {}", requestId);
 
-    auto iSendIt = iSendRequests.find(requestId);
-    if (iSendIt != iSendRequests.end()) {
-        iSendRequests.erase(iSendIt);
+    auto [sendRank, recvRank, isSend] = getRanksFromRequestId(requestId);
+
+    if (isSend) {
         return;
     }
 
-    // Get the corresponding send and recv ranks
-    auto it = reqIdToRanks.find(requestId);
-    // If the request id is not in the map, the application either has issued an
-    // await without a previous isend/irecv, or the actual request id
-    // has been corrupted. In any case, we error out.
-    if (it == reqIdToRanks.end()) {
-        SPDLOG_ERROR("Asynchronous request id not recognized: {}", requestId);
-        throw std::runtime_error("Unrecognized async request id");
-    }
-    int sendRank = it->second.first;
-    int recvRank = it->second.second;
-    reqIdToRanks.erase(it);
-
-    std::shared_ptr<MpiMessageBuffer> umb =
-      getUnackedMessageBuffer(sendRank, recvRank);
-
-    std::list<MpiMessageBuffer::PendingAsyncMpiMessage>::iterator msgIt =
-      umb->getRequestPendingMsg(requestId);
-
-    MpiMessage m;
-    if (msgIt->msg != nullptr) {
-        // This id has already been acknowledged by a recv call, so do the recv
-        m = *(msgIt->msg);
-    } else {
-        // We need to acknowledge all messages not acknowledged from the
-        // begining until us
-        m = recvBatchReturnLast(
-          sendRank, recvRank, umb->getTotalUnackedMessagesUntil(msgIt) + 1);
-    }
-
-    doRecv(m,
-           msgIt->buffer,
-           msgIt->dataType,
-           msgIt->count,
-           MPI_STATUS_IGNORE,
-           msgIt->messageType);
-
-    // Remove the acknowledged indexes from the UMB
-    umb->deleteMessage(msgIt);
+    // Indicate recvBatchReturnLast to stop when we find the given request id
+    (void)recvBatchReturnLast(sendRank, recvRank, requestId);
 }
 
 void MpiWorld::reduce(int sendRank,
@@ -1473,86 +1479,82 @@ void MpiWorld::initLocalQueues()
     }
 }
 
-// TODO(mpi-opt): double-check that the fast (no-async) path is fast
+MpiMessage MpiWorld::internalRecv(int sendRank, int recvRank, bool isLocal)
+{
+    if (isLocal) {
+        SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
+        return getLocalQueue(sendRank, recvRank)->dequeue();
+    }
+
+    SPDLOG_TRACE("MPI - recv remote {} -> {}", sendRank, recvRank);
+    return recvRemoteMpiMessage(sendRank, recvRank);
+}
+
 MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
                                          int recvRank,
-                                         int batchSize)
+                                         int requestId)
 {
-    std::shared_ptr<MpiMessageBuffer> umb =
-      getUnackedMessageBuffer(sendRank, recvRank);
-
-    // When calling from recv, we set the batch size to zero and work
-    // out the total here. We want to acknowledge _all_ unacknowleged messages
-    // _and then_ receive ours (which is not in the MMB).
-    if (batchSize == 0) {
-        batchSize = umb->getTotalUnackedMessages() + 1;
-    }
+    auto index = getUnackedMessageBuffer(sendRank, recvRank);
 
     // Work out whether the message is sent locally or from another host
     assert(thisHost == getHostForRank(recvRank));
     const std::string otherHost = getHostForRank(sendRank);
     bool isLocal = otherHost == thisHost;
 
-    // Recv message: first we receive all messages for which there is an id
-    // in the unacknowleged buffer but no msg. Note that these messages
-    // (batchSize - 1) were `irecv`-ed before ours.
-    MpiMessage ourMsg;
-    auto msgIt = umb->getFirstNullMsg();
-    if (isLocal) {
-        // First receive messages that happened before us
-        for (int i = 0; i < batchSize - 1; i++) {
-            try {
-                SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
-                auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
-
-                // Put the unacked message in the UMB
-                assert(!msgIt->isAcknowledged());
-                msgIt->acknowledge(pendingMsg);
-                msgIt++;
-            } catch (faabric::util::QueueTimeoutException& e) {
-                SPDLOG_ERROR(
-                  "{}:{}:{} Timed out with: MPI - pending recv {} -> {}",
-                  thisRankMsg->appid(),
-                  thisRankMsg->groupid(),
-                  thisRankMsg->groupidx(),
-                  sendRank,
-                  recvRank);
-                throw e;
-            }
-        }
-
-        // Finally receive the message corresponding to us
-        SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        try {
-            ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
-        } catch (faabric::util::QueueTimeoutException& e) {
-            SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - recv {} -> {}",
-                         thisRankMsg->appid(),
-                         thisRankMsg->groupid(),
-                         thisRankMsg->groupidx(),
-                         sendRank,
-                         recvRank);
-            throw e;
-        }
-    } else {
-        // First receive messages that happened before us
-        for (int i = 0; i < batchSize - 1; i++) {
-            SPDLOG_TRACE(
-              "MPI - pending remote recv {} -> {}", sendRank, recvRank);
-            auto pendingMsg = recvRemoteMpiMessage(sendRank, recvRank);
-
-            // Put the unacked message in the UMB
-            assert(!msgIt->isAcknowledged());
-            msgIt->acknowledge(pendingMsg);
-            msgIt++;
-        }
-
-        // Finally receive the message corresponding to us
-        SPDLOG_TRACE("MPI - recv remote {} -> {}", sendRank, recvRank);
-        ourMsg = recvRemoteMpiMessage(sendRank, recvRank);
+    // Fast-path for non-async case
+    if (unackedMessageBuffers.at(index)->empty()) {
+        return internalRecv(sendRank, recvRank, isLocal);
     }
 
-    return ourMsg;
+    // If there are Irecv-ed messages pending to be acked, read them from the
+    // transport
+    auto itr = unackedMessageBuffers.at(index)->begin();
+    while (itr != unackedMessageBuffers.at(index)->end()) {
+        // We are receiving a message that has been previously irecv-ed, so
+        // we can safely copy into the provided buffer, and free the received
+        // one
+        if (itr->messageType == MpiMessageType::UNACKED_MPI_MESSAGE) {
+            SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
+
+            // Copy the request id so that it is not overwritten
+            int tmpRequestId = itr->requestId;
+
+            // Copy into current slot in the list, but keep a copy to the
+            // app-provided buffer to read data into
+            void* providedBuffer = itr->buffer;
+            *itr = internalRecv(sendRank, recvRank, isLocal);
+            itr->requestId = tmpRequestId;
+
+            if (itr->buffer != nullptr) {
+                assert(providedBuffer != nullptr);
+                std::memcpy(
+                  providedBuffer, itr->buffer, itr->count * itr->typeSize);
+                faabric::util::free(itr->buffer);
+            }
+            itr->buffer = providedBuffer;
+        }
+        assert(itr->messageType != MpiMessageType::UNACKED_MPI_MESSAGE);
+
+        // If called from await, we are given a request id such that, when
+        // we find it, we can return
+        if (requestId == itr->requestId) {
+            break;
+        }
+
+        itr++;
+    }
+
+    // If we have breaked-out of the while, it means that we found what we
+    // were looking for and we are done
+    if (itr != unackedMessageBuffers.at(index)->end()) {
+        assert(requestId == itr->requestId);
+
+        unackedMessageBuffers.at(index)->erase(itr);
+        return MpiMessage{};
+    }
+
+    // Lastly, return our message
+    return internalRecv(sendRank, recvRank, isLocal);
 }
 
 int MpiWorld::getIndexForRanks(int sendRank, int recvRank) const
@@ -1573,16 +1575,6 @@ double MpiWorld::getWTime()
 {
     double t = faabric::util::getTimeDiffMillis(creationTime);
     return t / 1000.0;
-}
-
-std::vector<bool> MpiWorld::getInitedUMB()
-{
-    std::vector<bool> retVec(unackedMessageBuffers.size());
-    for (int i = 0; i < unackedMessageBuffers.size(); i++) {
-        retVec.at(i) = unackedMessageBuffers.at(i) != nullptr;
-    }
-
-    return retVec;
 }
 
 std::string MpiWorld::getUser()
@@ -1627,26 +1619,19 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
 void MpiWorld::prepareMigration(int thisRank)
 {
     // Check that there are no pending asynchronous messages to send and receive
-    for (auto umb : unackedMessageBuffers) {
-        if (umb != nullptr && umb->size() > 0) {
+    auto itr = unackedMessageBuffers.begin();
+    while (itr != unackedMessageBuffers.end()) {
+        if (*itr != nullptr && !(*itr)->empty()) {
             SPDLOG_ERROR("Trying to migrate MPI application (id: {}) but rank"
                          " {} has {} pending async messages to receive",
                          thisRankMsg->appid(),
                          thisRank,
-                         umb->size());
+                         (*itr)->size());
             throw std::runtime_error(
               "Migrating with pending async messages is not supported");
         }
-    }
 
-    if (!iSendRequests.empty()) {
-        SPDLOG_ERROR("Trying to migrate MPI application (id: {}) but rank"
-                     " {} has {} pending async send messages to acknowledge",
-                     thisRankMsg->appid(),
-                     thisRank,
-                     iSendRequests.size());
-        throw std::runtime_error(
-          "Migrating with pending async messages is not supported");
+        itr++;
     }
 
     // Update local records
