@@ -9,7 +9,9 @@
 
 namespace tests {
 
-TEST_CASE_METHOD(MpiDistTestsFixture, "Bench MPI all reduce local", "[.][mpi]")
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Bench MPI all reduce local",
+                 "[.][bench]")
 {
     // Set up this host's resources
     setLocalSlots(4, 4); // all local
@@ -22,7 +24,9 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Bench MPI all reduce local", "[.][mpi]")
     checkAllocationAndResult(req);
 }
 
-TEST_CASE_METHOD(MpiDistTestsFixture, "Bench MPI all reduce remote", "[.][mpi]")
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Bench MPI all reduce remote",
+                 "[.][bench]")
 {
     // Set up this host's resources
     setLocalSlots(2, 4); // 2 local, 2 remote
