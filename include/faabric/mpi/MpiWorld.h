@@ -215,7 +215,10 @@ class MpiWorld
     int getIndexForRanks(int sendRank, int recvRank) const;
 
     // Store the ranks that live in each host and host for each rank
-    std::map<std::string, std::vector<int>> ranksForHost;
+    // WARN: it is important that ranksForHost only uses sorted collections,
+    // as some collective communication algorithms rely on it being read in
+    // the same order in all worlds
+    std::map<std::string, std::set<int>> ranksForHost;
     std::vector<std::string> hostForRank;
 
     // Track local and remote leaders. The leader is stored in the first

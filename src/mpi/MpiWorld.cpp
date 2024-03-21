@@ -37,7 +37,7 @@ namespace faabric::mpi {
 static std::mutex mockMutex;
 
 // The identifier in this map is the sending rank. For the receiver's rank
-// we can inspect the MPIMessage object
+// we can inspect the MpiMessage object
 static std::map<int, std::vector<MpiMessage>> mpiMockedMessages;
 
 std::vector<MpiMessage> getMpiMockedMessages(int sendRank)
@@ -279,7 +279,7 @@ void MpiWorld::initLocalRemoteLeaders()
         throw std::runtime_error("Rank message not set!");
     }
     int groupId = thisRankMsg->groupid();
-    auto rankIds = broker.getIdxsRegisteredForGroup(groupId);
+    std::set<int> rankIds = broker.getIdxsRegisteredForGroup(groupId);
     if (rankIds.size() != size) {
         SPDLOG_ERROR("{}:{}:{} rankIds != size ({} != {})",
                      thisRankMsg->appid(),
@@ -293,21 +293,12 @@ void MpiWorld::initLocalRemoteLeaders()
     hostForRank.resize(size);
     for (const auto& rankId : rankIds) {
         std::string host = broker.getHostForReceiver(groupId, rankId);
-        ranksForHost[host].push_back(rankId);
+        ranksForHost[host].insert(rankId);
         hostForRank.at(rankId) = host;
     }
 
-    // Second, put the local leader for each host (currently lowest rank) at the
-    // front.
-    for (auto it : ranksForHost) {
-        // Persist the local leader in this host for further use
-        if (it.first == thisHost) {
-            localLeader = *std::min_element(it.second.begin(), it.second.end());
-        }
-
-        std::iter_swap(it.second.begin(),
-                       std::min_element(it.second.begin(), it.second.end()));
-    }
+    // Persist the local leader in this host for further use
+    localLeader = (*ranksForHost[thisHost].begin());
 }
 
 void MpiWorld::getCartesianRank(int rank,
@@ -741,7 +732,7 @@ void MpiWorld::broadcast(int sendRank,
                 // that the local leader will then broadcast the message to its
                 // local ranks.
                 send(recvRank,
-                     it.second.front(),
+                     *(it.second.begin()),
                      buffer,
                      dataType,
                      count,
@@ -920,7 +911,7 @@ void MpiWorld::gather(int sendRank,
                 auto rankData =
                   std::make_unique<uint8_t[]>(it.second.size() * recvSize);
 
-                recv(it.second.front(),
+                recv(*(it.second.begin()),
                      recvRank,
                      rankData.get(),
                      recvType,
@@ -929,8 +920,9 @@ void MpiWorld::gather(int sendRank,
                      MpiMessageType::GATHER);
 
                 // Copy each received chunk to its offset
-                for (int r = 0; r < it.second.size(); r++) {
-                    ::memcpy(recvBuffer + (it.second.at(r) * recvSize),
+                auto itr = it.second.begin();
+                for (int r = 0; r < it.second.size(); r++, itr++) {
+                    ::memcpy(recvBuffer + ((*itr) * recvSize),
                              rankData.get() + (r * recvSize),
                              recvSize);
                 }
@@ -942,15 +934,16 @@ void MpiWorld::gather(int sendRank,
           std::make_unique<uint8_t[]>(ranksForHost[thisHost].size() * sendSize);
 
         // Gather all our local ranks data and send in a single remote message
-        for (int r = 0; r < ranksForHost[thisHost].size(); r++) {
-            if (ranksForHost[thisHost].at(r) == sendRank) {
+        auto localItr = ranksForHost[thisHost].begin();
+        for (int r = 0; r < ranksForHost[thisHost].size(); r++, localItr++) {
+            if ((*localItr) == sendRank) {
                 // Receive from ourselves, just copy from/to the right offset
                 ::memcpy(rankData.get() + r * sendSize,
                          sendBuffer + sendBufferOffset,
                          sendSize);
             } else {
                 // Receive from other local ranks
-                recv(ranksForHost[thisHost].at(r),
+                recv((*localItr),
                      sendRank,
                      rankData.get() + r * sendSize,
                      sendType,
@@ -1097,7 +1090,7 @@ void MpiWorld::reduce(int sendRank,
             } else {
                 // For remote ranks, only receive from the host leader
                 memset(rankData.get(), 0, bufferSize);
-                recv(it.second.front(),
+                recv((*it.second.begin()),
                      recvRank,
                      rankData.get(),
                      datatype,
@@ -1366,22 +1359,44 @@ void MpiWorld::allToAll(int rank,
 {
     checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
 
-    size_t sendOffset = sendCount * sendType->size;
+    size_t sendSize = sendCount * sendType->size;
+    size_t recvSize = recvCount * recvType->size;
+    assert(sendSize == recvSize);
+    assert(sendType->size == recvType->size);
+    assert(sendCount == recvCount);
 
-    // Send out messages for this rank
-    for (int r = 0; r < size; r++) {
-        // Work out what data to send to this rank
-        size_t rankOffset = r * sendOffset;
-        uint8_t* sendChunk = sendBuffer + rankOffset;
+    // When we are sending messages, this method gives us the offset in
+    // sendBuffer for a given receiver rank
+    auto getSendBufferOffset = [sendSize](int recvRank) {
+        return recvRank * sendSize;
+    };
 
-        if (r == rank) {
+    // When we are receiving messages, this method gives us the offset in
+    // the recvBuffer for a given sender rank
+    auto getRecvBufferOffset = [recvSize](int sendRank) {
+        return sendRank * recvSize;
+    };
+
+    // Given a send idx and a recv idx, get the offset into the batched
+    // message buffer
+    auto getBatchMsgOffset =
+      [sendSize](int recvWorldSize, int sendIdx, int recvIdx) {
+          return (recvWorldSize * sendIdx + recvIdx) * sendSize;
+      };
+
+    // -------- Send Phase --------
+
+    // First, just send our local messages to our local ranks
+    for (const int recvRank : ranksForHost.at(thisHost)) {
+        uint8_t* sendChunk = sendBuffer + getSendBufferOffset(recvRank);
+
+        if (recvRank == rank) {
             // Copy directly
-            std::copy(
-              sendChunk, sendChunk + sendOffset, recvBuffer + rankOffset);
+            std::memcpy(
+              recvBuffer + getRecvBufferOffset(rank), sendChunk, sendSize);
         } else {
-            // Send message to other rank
             send(rank,
-                 r,
+                 recvRank,
                  sendChunk,
                  sendType,
                  sendCount,
@@ -1389,23 +1404,199 @@ void MpiWorld::allToAll(int rank,
         }
     }
 
-    // Await incoming messages from others
-    for (int r = 0; r < size; r++) {
-        if (r == rank) {
-            continue;
+    if (rank == localLeader) {
+        // Given that we _always_ send local messages first, the local leader
+        // needs to receive them here. Otherwise subsequent recv's would be
+        // out of order
+        for (const int sendRank : ranksForHost.at(thisHost)) {
+            if (sendRank == rank) {
+                // We have  already copied the chunk in before
+                continue;
+            }
+
+            recv(sendRank,
+                 rank,
+                 recvBuffer + getRecvBufferOffset(sendRank),
+                 recvType,
+                 recvCount,
+                 nullptr,
+                 MpiMessageType::ALLTOALL);
         }
 
-        // Work out where to place the result from this rank
-        uint8_t* recvChunk = recvBuffer + (r * sendOffset);
+        // The local leader now receives, for each remote world,
+        // `remoteWorldSize` messages from each local rank, and it batches
+        // them into one network message per remote world
+        for (const auto& [remoteHost, remoteRanks] : ranksForHost) {
+            if (remoteHost == thisHost) {
+                continue;
+            }
 
-        // Do the receive
-        recv(r,
-             rank,
-             recvChunk,
-             recvType,
-             recvCount,
-             nullptr,
-             MpiMessageType::ALLTOALL);
+            auto localRanks = ranksForHost.at(thisHost);
+            int remoteLeader = *(remoteRanks.begin());
+
+            // Prepare a the batch message
+            int numMessages =
+              localRanks.size() * remoteRanks.size() * sendCount;
+            size_t bufferSize = numMessages * sendSize;
+            MpiMessage remoteBatchMsg = { .worldId = id,
+                                          .sendRank = rank,
+                                          .recvRank = remoteLeader,
+                                          .typeSize = (int)sendSize,
+                                          .count = numMessages,
+                                          .messageType =
+                                            MpiMessageType::ALLTOALL_PACKED,
+                                          .buffer =
+                                            faabric::util::malloc(bufferSize) };
+
+            // Receive `remoteRanks` message from each local rank, and copy
+            // them to the appropriate offset in the buffer
+            auto localItr = localRanks.begin();
+            for (int sendIdx = 0; sendIdx < localRanks.size();
+                 sendIdx++, localItr++) {
+                int localSendRank = (*localItr);
+
+                auto remoteItr = remoteRanks.begin();
+                for (int recvIdx = 0; recvIdx < remoteRanks.size();
+                     recvIdx++, remoteItr++) {
+                    int remoteRecvRank = (*remoteItr);
+                    size_t batchOffset =
+                      getBatchMsgOffset(remoteRanks.size(), sendIdx, recvIdx);
+
+                    if (localSendRank == rank) {
+                        std::memcpy(
+                          (uint8_t*)remoteBatchMsg.buffer + batchOffset,
+                          sendBuffer + getSendBufferOffset(remoteRecvRank),
+                          sendSize);
+
+                        continue;
+                    }
+
+                    // Receive directly into the appropriate buffer
+                    recv(localSendRank,
+                         rank,
+                         (uint8_t*)remoteBatchMsg.buffer + batchOffset,
+                         sendType,
+                         sendCount,
+                         nullptr,
+                         MpiMessageType::ALLTOALL);
+                }
+            }
+
+            // Send the remote message
+            sendRemoteMpiMessage(
+              remoteHost, rank, remoteLeader, remoteBatchMsg);
+        }
+    } else {
+        // If we are not the local leader, we just sent our local leader all
+        // our remote messages
+        for (const auto& [remoteHost, remoteRanks] : ranksForHost) {
+            if (remoteHost == thisHost) {
+                continue;
+            }
+
+            // The local leader will infer the recv rank from the order
+            // in which we are sending the messages
+            for (const int recvRank : remoteRanks) {
+                send(rank,
+                     localLeader,
+                     sendBuffer + getSendBufferOffset(recvRank),
+                     sendType,
+                     sendCount,
+                     MpiMessageType::ALLTOALL);
+            }
+        }
+    }
+
+    // -------- Receive Phase --------
+
+    if (rank == localLeader) {
+        // If we are a local leader, we now need to receive one remote batch
+        // message per remote host, and propagate the messages downstream
+        for (const auto& [remoteHost, remoteRanks] : ranksForHost) {
+            if (remoteHost == thisHost) {
+                continue;
+            }
+
+            auto localRanks = ranksForHost.at(thisHost);
+            int remoteLeader = *(remoteRanks.begin());
+
+            auto remoteBatchMsg = recvRemoteMpiMessage(remoteLeader, rank);
+
+            // Sanity check the remote (batched) message
+            [[maybe_unused]] int numMessages =
+              localRanks.size() * remoteRanks.size() * recvCount;
+            assert(remoteBatchMsg.count == numMessages);
+            assert(remoteBatchMsg.typeSize == (int)sendSize);
+            assert(remoteBatchMsg.messageType ==
+                   MpiMessageType::ALLTOALL_PACKED);
+
+            // For each local rank, send remoteWorldSize messages
+            auto localItr = localRanks.begin();
+            for (int recvIdx = 0; recvIdx < localRanks.size();
+                 recvIdx++, localItr++) {
+                int localRecvRank = *localItr;
+
+                auto remoteItr = remoteRanks.begin();
+                for (int sendIdx = 0; sendIdx < remoteRanks.size();
+                     sendIdx++, remoteItr++) {
+                    int remoteSendRank = *remoteItr;
+                    size_t batchOffset =
+                      getBatchMsgOffset(localRanks.size(), sendIdx, recvIdx);
+
+                    if (localRecvRank == rank) {
+                        std::memcpy(
+                          recvBuffer + getRecvBufferOffset(remoteSendRank),
+                          (uint8_t*)remoteBatchMsg.buffer + batchOffset,
+                          recvSize);
+                        continue;
+                    }
+
+                    // The local rank is expecting to receive from the local
+                    // leader. It is the message ordering that will let the
+                    // local rank know which remote rank it corresponds to
+                    send(rank,
+                         localRecvRank,
+                         (uint8_t*)remoteBatchMsg.buffer + batchOffset,
+                         sendType,
+                         sendCount,
+                         MpiMessageType::ALLTOALL);
+                }
+            }
+        }
+    } else {
+        // First, receive our local messages from our local ranks
+        for (const int sendRank : ranksForHost.at(thisHost)) {
+            if (sendRank == rank) {
+                // We have  already copied the chunk in before
+                continue;
+            }
+
+            recv(sendRank,
+                 rank,
+                 recvBuffer + getRecvBufferOffset(sendRank),
+                 recvType,
+                 recvCount,
+                 nullptr,
+                 MpiMessageType::ALLTOALL);
+        }
+
+        // If we are not the local leader, we receive all non-local messages
+        // from our local leader
+        for (const auto& [remoteHost, remoteRanks] : ranksForHost) {
+            if (remoteHost == thisHost) {
+                continue;
+            }
+
+            for (const int sendRank : remoteRanks) {
+                recv(localLeader,
+                     rank,
+                     recvBuffer + getRecvBufferOffset(sendRank),
+                     recvType,
+                     recvCount,
+                     nullptr,
+                     MpiMessageType::ALLTOALL);
+            }
+        }
     }
 }
 

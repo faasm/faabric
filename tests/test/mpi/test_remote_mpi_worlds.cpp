@@ -1,6 +1,5 @@
 #include <catch2/catch.hpp>
 
-#include "faabric_utils.h"
 #include "fixtures.h"
 
 #include <faabric/mpi/MpiWorldRegistry.h>
@@ -9,8 +8,6 @@
 #include <faabric/util/bytes.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
-
-#include <thread>
 
 // The tests in this file are used to test the internal behaviour of MPI when
 // running in a distributed behaviour. They should test very specific things
@@ -328,6 +325,97 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(msgs.size() == expectedNumMsgSent);
     REQUIRE(getReceiversFromMessages(msgs) == expectedSentMsgRanks);
     REQUIRE(getMsgCountsFromMessages(msgs) == expectedSentMsgCounts);
+
+    otherWorld.destroy();
+    thisWorld.destroy();
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test number of messages sent during all-to-all",
+                 "[mpi]")
+{
+    int worldSize = 5;
+    int numLocalRanks = 3;
+    int numRemoteRanks = 2;
+    setWorldSizes(worldSize, numLocalRanks, numRemoteRanks);
+
+    // Init worlds
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    otherWorld.initialiseFromMsg(msg);
+
+    // Expectations
+    std::set<int> expectedSentMsgRanks;
+    std::set<int> expectedSentMsgCounts;
+    int expectedNumMsgSent = 0;
+    int rank = 0;
+
+    // Annoyingly, local leaders in all-to-all do remote messaging and
+    // sanity-check on the remote messages to be able to make progress, so
+    // we can not mock them
+    // TODO: can we thread them somehow?
+
+    // Non-local leader is going to send worldSize - 1 messages, with the
+    // following distribution:
+    // - One to each (local) rank
+    // - All the other remote messages to the local leader
+    SECTION("Call all-to-all from (local) non-local leader")
+    {
+        int numToLocalLeader = 1 + numRemoteRanks;
+        rank = 1;
+        // From the local ranks discard ourselves, and the local leader
+        // (already counted in numToLocalLeader)
+        expectedNumMsgSent = (numLocalRanks - 2) + numToLocalLeader;
+        expectedSentMsgRanks = { 0, 2 };
+        expectedSentMsgCounts = { numToLocalLeader, 1 };
+    }
+
+    SECTION("Call all-to-all from (non-local) non-local leader")
+    {
+        int numToLocalLeader = 1 + numLocalRanks;
+        rank = 4;
+        // From the local ranks discard ourselves, and the local leader
+        // (already counted in numToLocalLeader)
+        expectedNumMsgSent = (numRemoteRanks - 2) + numToLocalLeader;
+        expectedSentMsgRanks = { 3 };
+        expectedSentMsgCounts = { numToLocalLeader };
+    }
+
+    // All-to-all input and expectation. Each rank sends two ints to each
+    // other rank
+    int sendCount = 2;
+
+    int allToAllInputData[5][10] = {
+        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 },
+        { 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 },
+        { 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 },
+        { 30, 31, 32, 33, 34, 35, 36, 37, 38, 39 },
+        { 40, 41, 42, 43, 44, 45, 46, 47, 48, 49 },
+    };
+
+    int allToAllActualData[10];
+
+    if (rank < 2) {
+        thisWorld.allToAll(rank,
+                           (uint8_t*)allToAllInputData[rank],
+                           MPI_INT,
+                           sendCount,
+                           (uint8_t*)allToAllActualData,
+                           MPI_INT,
+                           sendCount);
+    } else {
+        otherWorld.allToAll(rank,
+                            (uint8_t*)allToAllInputData[rank],
+                            MPI_INT,
+                            sendCount,
+                            (uint8_t*)allToAllActualData,
+                            MPI_INT,
+                            sendCount);
+    }
+
+    auto msgs = getMpiMockedMessages(rank);
+
+    REQUIRE(msgs.size() == expectedNumMsgSent);
+    REQUIRE(getReceiversFromMessages(msgs) == expectedSentMsgRanks);
 
     otherWorld.destroy();
     thisWorld.destroy();

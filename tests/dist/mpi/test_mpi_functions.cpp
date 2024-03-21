@@ -65,14 +65,34 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all reduce", "[mpi]")
 
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all", "[.][mpi]")
 {
+    std::vector<std::string> expectedHosts = {};
+
     // Set up this host's resources
-    setLocalSlots(nLocalSlots);
+    SECTION("Even distribution")
+    {
+        setLocalSlots(nLocalSlots);
+        expectedHosts = {
+            getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
+        };
+    }
+
+    SECTION("Uneven distribution")
+    {
+        // Local slots, and world size
+        setLocalSlots(3, 5);
+        expectedHosts = { getMasterIP(),
+                          getMasterIP(),
+                          getMasterIP(),
+                          getWorkerIP(),
+                          getWorkerIP() };
+    }
+
     auto req = setRequest("alltoall");
 
     // Call the functions
     plannerCli.callFunctions(req);
 
-    checkAllocationAndResult(req);
+    checkAllocationAndResult(req, expectedHosts);
 }
 
 /* 01/12/2023 - flaky tet
