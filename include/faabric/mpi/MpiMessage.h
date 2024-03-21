@@ -17,10 +17,11 @@ enum MpiMessageType : int32_t
     SCAN = 7,
     ALLREDUCE = 8,
     ALLTOALL = 9,
-    SENDRECV = 10,
-    BROADCAST = 11,
+    ALLTOALL_PACKED = 10,
+    SENDRECV = 11,
+    BROADCAST = 12,
     // Special message type for async messages that have not been unacked yet
-    UNACKED_MPI_MESSAGE = 12,
+    UNACKED_MPI_MESSAGE = 13,
 };
 
 /* Simple fixed-size C-struct to capture the state of an MPI message moving

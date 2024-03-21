@@ -1,6 +1,8 @@
 #include <faabric/mpi/mpi.h>
 #include <stdio.h>
 
+#include <string>
+
 namespace tests::mpi {
 
 int allToAll()
@@ -34,14 +36,31 @@ int allToAll()
     MPI_Alltoall(
       sendBuf, chunkSize, MPI_INT, actual, chunkSize, MPI_INT, MPI_COMM_WORLD);
 
+    int returnValue = 0;
+
     for (int i = 0; i < fullSize; i++) {
         if (actual[i] != expected[i]) {
-            printf("Alltoall failed\n");
-            return 1;
+            returnValue = 1;
         }
     }
 
-    printf("Rank %i: alltoall as expected\n", rank);
+    if (returnValue == 0) {
+        printf("Rank %i: alltoall as expected\n", rank);
+    } else {
+        std::string expectedMsg = "[" + std::to_string(expected[0]);
+        std::string actualMsg = "[" + std::to_string(actual[0]);
+        for (int i = 1; i < fullSize; i++) {
+            expectedMsg += "," + std::to_string(expected[i]);
+            actualMsg += "," + std::to_string(actual[i]);
+        }
+        expectedMsg += "]";
+        actualMsg += "]";
+
+        printf("Rank %i: alltoall failed\n\texpected: %s\n\tgot:%s\n",
+               rank,
+               expectedMsg.c_str(),
+               actualMsg.c_str());
+    }
 
     delete[] sendBuf;
     delete[] actual;
@@ -49,6 +68,6 @@ int allToAll()
 
     MPI_Finalize();
 
-    return 0;
+    return returnValue;
 }
 }
