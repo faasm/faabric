@@ -69,7 +69,7 @@ def tests(
         TEST_ENV["LOG_LEVEL"] = "trace"
 
     if test_case:
-        tests_cmd.append("'{}'".format(test_case))
+        tests_cmd.append('"{}"'.format(test_case))
     elif test_file:
         tests_cmd.append("--filenames-as-tags [#{}]".format(test_file))
     elif test_dir:
