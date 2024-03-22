@@ -23,6 +23,11 @@ inline void free(void* ptr)
     return std::free(ptr);
 }
 
+inline void* realloc(void* ptr, std::size_t newSize)
+{
+    return std::realloc(ptr, newSize);
+}
+
 /*
  * Merges all the dirty page flags from the list of vectors into the first
  * vector in place.
