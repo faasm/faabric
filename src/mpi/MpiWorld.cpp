@@ -14,21 +14,6 @@
 #include <list>
 #include <map>
 
-// Each MPI rank runs in a separate thread, thus we use TLS to maintain the
-// per-rank data structures
-
-// This data structure contains one list for each <send, recv> pair containing
-// all the MPI messages for which we have posted an `irecv` but have not
-// `wait`ed on yet.
-static thread_local std::vector<
-  std::unique_ptr<std::list<faabric::mpi::MpiMessage>>>
-  unackedMessageBuffers;
-
-static thread_local int localMsgCount = 1;
-
-// Id of the message that created this thread-local instance
-static thread_local faabric::Message* thisRankMsg = nullptr;
-
 namespace faabric::mpi {
 
 // -----------------------------------
@@ -45,6 +30,54 @@ std::vector<MpiMessage> getMpiMockedMessages(int sendRank)
     faabric::util::UniqueLock lock(mockMutex);
     return mpiMockedMessages[sendRank];
 }
+
+// -----------------------------------
+// Thread-Local State
+// Each MPI rank runs in a separate thread, thus we use TLS to maintain the
+// per-rank data structures
+// -----------------------------------
+
+struct MpiRankState
+{
+    int msgCount = 1;
+
+    // Message that created this thread-local instance
+    faabric::Message* msg = nullptr;
+
+    // This data structure contains one list for each <send, recv> pair
+    // containing all the MPI messages for which we have posted an `irecv` but
+    // have not `wait`ed on yet.
+    std::vector<std::unique_ptr<std::list<MpiMessage>>> unackedMessageBuffers;
+
+    void reset()
+    {
+        // Unacked message buffers
+        if (!unackedMessageBuffers.empty()) {
+            for (auto& umb : unackedMessageBuffers) {
+                if (umb != nullptr) {
+                    if (!umb->empty()) {
+                        SPDLOG_ERROR(
+                          "Destroying the MPI world with outstanding {}"
+                          " messages in the message buffer",
+                          umb->size());
+                        throw std::runtime_error(
+                          "Destroying world with a non-empty MPI message "
+                          "buffer");
+                    }
+                }
+            }
+            unackedMessageBuffers.clear();
+        }
+
+        // Local message count
+        msgCount = 1;
+
+        // Rank message
+        msg = nullptr;
+    }
+};
+
+static thread_local MpiRankState rankState;
 
 MpiWorld::MpiWorld()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
@@ -64,7 +97,7 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
 
     try {
         broker.sendMessage(
-          thisRankMsg->groupid(),
+          rankState.msg->groupid(),
           sendRank,
           recvRank,
           reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
@@ -73,9 +106,9 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
           true);
     } catch (std::runtime_error& e) {
         SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - send {} -> {}",
-                     thisRankMsg->appid(),
-                     thisRankMsg->groupid(),
-                     thisRankMsg->groupidx(),
+                     rankState.msg->appid(),
+                     rankState.msg->groupid(),
+                     rankState.msg->groupidx(),
                      sendRank,
                      recvRank);
         throw e;
@@ -86,13 +119,13 @@ MpiMessage MpiWorld::recvRemoteMpiMessage(int sendRank, int recvRank)
 {
     std::vector<uint8_t> msg;
     try {
-        msg =
-          broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
+        msg = broker.recvMessage(
+          rankState.msg->groupid(), sendRank, recvRank, true);
     } catch (std::runtime_error& e) {
         SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - recv (remote) {} -> {}",
-                     thisRankMsg->appid(),
-                     thisRankMsg->groupid(),
-                     thisRankMsg->groupidx(),
+                     rankState.msg->appid(),
+                     rankState.msg->groupid(),
+                     rankState.msg->groupidx(),
                      sendRank,
                      recvRank);
         throw e;
@@ -112,9 +145,9 @@ int MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     // We want to lazily initialise this data structure because, given its
     // thread local nature, we expect it to be quite sparse (i.e. filled with
     // nullptr).
-    if (unackedMessageBuffers.empty()) {
-        unackedMessageBuffers.clear();
-        unackedMessageBuffers =
+    if (rankState.unackedMessageBuffers.empty()) {
+        rankState.unackedMessageBuffers.clear();
+        rankState.unackedMessageBuffers =
           std::vector<std::unique_ptr<std::list<MpiMessage>>>(size * size);
     }
 
@@ -122,8 +155,8 @@ int MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     int index = getIndexForRanks(sendRank, recvRank);
     assert(index >= 0 && index < size * size);
 
-    if (unackedMessageBuffers[index] == nullptr) {
-        unackedMessageBuffers.at(index) =
+    if (rankState.unackedMessageBuffers[index] == nullptr) {
+        rankState.unackedMessageBuffers.at(index) =
           std::make_unique<std::list<MpiMessage>>();
     }
 
@@ -135,7 +168,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     id = newId;
     user = call.user();
     function = call.function();
-    thisRankMsg = &call;
+    rankState.msg = &call;
     size = newSize;
 
     // Update the first message to make sure it looks like messages >= 1
@@ -161,14 +194,14 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
         // Set group idxs for remote messaging
         msg.set_groupidx(msg.mpirank());
-        if (thisRankMsg != nullptr) {
+        if (rankState.msg != nullptr) {
             // Set message fields to allow for function migration
-            msg.set_appid(thisRankMsg->appid());
-            msg.set_cmdline(thisRankMsg->cmdline());
-            msg.set_inputdata(thisRankMsg->inputdata());
+            msg.set_appid(rankState.msg->appid());
+            msg.set_cmdline(rankState.msg->cmdline());
+            msg.set_inputdata(rankState.msg->inputdata());
 
             // Log chained functions to generate execution graphs
-            if (thisRankMsg->recordexecgraph()) {
+            if (rankState.msg->recordexecgraph()) {
                 faabric::util::logChainedFunction(call, msg);
                 msg.set_recordexecgraph(true);
             }
@@ -180,7 +213,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     // to use the new PTP group
     if (size > 1) {
         auto decision = faabric::planner::getPlannerClient().callFunctions(req);
-        thisRankMsg->set_groupid(decision.groupId);
+        rankState.msg->set_groupid(decision.groupId);
         assert(decision.hosts.size() == size - 1);
     } else {
         // If world has size one, create the communication group (of size one)
@@ -205,26 +238,8 @@ void MpiWorld::destroy()
 {
     SPDLOG_TRACE("Destroying MPI world {}", id);
 
-    // Note that all ranks will call this function.
-
-    // Unacked message buffers
-    if (!unackedMessageBuffers.empty()) {
-        for (auto& umb : unackedMessageBuffers) {
-            if (umb != nullptr) {
-                if (!umb->empty()) {
-                    SPDLOG_ERROR("Destroying the MPI world with outstanding {}"
-                                 " messages in the message buffer",
-                                 umb->size());
-                    throw std::runtime_error(
-                      "Destroying world with a non-empty MPI message buffer");
-                }
-            }
-        }
-        unackedMessageBuffers.clear();
-    }
-
-    // Lastly, clear-out the rank message
-    thisRankMsg = nullptr;
+    // Per-rank cleanup
+    rankState.reset();
 
     // Clear structures used for mocking
     {
@@ -239,7 +254,7 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
-    thisRankMsg = &msg;
+    rankState.msg = &msg;
 
     // Record which ranks are local to this world, and query for all leaders
     initLocalRemoteLeaders();
@@ -250,7 +265,7 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
 
 void MpiWorld::setMsgForRank(faabric::Message& msg)
 {
-    thisRankMsg = &msg;
+    rankState.msg = &msg;
 }
 
 std::string MpiWorld::getHostForRank(int rank)
@@ -275,16 +290,16 @@ void MpiWorld::initLocalRemoteLeaders()
     // keep a record of the opposite mapping, the host that each rank belongs
     // to, as it is queried frequently and asking the ptp broker involves
     // acquiring a lock.
-    if (thisRankMsg == nullptr) {
+    if (rankState.msg == nullptr) {
         throw std::runtime_error("Rank message not set!");
     }
-    int groupId = thisRankMsg->groupid();
+    int groupId = rankState.msg->groupid();
     std::set<int> rankIds = broker.getIdxsRegisteredForGroup(groupId);
     if (rankIds.size() != size) {
         SPDLOG_ERROR("{}:{}:{} rankIds != size ({} != {})",
-                     thisRankMsg->appid(),
+                     rankState.msg->appid(),
                      groupId,
-                     thisRankMsg->groupidx(),
+                     rankState.msg->groupidx(),
                      rankIds.size(),
                      size);
         throw std::runtime_error("MPI Group-World size mismatch!");
@@ -520,7 +535,7 @@ int MpiWorld::irecv(int sendRank,
                        .buffer = (void*)buffer };
 
     auto index = getUnackedMessageBuffer(sendRank, recvRank);
-    unackedMessageBuffers.at(index)->push_back(msg);
+    rankState.unackedMessageBuffers.at(index)->push_back(msg);
 
     return requestId;
 }
@@ -545,7 +560,7 @@ void MpiWorld::send(int sendRank,
     bool isLocal = otherHost == thisHost;
 
     // Generate a message ID
-    int msgId = (localMsgCount + 1) % INT32_MAX;
+    int msgId = (rankState.msgCount + 1) % INT32_MAX;
 
     MpiMessage msg = { .id = msgId,
                        .worldId = id,
@@ -1693,14 +1708,14 @@ MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
     bool isLocal = otherHost == thisHost;
 
     // Fast-path for non-async case
-    if (unackedMessageBuffers.at(index)->empty()) {
+    if (rankState.unackedMessageBuffers.at(index)->empty()) {
         return internalRecv(sendRank, recvRank, isLocal);
     }
 
     // If there are Irecv-ed messages pending to be acked, read them from the
     // transport
-    auto itr = unackedMessageBuffers.at(index)->begin();
-    while (itr != unackedMessageBuffers.at(index)->end()) {
+    auto itr = rankState.unackedMessageBuffers.at(index)->begin();
+    while (itr != rankState.unackedMessageBuffers.at(index)->end()) {
         // We are receiving a message that has been previously irecv-ed, so
         // we can safely copy into the provided buffer, and free the received
         // one
@@ -1737,10 +1752,10 @@ MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
 
     // If we have breaked-out of the while, it means that we found what we
     // were looking for and we are done
-    if (itr != unackedMessageBuffers.at(index)->end()) {
+    if (itr != rankState.unackedMessageBuffers.at(index)->end()) {
         assert(requestId == itr->requestId);
 
-        unackedMessageBuffers.at(index)->erase(itr);
+        rankState.unackedMessageBuffers.at(index)->erase(itr);
         return MpiMessage{};
     }
 
@@ -1810,12 +1825,12 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
 void MpiWorld::prepareMigration(int thisRank)
 {
     // Check that there are no pending asynchronous messages to send and receive
-    auto itr = unackedMessageBuffers.begin();
-    while (itr != unackedMessageBuffers.end()) {
+    auto itr = rankState.unackedMessageBuffers.begin();
+    while (itr != rankState.unackedMessageBuffers.end()) {
         if (*itr != nullptr && !(*itr)->empty()) {
             SPDLOG_ERROR("Trying to migrate MPI application (id: {}) but rank"
                          " {} has {} pending async messages to receive",
-                         thisRankMsg->appid(),
+                         rankState.msg->appid(),
                          thisRank,
                          (*itr)->size());
             throw std::runtime_error(
