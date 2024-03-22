@@ -1,6 +1,5 @@
 #include <catch2/catch.hpp>
 
-#include "faabric_utils.h"
 #include "fixtures.h"
 
 #include <faabric/mpi/MpiContext.h>
@@ -101,6 +100,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
 {
     const std::string expectedHost =
       faabric::util::getSystemConfig().endpointHost;
+    MpiWorldRegistry& reg = getMpiWorldRegistry();
 
     auto reqA = faabric::util::batchExecFactory("mpi", "hellompi", 1);
     auto& msgA = *reqA->mutable_messages(0);
@@ -113,9 +113,10 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
     plannerCli.callFunctions(reqA);
 
     // Use one context to create the world
-    MpiContext cA;
-    cA.createWorld(msgA);
-    int worldId = cA.getWorldId();
+    MpiContext ctxA;
+    ctxA.createWorld(msgA);
+    int worldId = ctxA.getWorldId();
+    MpiWorld& worldA = reg.getOrInitialiseWorld(msgA);
 
     waitForMpiMessages(reqA, worldSize);
     // Set the function result to have access to the chained messages
@@ -126,25 +127,30 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
     auto msgB =
       plannerCli.getMessageResult(msgA.appid(), *chainedMsgs.begin(), 500);
 
-    // Create another context and make sure it's not initialised
-    MpiContext cB;
-    REQUIRE(!cB.getIsMpi());
-    REQUIRE(cB.getWorldId() == -1);
-    REQUIRE(cB.getRank() == -1);
+    std::jthread otherWorldThread([&]() {
+        // Create another context and make sure it's not initialised
+        MpiContext ctxB;
+        REQUIRE(!ctxB.getIsMpi());
+        REQUIRE(ctxB.getWorldId() == -1);
+        REQUIRE(ctxB.getRank() == -1);
 
-    // Join the world
-    cB.joinWorld(msgB);
+        // Join the world
+        ctxB.joinWorld(msgB);
 
-    REQUIRE(cB.getIsMpi());
-    REQUIRE(cB.getWorldId() == worldId);
-    REQUIRE(cB.getRank() == 1);
+        REQUIRE(ctxB.getIsMpi());
+        REQUIRE(ctxB.getWorldId() == worldId);
+        REQUIRE(ctxB.getRank() == 1);
 
-    // Check rank is registered to this host
-    MpiWorldRegistry& reg = getMpiWorldRegistry();
-    MpiWorld& world = reg.getOrInitialiseWorld(msgB);
-    const std::string actualHost = world.getHostForRank(1);
-    REQUIRE(actualHost == expectedHost);
+        // Check rank is registered to this host
+        MpiWorld& worldB = reg.getOrInitialiseWorld(msgB);
+        const std::string actualHost = worldB.getHostForRank(1);
+        REQUIRE(actualHost == expectedHost);
 
-    world.destroy();
+        worldB.destroy();
+    });
+    otherWorldThread.join();
+
+    // Destroy from main rank (rank 0!)
+    worldA.destroy();
 }
 }

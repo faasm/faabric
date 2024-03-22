@@ -104,6 +104,8 @@ class PointToPointBroker
 
     std::string getHostForReceiver(int groupId, int recvIdx);
 
+    int getMpiPortForReceiver(int groupId, int recvIdx);
+
     std::set<std::string> setUpLocalMappingsFromSchedulingDecision(
       const faabric::batch_scheduler::SchedulingDecision& decision);
 
@@ -157,6 +159,7 @@ class PointToPointBroker
 
     std::unordered_map<int, std::set<int>> groupIdIdxsMap;
     std::unordered_map<std::string, std::string> mappings;
+    std::unordered_map<std::string, int> mpiPortMappings;
 
     std::unordered_map<int, std::shared_ptr<faabric::util::FlagWaiter>>
       groupFlags;

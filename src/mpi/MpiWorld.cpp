@@ -2,6 +2,7 @@
 #include <faabric/mpi/MpiMessage.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/batch.h>
@@ -31,6 +32,9 @@ std::vector<MpiMessage> getMpiMockedMessages(int sendRank)
     return mpiMockedMessages[sendRank];
 }
 
+static const MpiMessage MPI_SHUTDOWN_MESSAGE = { .messageType =
+                                                   SHUTDOWN_WORLD };
+
 // -----------------------------------
 // Thread-Local State
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
@@ -48,6 +52,17 @@ struct MpiRankState
     // containing all the MPI messages for which we have posted an `irecv` but
     // have not `wait`ed on yet.
     std::vector<std::unique_ptr<std::list<MpiMessage>>> unackedMessageBuffers;
+
+    // ----- Remote Messaging -----
+
+    // This structure contains one send socket per remote rank
+    std::vector<std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>
+      sendSockets;
+
+    // This method and background thread are responsible to receiving messages
+    // from the network for this rank
+    std::unique_ptr<std::jthread> recvThread;
+    std::stop_source stopSource;
 
     void reset()
     {
@@ -69,6 +84,9 @@ struct MpiRankState
             unackedMessageBuffers.clear();
         }
 
+        // Send sockets (recv thread is cleared as part of separate call)
+        sendSockets.clear();
+
         // Local message count
         msgCount = 1;
 
@@ -86,24 +104,47 @@ MpiWorld::MpiWorld()
   , broker(faabric::transport::getPointToPointBroker())
 {}
 
+int MpiWorld::getSendSocket(int sendRank, int recvRank)
+{
+    // We want to lazily initialise this data structure because, given its
+    // thread local nature, we expect it to be quite sparse (i.e. filled with
+    // nullptr).
+    if (rankState.sendSockets.empty()) {
+        rankState.sendSockets = std::vector<
+          std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>(size);
+    }
+
+    int index = recvRank;
+    std::string dstHost = getHostForRank(recvRank);
+    int dstPort = getPortForRank(recvRank);
+    if (rankState.sendSockets[index] == nullptr) {
+        rankState.sendSockets.at(index) =
+          std::make_unique<faabric::transport::AsyncSendMessageEndpoint>(
+            dstHost, dstPort);
+    }
+
+    return index;
+}
+
 void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
                                     int sendRank,
                                     int recvRank,
                                     const MpiMessage& msg)
 {
     // Serialise
+    // TODO(mpi-sock): expose a sendv like interface and avoid serialising here
     std::vector<uint8_t> serialisedBuffer(msgSize(msg));
     serializeMpiMsg(serialisedBuffer, msg);
 
+    int index = getSendSocket(sendRank, recvRank);
+
     try {
-        broker.sendMessage(
-          rankState.msg->groupid(),
-          sendRank,
-          recvRank,
+        // TODO(mpi-sock): as we are bypassing the PTP layer we can null-out
+        // the header. We should consider using an MPI-only wire format
+        rankState.sendSockets.at(index)->send(
+          0,
           reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
-          serialisedBuffer.size(),
-          dstHost,
-          true);
+          serialisedBuffer.size());
     } catch (std::runtime_error& e) {
         SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - send {} -> {}",
                      rankState.msg->appid(),
@@ -113,29 +154,6 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
                      recvRank);
         throw e;
     }
-}
-
-MpiMessage MpiWorld::recvRemoteMpiMessage(int sendRank, int recvRank)
-{
-    std::vector<uint8_t> msg;
-    try {
-        msg = broker.recvMessage(
-          rankState.msg->groupid(), sendRank, recvRank, true);
-    } catch (std::runtime_error& e) {
-        SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - recv (remote) {} -> {}",
-                     rankState.msg->appid(),
-                     rankState.msg->groupid(),
-                     rankState.msg->groupidx(),
-                     sendRank,
-                     recvRank);
-        throw e;
-    }
-
-    // TODO(mpi-opt): make sure we minimze copies here
-    MpiMessage parsedMsg;
-    parseMpiMsg(msg, &parsedMsg);
-
-    return parsedMsg;
 }
 
 // This method lazily initialises the unacked message buffer's and returns
@@ -232,13 +250,21 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
     // Initialise the memory queues for message reception
     initLocalQueues();
+
+    // Finally, start the receiving thread for this rank
+    initRecvThread();
 }
 
 void MpiWorld::destroy()
 {
     SPDLOG_TRACE("Destroying MPI world {}", id);
 
-    // Per-rank cleanup
+    // ----- Per-rank cleanup -----
+
+    // First, stop the thread-local network-polling thread
+    stopRecvThread();
+
+    // Now we can safely reset all other thread-local structures
     rankState.reset();
 
     // Clear structures used for mocking
@@ -261,11 +287,17 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
 
     // Initialise the memory queues for message reception
     initLocalQueues();
+
+    // Initialise the receiver thread
+    initRecvThread();
 }
 
 void MpiWorld::setMsgForRank(faabric::Message& msg)
 {
     rankState.msg = &msg;
+
+    // Initialise the receiver thread for this rank
+    initRecvThread();
 }
 
 std::string MpiWorld::getHostForRank(int rank)
@@ -274,6 +306,11 @@ std::string MpiWorld::getHostForRank(int rank)
     // of the point-to-point broker, where we need to acquire a shared lock for
     // every query.
     return hostForRank.at(rank);
+}
+
+int MpiWorld::getPortForRank(int rank)
+{
+    return portForRank.at(rank);
 }
 
 // The local leader for an MPI world is defined as the lowest rank assigned to
@@ -285,6 +322,7 @@ void MpiWorld::initLocalRemoteLeaders()
     // migration
     ranksForHost.clear();
     hostForRank.clear();
+    portForRank.clear();
 
     // First, group the ranks per host they belong to for convinience. We also
     // keep a record of the opposite mapping, the host that each rank belongs
@@ -306,11 +344,17 @@ void MpiWorld::initLocalRemoteLeaders()
     }
     assert(rankIds.size() == size);
     hostForRank.resize(size);
+    portForRank.resize(size);
     for (const auto& rankId : rankIds) {
         std::string host = broker.getHostForReceiver(groupId, rankId);
         ranksForHost[host].insert(rankId);
         hostForRank.at(rankId) = host;
+        portForRank.at(rankId) = broker.getMpiPortForReceiver(groupId, rankId);
     }
+
+    // Add the port for this rank
+    int thisRank = rankState.msg->groupidx();
+    portForRank.at(thisRank) = broker.getMpiPortForReceiver(groupId, thisRank);
 
     // Persist the local leader in this host for further use
     localLeader = (*ranksForHost[thisHost].begin());
@@ -1465,15 +1509,59 @@ void MpiWorld::allToAll(int rank,
             }
         }
 
-        if (rank == localLeader) {
-            // Given that we _always_ send local messages first, the local
-     leader
-            // needs to receive them here. Otherwise subsequent recv's would be
-            // out of order
-            for (const int sendRank : ranksForHost.at(thisHost)) {
-                if (sendRank == rank) {
-                    // We have  already copied the chunk in before
-                    continue;
+    // -------- Receive Phase --------
+
+    if (rank == localLeader) {
+        // If we are a local leader, we now need to receive one remote batch
+        // message per remote host, and propagate the messages downstream
+        for (const auto& [remoteHost, remoteRanks] : ranksForHost) {
+            if (remoteHost == thisHost) {
+                continue;
+            }
+
+            auto localRanks = ranksForHost.at(thisHost);
+            int remoteLeader = *(remoteRanks.begin());
+
+            auto remoteBatchMsg = getLocalQueue(remoteLeader, rank)->dequeue();
+
+            // Sanity check the remote (batched) message
+            [[maybe_unused]] int numMessages =
+              localRanks.size() * remoteRanks.size() * recvCount;
+            assert(remoteBatchMsg.count == numMessages);
+            assert(remoteBatchMsg.typeSize == (int)sendSize);
+            assert(remoteBatchMsg.messageType ==
+                   MpiMessageType::ALLTOALL_PACKED);
+
+            // For each local rank, send remoteWorldSize messages
+            auto localItr = localRanks.begin();
+            for (int recvIdx = 0; recvIdx < localRanks.size();
+                 recvIdx++, localItr++) {
+                int localRecvRank = *localItr;
+
+                auto remoteItr = remoteRanks.begin();
+                for (int sendIdx = 0; sendIdx < remoteRanks.size();
+                     sendIdx++, remoteItr++) {
+                    int remoteSendRank = *remoteItr;
+                    size_t batchOffset =
+                      getBatchMsgOffset(localRanks.size(), sendIdx, recvIdx);
+
+                    if (localRecvRank == rank) {
+                        std::memcpy(
+                          recvBuffer + getRecvBufferOffset(remoteSendRank),
+                          (uint8_t*)remoteBatchMsg.buffer + batchOffset,
+                          recvSize);
+                        continue;
+                    }
+
+                    // The local rank is expecting to receive from the local
+                    // leader. It is the message ordering that will let the
+                    // local rank know which remote rank it corresponds to
+                    send(rank,
+                         localRecvRank,
+                         (uint8_t*)remoteBatchMsg.buffer + batchOffset,
+                         sendType,
+                         sendCount,
+                         MpiMessageType::ALLTOALL);
                 }
 
                 recv(sendRank,
@@ -1719,32 +1807,89 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
     return localQueues[getIndexForRanks(sendRank, recvRank)];
 }
 
+void MpiWorld::initRecvThread()
+{
+    assert(rankState.msg != nullptr);
+    int thisRank = rankState.msg->groupidx();
+    int thisPort = getPortForRank(thisRank);
+
+    // This method is called twice from remote local leaders (once as part of
+    // initialiseFromMsg, and another one from setMsgForRank) as a consequence
+    // we skip initialisation if the thread is already initialised
+    if (rankState.recvThread != nullptr) {
+        return;
+    }
+
+    rankState.recvThread =
+      std::make_unique<std::jthread>([this, thisRank, thisPort]() {
+          SPDLOG_DEBUG(
+            "MPI - Initialising BG receiver thread for rank {} (port: {})",
+            thisRank,
+            thisPort);
+
+          faabric::transport::AsyncRecvMessageEndpoint recvSocket(thisPort);
+          auto stopToken = rankState.stopSource.get_token();
+
+          while (!stopToken.stop_requested()) {
+              // TODO: we ignore error code and header
+              auto msg = recvSocket.recv();
+
+              // TODO: can we avoid this copy here?
+              MpiMessage parsedMsg;
+              parseMpiMsg(msg.dataCopy(), &parsedMsg);
+
+              if (parsedMsg.messageType == SHUTDOWN_WORLD) {
+                  break;
+              }
+
+              getLocalQueue(parsedMsg.sendRank, parsedMsg.recvRank)
+                ->enqueue(parsedMsg);
+          }
+
+          SPDLOG_DEBUG(
+            "MPI - Shutting down BG receiver thread for rank {} (port: {})",
+            thisRank,
+            thisPort);
+      });
+}
+
+void MpiWorld::stopRecvThread()
+{
+    if (rankState.recvThread == nullptr) {
+        return;
+    }
+
+    // To properly shut down our receiver TCP socket, we request stopping the
+    // jthread, and then send an empty (shutdown) message to ourselves
+    rankState.stopSource.request_stop();
+    sendRemoteMpiMessage(thisHost,
+                         rankState.msg->mpirank(),
+                         rankState.msg->mpirank(),
+                         MPI_SHUTDOWN_MESSAGE);
+
+    rankState.recvThread->join();
+    rankState.recvThread.reset();
+}
+
 // We pre-allocate all _potentially_ necessary queues in advance. Queues are
 // necessary to _receive_ messages, thus we initialise all queues whose
-// corresponding receiver is local to this host
-// Note - the queues themselves perform concurrency control
+// corresponding receiver is local to this host, for any sender
 void MpiWorld::initLocalQueues()
 {
     localQueues.resize(size * size);
-    for (const int sendRank : ranksForHost[thisHost]) {
+    for (int sendRank = 0; sendRank < size; sendRank++) {
         for (const int recvRank : ranksForHost[thisHost]) {
+            // We handle messages-to-self as memory copies
+            if (sendRank == recvRank) {
+                continue;
+            }
+
             if (localQueues[getIndexForRanks(sendRank, recvRank)] == nullptr) {
                 localQueues[getIndexForRanks(sendRank, recvRank)] =
                   std::make_shared<InMemoryMpiQueue>();
             }
         }
     }
-}
-
-MpiMessage MpiWorld::internalRecv(int sendRank, int recvRank, bool isLocal)
-{
-    if (isLocal) {
-        SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        return getLocalQueue(sendRank, recvRank)->dequeue();
-    }
-
-    SPDLOG_TRACE("MPI - recv remote {} -> {}", sendRank, recvRank);
-    return recvRemoteMpiMessage(sendRank, recvRank);
 }
 
 MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
@@ -1756,11 +1901,10 @@ MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
     // Work out whether the message is sent locally or from another host
     assert(thisHost == getHostForRank(recvRank));
     const std::string otherHost = getHostForRank(sendRank);
-    bool isLocal = otherHost == thisHost;
 
     // Fast-path for non-async case
     if (rankState.unackedMessageBuffers.at(index)->empty()) {
-        return internalRecv(sendRank, recvRank, isLocal);
+        return getLocalQueue(sendRank, recvRank)->dequeue();
     }
 
     // If there are Irecv-ed messages pending to be acked, read them from the
@@ -1779,7 +1923,7 @@ MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
             // Copy into current slot in the list, but keep a copy to the
             // app-provided buffer to read data into
             void* providedBuffer = itr->buffer;
-            *itr = internalRecv(sendRank, recvRank, isLocal);
+            *itr = getLocalQueue(sendRank, recvRank)->dequeue();
             itr->requestId = tmpRequestId;
 
             if (itr->buffer != nullptr) {
@@ -1811,7 +1955,7 @@ MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
     }
 
     // Lastly, return our message
-    return internalRecv(sendRank, recvRank, isLocal);
+    return getLocalQueue(sendRank, recvRank)->dequeue();
 }
 
 int MpiWorld::getIndexForRanks(int sendRank, int recvRank) const
@@ -1873,7 +2017,7 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
     }
 }
 
-void MpiWorld::prepareMigration(int thisRank)
+void MpiWorld::prepareMigration(int thisRank, bool thisRankMustMigrate)
 {
     // Check that there are no pending asynchronous messages to send and receive
     auto itr = rankState.unackedMessageBuffers.begin();
@@ -1890,6 +2034,15 @@ void MpiWorld::prepareMigration(int thisRank)
 
         itr++;
     }
+
+    // If our (this rank) is being migrated, stop the receiver thread
+    if (thisRankMustMigrate) {
+        stopRecvThread();
+    }
+
+    // Clear our TLS sockets to force lazy-initialising them after migration
+    // so that we pick up the right ranks for the remote ranks
+    rankState.sendSockets.clear();
 
     // Update local records
     if (thisRank == localLeader) {

@@ -396,6 +396,21 @@ std::string PointToPointBroker::getHostForReceiver(int groupId, int recvIdx)
     return mappings[key];
 }
 
+int PointToPointBroker::getMpiPortForReceiver(int groupId, int recvIdx)
+{
+    faabric::util::SharedLock lock(brokerMutex);
+
+    std::string key = getPointToPointKey(groupId, recvIdx);
+
+    if (mpiPortMappings.find(key) == mpiPortMappings.end()) {
+        SPDLOG_ERROR(
+          "No point-to-point mapping for group {} idx {}", groupId, recvIdx);
+        throw std::runtime_error("No point-to-point mapping found");
+    }
+
+    return mpiPortMappings[key];
+}
+
 std::set<std::string>
 PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
   const faabric::batch_scheduler::SchedulingDecision& decision)
@@ -412,12 +427,14 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
         for (int i = 0; i < decision.nFunctions; i++) {
             int groupIdx = decision.groupIdxs.at(i);
             const std::string& host = decision.hosts.at(i);
+            int port = decision.mpiPorts.at(i);
 
-            SPDLOG_DEBUG("Setting point-to-point mapping {}:{}:{} on {}",
+            SPDLOG_DEBUG("Setting point-to-point mapping {}:{}:{} on {}:{}",
                          decision.appId,
                          groupId,
                          groupIdx,
-                         host);
+                         host,
+                         port);
 
             // Record this index for this group
             groupIdIdxsMap[groupId].insert(groupIdx);
@@ -425,6 +442,7 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
             // Add host mapping
             std::string key = getPointToPointKey(groupId, groupIdx);
             mappings[key] = host;
+            mpiPortMappings[key] = port;
 
             // If it's not this host, add to set of returned hosts
             if (host != conf.endpointHost) {
@@ -476,6 +494,7 @@ void PointToPointBroker::sendMappingsFromSchedulingDecision(
             mapping->set_messageid(decision.messageIds.at(i));
             mapping->set_appidx(decision.appIdxs.at(i));
             mapping->set_groupidx(decision.groupIdxs.at(i));
+            mapping->set_mpiport(decision.mpiPorts.at(i));
         }
 
         SPDLOG_DEBUG("Sending {} point-to-point mappings for {} to {}",

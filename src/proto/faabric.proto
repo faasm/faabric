@@ -216,6 +216,7 @@ message PointToPointMappings {
         int32 messageId = 2;
         int32 appIdx = 3;
         int32 groupIdx = 4;
+        int32 mpiPort = 5;
     }
 
     repeated PointToPointMapping mappings = 3;
