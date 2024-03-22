@@ -1,7 +1,5 @@
 #include <catch2/catch.hpp>
 
-#include "fixtures.h"
-
 #include <faabric/util/dirty.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
@@ -13,6 +11,21 @@
 using namespace faabric::util;
 
 namespace tests {
+
+TEST_CASE("Test malloc/free/realloc are strongly linked namespaced symbols",
+          "[util]")
+{
+    size_t size = 1024;
+    void* ptr = faabric::util::malloc(size);
+
+    REQUIRE(ptr != nullptr);
+
+    void* newPtr = faabric::util::realloc(ptr, size);
+
+    REQUIRE(newPtr != nullptr);
+
+    faabric::util::free(newPtr);
+}
 
 TEST_CASE("Test rounding down offsets to page size", "[util][memory]")
 {
