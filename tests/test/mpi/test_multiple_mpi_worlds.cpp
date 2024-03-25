@@ -1,6 +1,5 @@
 #include <catch2/catch.hpp>
 
-#include "faabric_utils.h"
 #include "fixtures.h"
 
 using namespace faabric::mpi;
@@ -160,8 +159,8 @@ TEST_CASE_METHOD(MultiWorldMpiTestFixture,
         // Check for world A
         REQUIRE(worldA.getLocalQueueSize(rankA1, rankA2) == 1);
         REQUIRE(worldA.getLocalQueueSize(rankA2, rankA1) == 0);
-        REQUIRE(worldA.getLocalQueueSize(rankA1, 0) == 0);
-        REQUIRE(worldA.getLocalQueueSize(rankA2, 0) == 0);
+        REQUIRE(worldA.getLocalQueueSize(rankA1, 2) == 0);
+        REQUIRE(worldA.getLocalQueueSize(rankA2, 2) == 0);
         const std::shared_ptr<InMemoryMpiQueue>& queueA2 =
           worldA.getLocalQueue(rankA1, rankA2);
         MpiMessage actualMessage = queueA2->dequeue();
@@ -170,8 +169,8 @@ TEST_CASE_METHOD(MultiWorldMpiTestFixture,
         // Check for world B
         REQUIRE(worldB.getLocalQueueSize(rankA1, rankA2) == 1);
         REQUIRE(worldB.getLocalQueueSize(rankA2, rankA1) == 0);
-        REQUIRE(worldB.getLocalQueueSize(rankA1, 0) == 0);
-        REQUIRE(worldB.getLocalQueueSize(rankA2, 0) == 0);
+        REQUIRE(worldB.getLocalQueueSize(rankA1, 2) == 0);
+        REQUIRE(worldB.getLocalQueueSize(rankA2, 2) == 0);
         const std::shared_ptr<InMemoryMpiQueue>& queueA2B =
           worldB.getLocalQueue(rankA1, rankA2);
         actualMessage = queueA2B->dequeue();

@@ -35,6 +35,7 @@ void SchedulingDecision::addMessage(const std::string& host,
     messageIds.emplace_back(messageId);
     appIdxs.emplace_back(appIdx);
     groupIdxs.emplace_back(groupIdx);
+    mpiPorts.push_back(0);
 }
 
 SchedulingDecision SchedulingDecision::fromPointToPointMappings(
@@ -42,14 +43,16 @@ SchedulingDecision SchedulingDecision::fromPointToPointMappings(
 {
     SchedulingDecision decision(mappings.appid(), mappings.groupid());
 
-    for (const auto& m : mappings.mappings()) {
-        decision.addMessage(m.host(), m.messageid(), m.appidx(), m.groupidx());
+    for (const auto& map : mappings.mappings()) {
+        decision.addMessage(
+          map.host(), map.messageid(), map.appidx(), map.groupidx());
+        decision.mpiPorts.at(decision.nFunctions - 1) = map.mpiport();
     }
 
     return decision;
 }
 
-void SchedulingDecision::removeMessage(int32_t messageId)
+int32_t SchedulingDecision::removeMessage(int32_t messageId)
 {
     // Work out the index for the to-be-deleted message
     auto idxItr = std::find(messageIds.begin(), messageIds.end(), messageId);
@@ -66,6 +69,11 @@ void SchedulingDecision::removeMessage(int32_t messageId)
     messageIds.erase(messageIds.begin() + idx);
     appIdxs.erase(appIdxs.begin() + idx);
     groupIdxs.erase(groupIdxs.begin() + idx);
+
+    int vacatedMpiPort = *(mpiPorts.begin() + idx);
+    mpiPorts.erase(mpiPorts.begin() + idx);
+
+    return vacatedMpiPort;
 }
 
 std::set<std::string> SchedulingDecision::uniqueHosts()
@@ -78,16 +86,17 @@ void SchedulingDecision::print(const std::string& logLevel)
     std::string printedText = "Printing scheduling decision:";
     printedText += fmt::format(
       "\n-------------- Decision for App: {} ----------------\n", appId);
-    printedText += "MsgId\tAppId\tGroupId\tGrIdx\tHostIp\n";
+    printedText += "MsgId\tAppId\tGroupId\tGrIdx\tHostIp\t\tPort\n";
     // Modulo a big number so that we can get the UUIDs to fit within one tab
     int formatBase = 1e6;
     for (int i = 0; i < hosts.size(); i++) {
-        printedText += fmt::format("{}\t{}\t{}\t{}\t{}\n",
+        printedText += fmt::format("{}\t{}\t{}\t{}\t{}\t{}\n",
                                    messageIds.at(i) % formatBase,
                                    appId % formatBase,
                                    groupId % formatBase,
                                    groupIdxs.at(i),
-                                   hosts.at(i));
+                                   hosts.at(i),
+                                   mpiPorts.at(i));
     }
     printedText += fmt::format(
       "------------- End Decision for App {} ---------------", appId);

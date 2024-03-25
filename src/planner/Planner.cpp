@@ -5,6 +5,7 @@
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/transport/common.h>
 #include <faabric/util/batch.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
@@ -32,6 +33,38 @@ static void releaseHostSlots(std::shared_ptr<Host> host, int slotsToRelease = 1)
 {
     host->set_usedslots(host->usedslots() - slotsToRelease);
     assert(host->usedslots() >= 0);
+}
+
+static int claimHostMpiPort(std::shared_ptr<Host> host)
+{
+    for (int i = 0; i < host->mpiports_size(); i++) {
+        if (!host->mpiports(i).used()) {
+            host->mutable_mpiports()->at(i).set_used(true);
+            SPDLOG_DEBUG("Assigning MPI port {} for host {}",
+                         host->mpiports(i).port(),
+                         host->ip());
+            return host->mpiports(i).port();
+        }
+    }
+
+    SPDLOG_ERROR("Ran out of MPI ports trying to claim one!");
+    throw std::runtime_error("Ran out of MPI ports!");
+}
+
+static void releaseHostMpiPort(std::shared_ptr<Host> host, int mpiPort)
+{
+    SPDLOG_DEBUG("Releasing port {} for host {}", mpiPort, host->ip());
+
+    for (int i = 0; i < host->mpiports_size(); i++) {
+        if (host->mpiports(i).port() == mpiPort) {
+            assert(host->mpiports(i).used());
+            host->mutable_mpiports()->at(i).set_used(false);
+            return;
+        }
+    }
+
+    SPDLOG_ERROR("Requested to free unavailbale MPI port: {}", mpiPort);
+    throw std::runtime_error("Requested to free unavailable MPI port!");
 }
 
 static void printHostState(std::map<std::string, std::shared_ptr<Host>> hostMap,
@@ -212,6 +245,13 @@ bool Planner::registerHost(const Host& hostIn, bool overwrite)
         state.hostMap.emplace(
           std::make_pair<std::string, std::shared_ptr<Host>>(
             (std::string)hostIn.ip(), std::make_shared<Host>(hostIn)));
+
+        // Populate the mpi ports
+        for (int i = 0; i < hostIn.slots(); i++) {
+            auto* mpiPort = state.hostMap.at(hostIn.ip())->add_mpiports();
+            mpiPort->set_port(MPI_BASE_PORT + i);
+            mpiPort->set_used(false);
+        }
     } else if (it != state.hostMap.end() && overwrite) {
         // We allow overwritting the host state by sending another register
         // request with same IP but different host resources. This is useful
@@ -222,6 +262,15 @@ bool Planner::registerHost(const Host& hostIn, bool overwrite)
                     hostIn.usedslots());
         it->second->set_slots(hostIn.slots());
         it->second->set_usedslots(hostIn.usedslots());
+
+        it->second->clear_mpiports();
+        for (int i = 0; i < hostIn.slots(); i++) {
+            auto* mpiPort = state.hostMap.at(hostIn.ip())->add_mpiports();
+            mpiPort->set_port(MPI_BASE_PORT + i);
+            // If we are overwritting with a number of used slots, we
+            // set the first ports as used too
+            mpiPort->set_used(i < hostIn.usedslots());
+        }
     } else if (it != state.hostMap.end()) {
         SPDLOG_TRACE("NOT overwritting host {} with {} slots (used {})",
                      hostIn.ip(),
@@ -326,7 +375,9 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
             req->mutable_messages()->erase(it);
 
             // Remove message from decision
-            decision->removeMessage(msg->id());
+            int freedMpiPort = decision->removeMessage(msg->id());
+            releaseHostMpiPort(state.hostMap.at(msg->executedhost()),
+                               freedMpiPort);
 
             // Remove pair altogether if no more messages left
             if (req->messages_size() == 0) {
@@ -610,16 +661,19 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     auto& broker = faabric::transport::getPointToPointBroker();
     switch (decisionType) {
         case faabric::batch_scheduler::DecisionType::NEW: {
-            // 0. Log the decision in debug mode
-#ifndef NDEBUG
-            decision->print();
-#endif
-
             // 1. For a new request, we only need to update the hosts
             // with the new messages being scheduled
             for (int i = 0; i < decision->hosts.size(); i++) {
-                claimHostSlots(state.hostMap.at(decision->hosts.at(i)));
+                auto thisHost = state.hostMap.at(decision->hosts.at(i));
+                claimHostSlots(thisHost);
+                decision->mpiPorts.at(i) = claimHostMpiPort(thisHost);
             }
+            assert(decision->hosts.size() == decision->mpiPorts.size());
+
+            // 1.5. Log the decision after we have populated the MPI ports
+#ifndef NDEBUG
+            decision->print();
+#endif
 
             // 2. For a new decision, we just add it to the in-flight map
             state.inFlightReqs[appId] = std::make_pair(req, decision);
@@ -633,7 +687,8 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             // 1. For a scale change request, we only need to update the hosts
             // with the _new_ messages being scheduled
             for (int i = 0; i < decision->hosts.size(); i++) {
-                claimHostSlots(state.hostMap.at(decision->hosts.at(i)));
+                auto thisHost = state.hostMap.at(decision->hosts.at(i));
+                claimHostSlots(thisHost);
             }
 
             // 2. For a scale change request, we want to update the BER with the
@@ -643,12 +698,15 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             faabric::util::updateBatchExecGroupId(oldReq, newGroupId);
             oldDec->groupId = newGroupId;
 
+            // Update the MPI ports in the old decision
             for (int i = 0; i < req->messages_size(); i++) {
                 *oldReq->add_messages() = req->messages(i);
                 oldDec->addMessage(decision->hosts.at(i), req->messages(i));
+                oldDec->mpiPorts.at(oldDec->nFunctions - 1) =
+                  claimHostMpiPort(state.hostMap.at(decision->hosts.at(i)));
             }
 
-            // 2.5. Log the updated decision in debug mode
+            // 2.5.1. Log the updated decision in debug mode
 #ifndef NDEBUG
             oldDec->print();
 #endif
@@ -663,15 +721,6 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         case faabric::batch_scheduler::DecisionType::DIST_CHANGE: {
             auto oldReq = state.inFlightReqs.at(appId).first;
             auto oldDec = state.inFlightReqs.at(appId).second;
-
-            // 0. For the time being, when migrating we always print both
-            // decisions (old and new)
-            SPDLOG_INFO("Decided to migrate app {}!", appId);
-            SPDLOG_INFO("Old decision:");
-            oldDec->print("info");
-            SPDLOG_INFO("New decision:");
-            decision->print("info");
-            state.numMigrations += 1;
 
             // We want to let all hosts involved in the migration (not only
             // those in the new decision) that we are gonna migrate. For the
@@ -696,13 +745,32 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             // 1. We only need to update the hosts where both decisions differ
             assert(decision->hosts.size() == oldDec->hosts.size());
             for (int i = 0; i < decision->hosts.size(); i++) {
+                // If decision is the same, we propagate the port
                 if (decision->hosts.at(i) == oldDec->hosts.at(i)) {
+                    decision->mpiPorts.at(i) = oldDec->mpiPorts.at(i);
                     continue;
                 }
 
-                releaseHostSlots(state.hostMap.at(oldDec->hosts.at(i)));
-                claimHostSlots(state.hostMap.at(decision->hosts.at(i)));
+                auto oldHost = state.hostMap.at(oldDec->hosts.at(i));
+                auto newHost = state.hostMap.at(decision->hosts.at(i));
+
+                // Slots accounting
+                releaseHostSlots(oldHost);
+                claimHostSlots(newHost);
+
+                // MPI ports accounting
+                releaseHostMpiPort(oldHost, oldDec->mpiPorts.at(i));
+                decision->mpiPorts.at(i) = claimHostMpiPort(newHost);
             }
+
+            // 0. For the time being, when migrating we always print both
+            // decisions (old and new)
+            SPDLOG_INFO("Decided to migrate app {}!", appId);
+            SPDLOG_INFO("Old decision:");
+            oldDec->print("info");
+            SPDLOG_INFO("New decision:");
+            decision->print("info");
+            state.numMigrations += 1;
 
             // 2. For a DIST_CHANGE request (migration), we want to replace the
             // exsiting decision with the new one

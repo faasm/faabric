@@ -93,6 +93,13 @@ message Host {
     int32 usedSlots = 3;
     // Host register timestamp as epoch time in ms
     Timestamp registerTs = 4;
+
+    message MpiPort {
+        int32 port = 1;
+        bool used = 2;
+    }
+
+    repeated MpiPort mpiPorts = 5;
 }
 
 message PingResponse {

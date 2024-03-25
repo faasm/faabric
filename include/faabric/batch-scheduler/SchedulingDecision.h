@@ -79,6 +79,8 @@ class SchedulingDecision
 
     std::vector<int32_t> groupIdxs;
 
+    std::vector<int32_t> mpiPorts;
+
     std::string returnHost;
 
     /**
@@ -99,7 +101,8 @@ class SchedulingDecision
                     int32_t appIdx,
                     int32_t groupIdx);
 
-    void removeMessage(int32_t messageId);
+    // Returns the MPI port that we have vacated
+    int32_t removeMessage(int32_t messageId);
 
     std::set<std::string> uniqueHosts();
 

@@ -799,7 +799,7 @@ void mpiMigrationPoint(int entrypointFuncArg)
 
         if (call->ismpi()) {
             auto& mpiWorld = getMpiWorldRegistry().getWorld(call->mpiworldid());
-            mpiWorld.prepareMigration(call->mpirank());
+            mpiWorld.prepareMigration(call->mpirank(), funcMustMigrate);
         }
     }
 

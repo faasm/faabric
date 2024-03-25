@@ -194,7 +194,7 @@ class MpiWorld
 
     /* Function Migration */
 
-    void prepareMigration(int thisRank);
+    void prepareMigration(int thisRank, bool thisRankMustMigrate);
 
   private:
     int id = -1;
@@ -220,6 +220,8 @@ class MpiWorld
     // the same order in all worlds
     std::map<std::string, std::set<int>> ranksForHost;
     std::vector<std::string> hostForRank;
+    // For each remote rank, store the port that it is listening to
+    std::vector<int> portForRank;
 
     // Track local and remote leaders. The leader is stored in the first
     // position of the host to ranks map.
@@ -230,15 +232,22 @@ class MpiWorld
     std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
     void initLocalQueues();
 
-    // Remote messaging using the PTP layer
+    // Remote messaging using the PTP layer for control-plane
     faabric::transport::PointToPointBroker& broker;
+
+    // Receiver and sender sockets for data plane
+    void initRecvThread();
+
+    void stopRecvThread();
+
+    int getPortForRank(int rank);
+
+    int getSendSocket(int sendRank, int recvRank);
 
     void sendRemoteMpiMessage(std::string dstHost,
                               int sendRank,
                               int recvRank,
                               const MpiMessage& msg);
-
-    MpiMessage recvRemoteMpiMessage(int sendRank, int recvRank);
 
     // Support for asyncrhonous communications
     int getUnackedMessageBuffer(int sendRank, int recvRank);
@@ -267,7 +276,5 @@ class MpiWorld
                 int count,
                 MPI_Status* status,
                 MpiMessageType messageType = MpiMessageType::NORMAL);
-
-    MpiMessage internalRecv(int sendRank, int recvRank, bool isLocal);
 };
 }
