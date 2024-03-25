@@ -20,7 +20,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm.azurecr.io/faabric:0.15.0
+      image: faasm.azurecr.io/faabric:0.16.0
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm.azurecr.io/faabric:0.15.0
+      image: faasm.azurecr.io/faabric:0.16.0
     steps:
       - name: "Check out code"
         uses: actions/checkout@v4
@@ -43,7 +43,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm.azurecr.io/faabric:0.15.0
+      image: faasm.azurecr.io/faabric:0.16.0
     steps:
       - name: "Check out code"
         uses: actions/checkout@v4
@@ -63,7 +63,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm.azurecr.io/faabric:0.15.0
+      image: faasm.azurecr.io/faabric:0.16.0
       options: --privileged
     services:
       redis:
@@ -102,7 +102,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm.azurecr.io/faabric:0.15.0
+      image: faasm.azurecr.io/faabric:0.16.0
       options: --privileged
     services:
       redis:
@@ -149,7 +149,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm.azurecr.io/faabric:0.15.0
+      image: faasm.azurecr.io/faabric:0.16.0
     services:
       redis:
         image: redis
