@@ -21,7 +21,6 @@ RUN ./bin/create_venv.sh \
     # Static build
     && inv dev.cmake --build=Release \
     && inv dev.cc faabric \
-    && inv dev.cc faabric_tests \
     # Shared build
     && inv dev.cmake --shared --build=Release \
     && inv dev.cc faabric --shared \

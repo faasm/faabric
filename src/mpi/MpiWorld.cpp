@@ -1824,7 +1824,7 @@ void MpiWorld::initRecvThread()
       std::make_unique<std::jthread>([this, thisRank, thisPort]() {
           // Variable is only used in debug builds, so mark it here to avoid
           // compiler warnigns
-          (void) thisRank;
+          (void)thisRank;
 
           SPDLOG_DEBUG(
             "MPI - Initialising BG receiver thread for rank {} (port: {})",

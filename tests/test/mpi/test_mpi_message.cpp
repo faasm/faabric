@@ -31,7 +31,7 @@ bool areMpiMsgEqual(const MpiMessage& msgA, const MpiMessage& msgB)
 
     // If none points to null, they must point to the same data
     auto payloadSizeA = payloadSize(msgA);
-    auto payloadSizeB = payloadSize(msgB);
+    [[maybe_unused]] auto payloadSizeB = payloadSize(msgB);
     // Assert, as this should pass given the previous comparisons
     assert(payloadSizeA == payloadSizeB);
 
