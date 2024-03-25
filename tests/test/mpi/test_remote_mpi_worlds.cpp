@@ -330,6 +330,10 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     thisWorld.destroy();
 }
 
+/* 25/03/2024 - Temporarily disable the locality-aware all-to-all
+ * implementation as it is not clear if the reduction of cross-VM messages
+ * justifies the increase in local messages (by a factor of 3) plus the
+ * contention on local leaders.
 TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "Test number of messages sent during all-to-all",
                  "[mpi]")
@@ -420,4 +424,5 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     otherWorld.destroy();
     thisWorld.destroy();
 }
+*/
 }
