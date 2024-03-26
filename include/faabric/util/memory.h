@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mimalloc.h>
 #include <span>
 #include <string>
 #include <unistd.h>
@@ -15,17 +16,17 @@ namespace faabric::util {
 // malloc implementations.
 inline void* malloc(std::size_t size)
 {
-    return std::malloc(size);
+    return mi_malloc(size);
 }
 
 inline void free(void* ptr)
 {
-    return std::free(ptr);
+    return mi_free(ptr);
 }
 
 inline void* realloc(void* ptr, std::size_t newSize)
 {
-    return std::realloc(ptr, newSize);
+    return mi_realloc(ptr, newSize);
 }
 
 /*

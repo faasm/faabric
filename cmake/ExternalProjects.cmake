@@ -37,6 +37,7 @@ conan_cmake_configure(
         "catch2/2.13.9@#8793d3e6287d3684201418de556d98fe"
         "flatbuffers/23.5.26@#b153646f6546daab4c7326970b6cd89c"
         "hiredis/1.0.2@#370dad964286cadb1f15dc90252e8ef3"
+        "mimalloc/2.1.2@#93a294cba11166006270536859c3c9ef"
         "openssl/3.0.2@#269fa93e5afe8c34bd9a0030d2b8f0fe"
         "protobuf/3.20.0@#8e4de7081bea093469c9e6076149b2b4"
         "readerwriterqueue/1.0.6@#a95c8da3d68822dec4d4c13fff4b5c96"
@@ -79,6 +80,7 @@ find_package(Catch2 REQUIRED)
 find_package(flatbuffers REQUIRED)
 find_package(fmt REQUIRED)
 find_package(hiredis REQUIRED)
+find_package(mimalloc 2.1.2 REQUIRED)
 # 27/01/2023 - Pin OpenSSL to a specific version to avoid incompatibilities
 # with the system's (i.e. Ubuntu 22.04) OpenSSL
 find_package(OpenSSL 3.0.2 REQUIRED)
@@ -145,6 +147,7 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     Boost::system
     flatbuffers::flatbuffers
     hiredis::hiredis
+    mimalloc::mimalloc
     nng::nng
     protobuf::libprotobuf
     readerwriterqueue::readerwriterqueue
