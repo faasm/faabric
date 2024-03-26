@@ -8,6 +8,7 @@
 #include <faabric/util/batch.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/hwloc.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
@@ -52,6 +53,9 @@ struct MpiRankState
     // containing all the MPI messages for which we have posted an `irecv` but
     // have not `wait`ed on yet.
     std::vector<std::unique_ptr<std::list<MpiMessage>>> unackedMessageBuffers;
+
+    // CPU that this thread is pinned to
+    std::unique_ptr<faabric::util::FaabricCpuSet> pinnedCpu;
 
     // ----- Remote Messaging -----
 
@@ -1774,6 +1778,7 @@ void MpiWorld::initRecvThread()
     // initialiseFromMsg, and another one from setMsgForRank) as a consequence
     // we skip initialisation if the thread is already initialised
     if (rankState.recvThread != nullptr) {
+        assert(rankState.pinnedCpu != nullptr);
         return;
     }
 
@@ -1817,11 +1822,19 @@ void MpiWorld::initRecvThread()
             thisRank,
             thisPort);
       });
+
+    // The MPI rank thread (this) and the received thread are talking a
+    // lot over shared memory. As a consequence, we pin them to the same
+    // CPU (which will be different to other MPI ranks and receiver threads
+    rankState.pinnedCpu = faabric::util::pinThreadToFreeCpu(pthread_self());
+    faabric::util::pinThreadToCpu(rankState.recvThread->native_handle(),
+                                  rankState.pinnedCpu->get());
 }
 
 void MpiWorld::stopRecvThread()
 {
     if (rankState.recvThread == nullptr) {
+        assert(rankState.pinnedCpu == nullptr);
         return;
     }
 
@@ -1835,6 +1848,10 @@ void MpiWorld::stopRecvThread()
 
     rankState.recvThread->join();
     rankState.recvThread.reset();
+
+    // Finally, free the CPU that the receiver thread and the application
+    // thread were pinned to
+    rankState.pinnedCpu.reset();
 }
 
 // We pre-allocate all _potentially_ necessary queues in advance. Queues are

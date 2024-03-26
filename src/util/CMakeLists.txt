@@ -14,6 +14,7 @@ faabric_lib(util
     files.cpp
     func.cpp
     gids.cpp
+    hwloc.cpp
     json.cpp
     latch.cpp
     locks.cpp
