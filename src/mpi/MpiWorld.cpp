@@ -558,9 +558,6 @@ int MpiWorld::irecv(int sendRank,
                     int count,
                     MpiMessageType messageType)
 {
-    // int requestId = (int)faabric::util::generateGid();
-    // TODO: encode the send, recv rank in the request id
-    // reqIdToRanks.try_emplace(requestId, sendRank, recvRank);
     int32_t requestId = getAsyncRequestId(sendRank, recvRank, false);
 
     SPDLOG_TRACE(
@@ -613,7 +610,7 @@ void MpiWorld::send(int sendRank,
                        .typeSize = dataType->size,
                        .count = count,
                        .messageType = messageType,
-                       .buffer = (void*)buffer };
+                       .buffer = nullptr };
 
     // Mock the message sending in tests
     if (faabric::util::isMockMode()) {
@@ -621,11 +618,13 @@ void MpiWorld::send(int sendRank,
         return;
     }
 
+    bool mustSendData = count > 0 && buffer != nullptr;
+
     // Dispatch the message locally or globally
     if (isLocal) {
         // Take control over the buffer data if we are gonna move it to
         // the in-memory queues for local messaging
-        if (count > 0 && buffer != nullptr) {
+        if (mustSendData) {
             void* bufferPtr = faabric::util::malloc(count * dataType->size);
             std::memcpy(bufferPtr, buffer, count * dataType->size);
 
@@ -636,6 +635,10 @@ void MpiWorld::send(int sendRank,
           "MPI - send {} -> {} ({})", sendRank, recvRank, messageType);
         getLocalQueue(sendRank, recvRank)->enqueue(msg);
     } else {
+        if (mustSendData) {
+            msg.buffer = (void*)buffer;
+        }
+
         SPDLOG_TRACE(
           "MPI - send remote {} -> {} ({})", sendRank, recvRank, messageType);
         sendRemoteMpiMessage(otherHost, sendRank, recvRank, msg);
@@ -1937,6 +1940,8 @@ MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
 
             if (itr->buffer != nullptr) {
                 assert(providedBuffer != nullptr);
+                // If buffers are not null, we must have a non-zero size
+                assert((itr->count * itr->typeSize) > 0);
                 std::memcpy(
                   providedBuffer, itr->buffer, itr->count * itr->typeSize);
                 faabric::util::free(itr->buffer);
