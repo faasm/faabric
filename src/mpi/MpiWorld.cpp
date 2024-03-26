@@ -1835,8 +1835,13 @@ void MpiWorld::initRecvThread()
           auto stopToken = rankState.stopSource.get_token();
 
           while (!stopToken.stop_requested()) {
-              // TODO: we ignore error code and header
               auto msg = recvSocket.recv();
+
+              // On timeout we listen again
+              if (msg.getResponseCode() ==
+                  faabric::transport::MessageResponseCode::TIMEOUT) {
+                  continue;
+              }
 
               // TODO: can we avoid this copy here?
               MpiMessage parsedMsg;
