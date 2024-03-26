@@ -237,26 +237,34 @@ TEST_CASE_METHOD(MpiTestFixture, "Test send and recv on same host", "[mpi]")
     // Send a message between colocated ranks
     int rankA1 = 0;
     int rankA2 = 1;
-    std::vector<int> messageData = { 0, 1, 2 };
+    std::vector<int> messageData;
+
+    SECTION("Non-empty message")
+    {
+        messageData = { 0, 1, 2 };
+    }
+
+    SECTION("Empty message")
+    {
+        messageData = {};
+    }
+
     world.send(
       rankA1, rankA2, BYTES(messageData.data()), MPI_INT, messageData.size());
 
-    SECTION("Test recv")
-    {
-        // Receive the message
-        MPI_Status status{};
-        auto bufferAllocation = std::make_unique<int[]>(messageData.size());
-        auto* buffer = bufferAllocation.get();
-        world.recv(
-          rankA1, rankA2, BYTES(buffer), MPI_INT, messageData.size(), &status);
+    // Receive the message
+    MPI_Status status{};
+    auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+    auto* buffer = bufferAllocation.get();
+    world.recv(
+      rankA1, rankA2, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
-        std::vector<int> actual(buffer, buffer + messageData.size());
-        REQUIRE(actual == messageData);
+    std::vector<int> actual(buffer, buffer + messageData.size());
+    REQUIRE(actual == messageData);
 
-        REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
-        REQUIRE(status.MPI_SOURCE == rankA1);
-        REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
-    }
+    REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
+    REQUIRE(status.MPI_SOURCE == rankA1);
+    REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
 }
 
 TEST_CASE_METHOD(MpiTestFixture, "Test sendrecv", "[mpi]")
@@ -410,6 +418,17 @@ TEST_CASE_METHOD(MpiTestFixture, "Test send/recv message with no data", "[mpi]")
         REQUIRE(status.MPI_SOURCE == rankA1);
         REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
         REQUIRE(status.bytesSize == 0);
+    }
+
+    SECTION("Check irecv-ing empty message")
+    {
+        MPI_Status status{};
+        std::vector<int> actualData(3);
+        world.send(rankA1, rankA2, BYTES(messageData.data()), MPI_INT, 0);
+        int recvId = world.irecv(
+          rankA1, rankA2, BYTES(actualData.data()), MPI_INT, actualData.size());
+        world.recv(rankA1, rankA2, nullptr, MPI_INT, 0, &status);
+        world.awaitAsyncRequest(recvId);
     }
 }
 
