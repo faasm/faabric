@@ -15,6 +15,7 @@ if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/conan.cmake")
                 TLS_VERIFY ON)
 endif()
 
+set(CONAN_CMAKE_SILENT_OUTPUT ON CACHE INTERNAL "")
 include(${CMAKE_CURRENT_BINARY_DIR}/conan.cmake)
 
 conan_check(VERSION 1.63.0 REQUIRED)
@@ -73,19 +74,19 @@ conan_cmake_install(PATH_OR_REFERENCE .
 
 include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
 
-find_package(absl REQUIRED)
-find_package(Boost 1.80.0 REQUIRED)
-find_package(Catch2 REQUIRED)
-find_package(flatbuffers REQUIRED)
-find_package(fmt REQUIRED)
-find_package(hiredis REQUIRED)
+find_package(absl QUIET REQUIRED)
+find_package(Boost 1.80.0 QUIET REQUIRED)
+find_package(Catch2 QUIET REQUIRED)
+find_package(flatbuffers QUIET REQUIRED)
+find_package(fmt QUIET REQUIRED)
+find_package(hiredis QUIET REQUIRED)
 # 27/01/2023 - Pin OpenSSL to a specific version to avoid incompatibilities
 # with the system's (i.e. Ubuntu 22.04) OpenSSL
-find_package(OpenSSL 3.0.2 REQUIRED)
-find_package(Protobuf 3.20.0 REQUIRED)
-find_package(readerwriterqueue REQUIRED)
-find_package(spdlog REQUIRED)
-find_package(ZLIB REQUIRED)
+find_package(OpenSSL 3.0.2 QUIET REQUIRED)
+find_package(Protobuf 3.20.0 QUIET REQUIRED)
+find_package(readerwriterqueue QUIET REQUIRED)
+find_package(spdlog QUIET REQUIRED)
+find_package(ZLIB QUIET REQUIRED)
 
 # --------------------------------
 # Fetch content dependencies
@@ -109,16 +110,26 @@ set(ZSTD_LZ4_SUPPORT OFF CACHE INTERNAL "")
 # nng (Conan version out of date)
 set(NNG_TESTS OFF CACHE INTERNAL "")
 
-FetchContent_Declare(zstd_ext
-    GIT_REPOSITORY "https://github.com/facebook/zstd"
-    GIT_TAG "v1.5.2"
-    SOURCE_SUBDIR "build/cmake"
+FetchContent_Declare(atomic_queue_ext
+    GIT_REPOSITORY "https://github.com/max0x7ba/atomic_queue"
+    GIT_TAG "7c36f0997979a0fee5be84c9511ee0f6032057ec"
 )
 FetchContent_Declare(nng_ext
     GIT_REPOSITORY "https://github.com/nanomsg/nng"
     # NNG tagged version 1.7.1
     GIT_TAG "ec4b5722fba105e3b944e3dc0f6b63c941748b3f"
 )
+FetchContent_Declare(zstd_ext
+    GIT_REPOSITORY "https://github.com/facebook/zstd"
+    GIT_TAG "v1.5.2"
+    SOURCE_SUBDIR "build/cmake"
+)
+
+FetchContent_MakeAvailable(atomic_queue_ext)
+add_library(atomic_queue::atomic_queue ALIAS atomic_queue)
+
+FetchContent_MakeAvailable(nng_ext)
+add_library(nng::nng ALIAS nng)
 
 FetchContent_MakeAvailable(zstd_ext)
 # Work around zstd not declaring its targets properly
@@ -126,9 +137,6 @@ target_include_directories(libzstd_static SYSTEM INTERFACE $<BUILD_INTERFACE:${z
 target_include_directories(libzstd_shared SYSTEM INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
 add_library(zstd::libzstd_static ALIAS libzstd_static)
 add_library(zstd::libzstd_shared ALIAS libzstd_shared)
-
-FetchContent_MakeAvailable(nng_ext)
-add_library(nng::nng ALIAS nng)
 
 # Group all external dependencies into a convenient virtual CMake library
 add_library(faabric_common_dependencies INTERFACE)
@@ -141,6 +149,7 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     absl::flat_hash_set
     absl::flat_hash_map
     absl::strings
+    atomic_queue::atomic_queue
     Boost::Boost
     Boost::system
     flatbuffers::flatbuffers

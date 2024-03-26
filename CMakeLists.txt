@@ -6,6 +6,7 @@ option(FAABRIC_BUILD_TESTS "Build Faabric tests" ON)
 option(FAABRIC_SELF_TRACING "Turn on system tracing using the logger" OFF)
 option(FAABRIC_CODE_COVERAGE "Build Faabric with code coverage profiling" OFF)
 option(FAABRIC_TARGET_CPU "CPU to optimise for, e.g. skylake, icelake or native" OFF)
+option(FAABRIC_USE_SPINLOCK "Use spinlocks for low-latency messaging" ON)
 
 # Enable colorized compiler output
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
@@ -16,10 +17,10 @@ endif()
 
 # Optimise for CPU
 if(FAABRIC_TARGET_CPU)
-    message(STATUS "Optimising Faabric for CPU ${FAABRIC_TARGET_CPU}")
+    message(STATUS "Faabric: optimising for CPU ${FAABRIC_TARGET_CPU}")
     add_compile_options(-march=${FAABRIC_TARGET_CPU} -mtune=${FAABRIC_TARGET_CPU})
 else()
-    message(STATUS "Faabric not optimised for specific CPU")
+    message(STATUS "Faabric: not optimised for specific CPU")
 endif()
 
 # Top-level CMake config
@@ -36,6 +37,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(${FAABRIC_SELF_TRACING})
     message("-- Activated Faabric self-tracing")
     add_definitions(-DTRACE_ALL=1)
+endif()
+
+# We want to disable the usage of spinlocks (and CPU pinning) in GHA runners
+# as they have a very low number of vCPU cores
+if (${FAABRIC_USE_SPINLOCK} AND NOT "$ENV{DEPLOYMENT_TYPE}" STREQUAL "gha-ci")
+    message(STATUS "Faabric: enabled spin-locks")
+    add_definitions(-DFAABRIC_USE_SPINLOCK)
+else()
+    message(STATUS "Faabric: disabled spin-locks")
 endif()
 
 # Set-up use of sanitisers

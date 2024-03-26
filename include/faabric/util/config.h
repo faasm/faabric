@@ -27,6 +27,7 @@ class SystemConfig
 
     // Scheduling
     int overrideCpuCount;
+    int overrideFreeCpuStart;
     std::string batchSchedulerMode;
 
     // Worker-related timeouts

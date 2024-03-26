@@ -4,6 +4,7 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
+#include <atomic_queue/atomic_queue.h>
 #include <condition_variable>
 #include <queue>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
@@ -213,6 +214,32 @@ class FixedCapacityQueue
 
   private:
     moodycamel::BlockingReaderWriterCircularBuffer<T> mq;
+};
+
+template<typename T>
+class SpinLockQueue
+{
+  public:
+    void enqueue(T& value) { mq.push(value); }
+
+    T dequeue() { return mq.pop(); }
+
+    long size()
+    {
+        throw std::runtime_error("Size for fast queue unimplemented!");
+    }
+
+    void drain()
+    {
+        while (mq.pop()) {
+            ;
+        }
+    }
+
+    void reset() { ; }
+
+  private:
+    atomic_queue::AtomicQueue2<T, 1024, true, true, false, true> mq;
 };
 
 class TokenPool

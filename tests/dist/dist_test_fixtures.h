@@ -33,6 +33,10 @@ class DistTestsFixture
         updateLocalSlots(4, 0);
         updateRemoteSlots(4, 0);
 
+        // The dist-test server always uses at most 4 slots, so we configure
+        // the main worker (here) to start assigning CPU cores from core 4
+        conf.overrideFreeCpuStart = 4;
+
         // Set up executor
         std::shared_ptr<tests::DistTestExecutorFactory> fac =
           std::make_shared<tests::DistTestExecutorFactory>();
@@ -129,10 +133,11 @@ class MpiDistTestsFixture : public DistTestsFixture
         auto decision = plannerCli.getSchedulingDecision(req);
         while (decision.messageIds.size() != worldSize) {
             if (numRetries >= maxRetries) {
-                SPDLOG_ERROR(
-                  "Timed-out waiting for MPI messages to be scheduled ({}/{})",
-                  decision.messageIds.size(),
-                  worldSize);
+                SPDLOG_ERROR("Timed-out waiting for MPI messages to be "
+                             "scheduled (app: {}, {}/{})",
+                             req->appid(),
+                             decision.messageIds.size(),
+                             worldSize);
                 throw std::runtime_error("Timed-out waiting for MPI messges");
             }
 

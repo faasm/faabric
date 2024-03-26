@@ -29,6 +29,7 @@ services:
     tty: true
     privileged: true
     environment:
+      - DEPLOYMENT_TYPE=${FAABRIC_DEPLOYMENT_TYPE:-compose}
       - LOG_LEVEL=${LOG_LEVEL:-debug}
       - PLANNER_HOST=planner
       - PLANNER_PORT=8080
@@ -48,6 +49,7 @@ services:
       - ./conan-cache/:/root/.conan
     working_dir: /build/faabric/static
     environment:
+      - DEPLOYMENT_TYPE=${FAABRIC_DEPLOYMENT_TYPE:-compose}
       - LOG_LEVEL=debug
       - PLANNER_HOST=planner
       - PLANNER_PORT=8080

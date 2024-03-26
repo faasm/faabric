@@ -31,5 +31,7 @@ class RecvSocket
     int port;
 
     std::deque<int> openConnections;
+
+    void setSocketOptions(int connFd);
 };
 }

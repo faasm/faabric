@@ -2,6 +2,8 @@
 #include <faabric/transport/tcp/SocketOptions.h>
 #include <faabric/util/logging.h>
 
+#include <emmintrin.h>
+
 namespace faabric::transport::tcp {
 RecvSocket::RecvSocket(int port, const std::string& host)
   : addr(host, port)
@@ -67,14 +69,30 @@ int RecvSocket::accept()
     }
     setNonBlocking(connFd);
 
-    // Set the newly accepted connection as blocking (we want `recv` to block)
-    // TODO: do we want to block, or do we want to spinlock??
-    setBlocking(newConn);
+    // Set socket options for the newly created receive socket
+    setSocketOptions(newConn);
 
     // TODO: add constructor parameter of max num conn
     openConnections.push_back(newConn);
 
     return newConn;
+}
+
+// Single function to configure _all_ TCP options for a reception socket
+void RecvSocket::setSocketOptions(int connFd)
+{
+#ifdef FAABRIC_USE_SPINLOCK
+    if (!isNonBlocking(connFd)) {
+        setNonBlocking(connFd);
+    }
+
+    // TODO: not clear if this helps or not
+    setBusyPolling(connFd);
+#else
+    if (isNonBlocking(connFd)) {
+        setBlocking(connFd);
+    }
+#endif
 }
 
 void RecvSocket::recvOne(int conn, uint8_t* buffer, size_t bufferSize)
@@ -83,22 +101,29 @@ void RecvSocket::recvOne(int conn, uint8_t* buffer, size_t bufferSize)
 
     while (numRecvd < bufferSize) {
         // Receive from socket
+#ifdef FAABRIC_USE_SPINLOCK
+        int got = ::recv(conn, buffer, bufferSize - numRecvd, MSG_DONTWAIT);
+#else
         int got = ::recv(conn, buffer, bufferSize - numRecvd, 0);
-        if (got < 0) {
-            // TODO: why?
-            if (errno != EAGAIN) {
-                SPDLOG_ERROR("TCP Server error receiving in {}: {}",
-                             conn,
-                             std::strerror(errno));
-                throw std::runtime_error("TCP error receiving!");
+#endif
+        if (got == -1) {
+#ifdef FAABRIC_USE_SPINLOCK
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                _mm_pause();
+#else
+            if (errno == EAGAIN) {
+#endif
+                continue;
             }
 
-            // TODO: ??
-            SPDLOG_ERROR("not expected: {}", std::strerror(errno));
-        } else {
-            buffer += got;
-            numRecvd += got;
+            SPDLOG_ERROR("TCP Server error receiving in {}: {}",
+                         conn,
+                         std::strerror(errno));
+            throw std::runtime_error("TCP error receiving!");
         }
+
+        buffer += got;
+        numRecvd += got;
     }
 
     assert(numRecvd == bufferSize);

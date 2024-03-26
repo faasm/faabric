@@ -10,6 +10,7 @@
 #include <faabric/util/batch.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/hwloc.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
@@ -52,6 +53,9 @@ struct MpiRankState
     // have not `wait`ed on yet.
     std::vector<std::unique_ptr<std::list<MpiMessage>>> unackedMessageBuffers;
 
+    // CPU that this thread is pinned to
+    std::unique_ptr<faabric::util::FaabricCpuSet> pinnedCpu;
+
     // ----- Remote Messaging -----
 
     // This structure contains one send socket per remote rank
@@ -88,6 +92,9 @@ struct MpiRankState
         sendSockets.clear();
         recvSocket.reset();
         recvConnPool.clear();
+
+        // Free the pinned-to CPU
+        pinnedCpu.reset();
 
         // Local message count
         msgCount = 1;
@@ -253,6 +260,11 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
 void MpiWorld::initialiseRankFromMsg(faabric::Message& msg)
 {
     rankState.msg = &msg;
+
+    // Pin this thread to a free CPU
+    if (rankState.pinnedCpu == nullptr) {
+        rankState.pinnedCpu = faabric::util::pinThreadToFreeCpu(pthread_self());
+    }
 
     // Initialise the TCP sockets for remote messaging
     initSendRecvSockets();
