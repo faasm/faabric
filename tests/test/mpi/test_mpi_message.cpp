@@ -18,9 +18,9 @@ bool areMpiMsgEqual(const MpiMessage& msgA, const MpiMessage& msgB)
         return false;
     }
 
-    // First, compare the message body (excluding the pointer, which we
-    // know is at the end)
-    if (std::memcmp(&msgA, &msgB, sizeof(MpiMessage) - sizeof(void*)) != 0) {
+    // First, compare the message body (excluding the union at the end)
+    size_t unionSize = sizeof(uint8_t) * MPI_MAX_INLINE_SEND;
+    if (std::memcmp(&msgA, &msgB, sizeof(MpiMessage) - unionSize) != 0) {
         return false;
     }
 
@@ -35,7 +35,11 @@ bool areMpiMsgEqual(const MpiMessage& msgA, const MpiMessage& msgB)
     // Assert, as this should pass given the previous comparisons
     assert(payloadSizeA == payloadSizeB);
 
-    return std::memcmp(msgA.buffer, msgB.buffer, payloadSizeA) == 0;
+    if (payloadSizeA > MPI_MAX_INLINE_SEND) {
+        return std::memcmp(msgA.buffer, msgB.buffer, payloadSizeA) == 0;
+    }
+
+    return std::memcmp(msgA.inlineMsg, msgB.inlineMsg, payloadSizeA) == 0;
 }
 
 TEST_CASE("Test getting a message size", "[mpi]")
@@ -95,11 +99,22 @@ TEST_CASE("Test (de)serialising an MPI message", "[mpi]")
         msg.buffer = nullptr;
     }
 
-    SECTION("Non-empty message")
+    SECTION("Non-empty (small) message")
     {
         std::vector<int> nums = { 1, 2, 3, 4, 5, 6, 6 };
         msg.count = nums.size();
         msg.typeSize = sizeof(int);
+        std::memcpy(msg.inlineMsg, nums.data(), nums.size() * sizeof(int));
+    }
+
+    SECTION("Non-empty (large) message")
+    {
+        // Make sure we send more ints than the maximum inline
+        int32_t maxNumInts = MPI_MAX_INLINE_SEND / sizeof(int32_t);
+        std::vector<int32_t> nums(maxNumInts + 3, 3);
+        msg.count = nums.size();
+        msg.typeSize = sizeof(int);
+        REQUIRE(payloadSize(msg) > MPI_MAX_INLINE_SEND);
         msg.buffer = faabric::util::malloc(msg.count * msg.typeSize);
         std::memcpy(msg.buffer, nums.data(), nums.size() * sizeof(int));
     }
@@ -113,11 +128,13 @@ TEST_CASE("Test (de)serialising an MPI message", "[mpi]")
 
     REQUIRE(areMpiMsgEqual(msg, parsedMsg));
 
-    if (msg.buffer != nullptr) {
-        faabric::util::free(msg.buffer);
-    }
-    if (parsedMsg.buffer != nullptr) {
-        faabric::util::free(parsedMsg.buffer);
+    if (msg.count * msg.typeSize > MPI_MAX_INLINE_SEND) {
+        if (msg.buffer != nullptr) {
+            faabric::util::free(msg.buffer);
+        }
+        if (parsedMsg.buffer != nullptr) {
+            faabric::util::free(parsedMsg.buffer);
+        }
     }
 }
 }
