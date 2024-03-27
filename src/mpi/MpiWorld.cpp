@@ -580,8 +580,7 @@ void MpiWorld::send(int sendRank,
                        .recvRank = recvRank,
                        .typeSize = dataType->size,
                        .count = count,
-                       .messageType = messageType,
-                       .buffer = nullptr };
+                       .messageType = messageType };
 
     // Mock the message sending in tests
 #ifndef NDEBUG
@@ -591,17 +590,24 @@ void MpiWorld::send(int sendRank,
     }
 #endif
 
-    bool mustSendData = count > 0 && buffer != nullptr;
+    size_t dataSize = count * dataType->size;
+    bool mustSendData = dataSize > 0 && buffer != nullptr;
 
     // Dispatch the message locally or globally
     if (isLocal) {
         // Take control over the buffer data if we are gonna move it to
         // the in-memory queues for local messaging
         if (mustSendData) {
-            void* bufferPtr = faabric::util::malloc(count * dataType->size);
-            std::memcpy(bufferPtr, buffer, count * dataType->size);
+            if (dataSize < MPI_MAX_INLINE_SEND) {
+                std::memcpy(msg.inlineMsg, buffer, count * dataType->size);
+            } else {
+                void* bufferPtr = faabric::util::malloc(count * dataType->size);
+                std::memcpy(bufferPtr, buffer, count * dataType->size);
 
-            msg.buffer = bufferPtr;
+                msg.buffer = bufferPtr;
+            }
+        } else {
+            msg.buffer = nullptr;
         }
 
         SPDLOG_TRACE(
@@ -609,7 +615,11 @@ void MpiWorld::send(int sendRank,
         getLocalQueue(sendRank, recvRank)->enqueue(msg);
     } else {
         if (mustSendData) {
-            msg.buffer = (void*)buffer;
+            if (dataSize < MPI_MAX_INLINE_SEND) {
+                std::memcpy(msg.inlineMsg, buffer, count * dataType->size);
+            } else {
+                msg.buffer = (void*)buffer;
+            }
         }
 
         SPDLOG_TRACE(
@@ -691,19 +701,28 @@ void MpiWorld::doRecv(const MpiMessage& msg,
                      msg.messageType,
                      messageType);
     }
-    assert(msg.messageType == messageType);
-    assert(msg.count <= count);
+
+    assert(m.messageType == messageType);
+    assert(m.count <= count);
+    size_t dataSize = msg.count * dataType->size;
 
     // We must copy the data into the application-provided buffer
-    if (msg.count > 0 && msg.buffer != nullptr) {
+    if (dataSize > 0) {
         // Make sure we do not overflow the recepient buffer
         auto bytesToCopy =
           std::min<size_t>(msg.count * dataType->size, count * dataType->size);
-        std::memcpy(buffer, msg.buffer, bytesToCopy);
 
-        // This buffer has been malloc-ed either as part of a local `send`
-        // or as part of a remote `parseMpiMsg`
-        faabric::util::free((void*)msg.buffer);
+        if (dataSize > MPI_MAX_INLINE_SEND) {
+            assert(m.buffer != nullptr);
+
+            std::memcpy(buffer, msg.buffer, bytesToCopy);
+
+            // This buffer has been malloc-ed either as part of a local `send`
+            // or as part of a remote `parseMpiMsg`
+            faabric::util::free((void*)msg.buffer);
+        } else {
+            std::memcpy(buffer, msg.inlineMsg, bytesToCopy);
+        }
     }
 
     // Set status values if required
@@ -1923,21 +1942,32 @@ MpiMessage MpiWorld::recvBatchReturnLast(int sendRank,
             // Copy the request id so that it is not overwritten
             int tmpRequestId = itr->requestId;
 
-            // Copy into current slot in the list, but keep a copy to the
-            // app-provided buffer to read data into
+            // Copy the app-provided buffer to recv data into so that it is
+            // not overwritten too. Note that, irrespective of wether the
+            // message is inlined or not, we always use the buffer pointer to
+            // point to the app-provided recv-buffer
             void* providedBuffer = itr->buffer;
             *itr = internalRecv(sendRank, recvRank, isLocal);
             itr->requestId = tmpRequestId;
 
-            if (itr->buffer != nullptr) {
+            // If we have send a non-inlined message, copy the data into the
+            // provided buffer, free the one in the queue,
+            size_t dataSize = itr->count * itr->typeSize;
+            if (dataSize > MPI_MAX_INLINE_SEND) {
+                assert(itr->buffer != nullptr);
                 assert(providedBuffer != nullptr);
-                // If buffers are not null, we must have a non-zero size
-                assert((itr->count * itr->typeSize) > 0);
                 std::memcpy(
                   providedBuffer, itr->buffer, itr->count * itr->typeSize);
+
                 faabric::util::free(itr->buffer);
+
+                itr->buffer = providedBuffer;
+            } else if (dataSize > 0) {
+                std::memcpy(
+                  providedBuffer, itr->inlineMsg, itr->count * itr->typeSize);
+            } else {
+                itr->buffer = providedBuffer;
             }
-            itr->buffer = providedBuffer;
         }
         assert(itr->messageType != MpiMessageType::UNACKED_MPI_MESSAGE);
 
