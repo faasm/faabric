@@ -239,9 +239,15 @@ TEST_CASE_METHOD(MpiTestFixture, "Test send and recv on same host", "[mpi]")
     int rankA2 = 1;
     std::vector<int> messageData;
 
-    SECTION("Non-empty message")
+    SECTION("Non-empty (small) message")
     {
         messageData = { 0, 1, 2 };
+    }
+
+    SECTION("Non-empty (large) message")
+    {
+        int32_t maxNumInts = MPI_MAX_INLINE_SEND / sizeof(int32_t);
+        messageData = std::vector<int>(maxNumInts + 3, 3);
     }
 
     SECTION("Empty message")
@@ -273,8 +279,27 @@ TEST_CASE_METHOD(MpiTestFixture, "Test sendrecv", "[mpi]")
     int rankA = 1;
     int rankB = 2;
     MPI_Status status{};
-    std::vector<int> messageDataAB = { 0, 1, 2 };
-    std::vector<int> messageDataBA = { 3, 2, 1, 0 };
+    std::vector<int> messageDataAB;
+    std::vector<int> messageDataBA;
+
+    SECTION("Empty messages")
+    {
+        messageDataAB = {};
+        messageDataBA = {};
+    }
+
+    SECTION("Small messages")
+    {
+        messageDataAB = { 0, 1, 2 };
+        messageDataBA = { 3, 2, 1, 0 };
+    }
+
+    SECTION("Large messages")
+    {
+        int32_t maxNumInts = MPI_MAX_INLINE_SEND / sizeof(int32_t);
+        messageDataAB = std::vector<int>(maxNumInts + 3, 3);
+        messageDataBA = std::vector<int>(maxNumInts + 4, 4);
+    }
 
     // Results
     std::vector<int> recvBufferA(messageDataBA.size(), 0);

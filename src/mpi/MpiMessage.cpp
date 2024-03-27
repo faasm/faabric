@@ -12,24 +12,25 @@ void parseMpiMsg(const std::vector<uint8_t>& bytes, MpiMessage* msg)
     assert(msg != nullptr);
     assert(bytes.size() >= sizeof(MpiMessage));
     std::memcpy(msg, bytes.data(), sizeof(MpiMessage));
-    size_t thisPayloadSize = bytes.size() - sizeof(MpiMessage);
-    assert(thisPayloadSize == payloadSize(*msg));
+    size_t thisPayloadSize = payloadSize(*msg);
 
     if (thisPayloadSize == 0) {
         msg->buffer = nullptr;
         return;
     }
 
-    msg->buffer = faabric::util::malloc(thisPayloadSize);
-    std::memcpy(
-      msg->buffer, bytes.data() + sizeof(MpiMessage), thisPayloadSize);
+    if (thisPayloadSize > MPI_MAX_INLINE_SEND) {
+        msg->buffer = faabric::util::malloc(thisPayloadSize);
+        std::memcpy(
+          msg->buffer, bytes.data() + sizeof(MpiMessage), thisPayloadSize);
+    }
 }
 
 void serializeMpiMsg(std::vector<uint8_t>& buffer, const MpiMessage& msg)
 {
     std::memcpy(buffer.data(), &msg, sizeof(MpiMessage));
     size_t payloadSz = payloadSize(msg);
-    if (payloadSz > 0 && msg.buffer != nullptr) {
+    if (payloadSz > MPI_MAX_INLINE_SEND && msg.buffer != nullptr) {
         std::memcpy(buffer.data() + sizeof(MpiMessage), msg.buffer, payloadSz);
     }
 }
