@@ -1,3 +1,4 @@
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/Message.h>
@@ -891,18 +892,18 @@ void PointToPointBroker::resetThreadLocalCache()
     threadEndpoints.clear();
 }
 
-void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
+void PointToPointBroker::postMigrationHook(faabric::Message& msg)
 {
     int postMigrationOkCode = 1337;
     int recvCode = 0;
 
     // TODO: implement this as a broadcast in the PTP broker
     int mainIdx = 0;
-    if (groupIdx == mainIdx) {
-        auto groupIdxs = getIdxsRegisteredForGroup(groupId);
+    if (msg.groupidx() == mainIdx) {
+        auto groupIdxs = getIdxsRegisteredForGroup(msg.groupid());
         groupIdxs.erase(mainIdx);
         for (const auto& recvIdx : groupIdxs) {
-            sendMessage(groupId,
+            sendMessage(msg.groupid(),
                         mainIdx,
                         recvIdx,
                         BYTES_CONST(&postMigrationOkCode),
@@ -910,19 +911,31 @@ void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
         }
         recvCode = postMigrationOkCode;
     } else {
-        std::vector<uint8_t> bytes = recvMessage(groupId, 0, groupIdx);
+        std::vector<uint8_t> bytes =
+          recvMessage(msg.groupid(), 0, msg.groupidx());
         recvCode = faabric::util::bytesToInt(bytes);
     }
 
     if (recvCode != postMigrationOkCode) {
-        SPDLOG_ERROR("Error in post-migration hook. {}:{} received code {}",
-                     groupId,
-                     groupIdx,
+        SPDLOG_ERROR("Error in post-migration hook. {}:{}:{} received code {}",
+                     msg.appid(),
+                     msg.groupid(),
+                     msg.groupidx(),
                      recvCode);
         throw std::runtime_error("Error in post-migration hook");
     }
 
-    SPDLOG_DEBUG("{}:{} exiting post-migration hook", groupId, groupIdx);
+    // Do per-thread MPI initialisation (mostly send/recv TCP sockets)
+    if (msg.ismpi()) {
+        auto& mpiWorld =
+          faabric::mpi::getMpiWorldRegistry().getWorld(msg.mpiworldid());
+        mpiWorld.initialiseRankFromMsg(msg);
+    }
+
+    SPDLOG_DEBUG("{}:{}:{} exiting post-migration hook",
+                 msg.appid(),
+                 msg.groupid(),
+                 msg.groupidx());
 }
 
 PointToPointBroker& getPointToPointBroker()

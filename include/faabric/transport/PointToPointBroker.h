@@ -7,7 +7,6 @@
 
 #include <atomic>
 #include <barrier>
-#include <condition_variable>
 #include <queue>
 #include <set>
 #include <shared_mutex>
@@ -150,7 +149,7 @@ class PointToPointBroker
 
     void resetThreadLocalCache();
 
-    void postMigrationHook(int groupId, int groupIdx);
+    void postMigrationHook(faabric::Message& msg);
 
   private:
     faabric::util::SystemConfig& conf;

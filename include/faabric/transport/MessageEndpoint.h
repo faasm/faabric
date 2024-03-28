@@ -11,8 +11,6 @@
 #include <variant>
 #include <vector>
 
-#define ANY_HOST "0.0.0.0"
-
 // These timeouts should be long enough to permit sending and receiving large
 // messages, but also determine the period on which endpoints will re-poll, so
 // they can be fairly long.

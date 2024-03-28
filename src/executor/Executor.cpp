@@ -363,8 +363,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         bool isMigration =
           task.req->type() == faabric::BatchExecuteRequest::MIGRATION;
         if (isMigration) {
-            faabric::transport::getPointToPointBroker().postMigrationHook(
-              msg.groupid(), msg.groupidx());
+            faabric::transport::getPointToPointBroker().postMigrationHook(msg);
         }
 
         SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",

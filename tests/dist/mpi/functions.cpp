@@ -11,15 +11,11 @@ using namespace tests::mpi;
 
 namespace tests {
 
-std::atomic<faabric::Message*> tests::mpi::executingCall;
-
 int handleMpiBenchAllReduce(tests::DistTestExecutor* exec,
                             int threadPoolIdx,
                             int msgIdx,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return bench_allreduce();
 }
 
@@ -28,8 +24,6 @@ int handleMpiAllGather(tests::DistTestExecutor* exec,
                        int msgIdx,
                        std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return allGather();
 }
 
@@ -38,8 +32,6 @@ int handleMpiAllReduce(tests::DistTestExecutor* exec,
                        int msgIdx,
                        std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return allReduce();
 }
 
@@ -48,8 +40,6 @@ int handleMpiAllToAll(tests::DistTestExecutor* exec,
                       int msgIdx,
                       std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return allToAll();
 }
 
@@ -58,8 +48,6 @@ int handleMpiAllToAllAndSleep(tests::DistTestExecutor* exec,
                               int msgIdx,
                               std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return allToAllAndSleep();
 }
 
@@ -68,8 +56,6 @@ int handleMpiBarrier(tests::DistTestExecutor* exec,
                      int msgIdx,
                      std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return barrier();
 }
 
@@ -78,8 +64,6 @@ int handleMpiBcast(tests::DistTestExecutor* exec,
                    int msgIdx,
                    std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return broadcast();
 }
 
@@ -88,8 +72,6 @@ int handleMpiCartCreate(tests::DistTestExecutor* exec,
                         int msgIdx,
                         std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return cartCreate();
 }
 
@@ -98,8 +80,6 @@ int handleMpiCartesian(tests::DistTestExecutor* exec,
                        int msgIdx,
                        std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return cartesian();
 }
 
@@ -108,8 +88,6 @@ int handleMpiChecks(tests::DistTestExecutor* exec,
                     int msgIdx,
                     std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return checks();
 }
 
@@ -118,8 +96,6 @@ int handleMpiGather(tests::DistTestExecutor* exec,
                     int msgIdx,
                     std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return gather();
 }
 
@@ -128,8 +104,6 @@ int handleMpiHelloWorld(tests::DistTestExecutor* exec,
                         int msgIdx,
                         std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return helloWorld();
 }
 
@@ -138,8 +112,6 @@ int handleMpiISendRecv(tests::DistTestExecutor* exec,
                        int msgIdx,
                        std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return iSendRecv();
 }
 
@@ -148,9 +120,9 @@ int handleMpiMigration(tests::DistTestExecutor* exec,
                        int msgIdx,
                        std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
+    auto* call = &req->mutable_messages()->at(msgIdx);
 
-    return migration(std::stoi(executingCall.load()->inputdata()));
+    return migration(std::stoi(call->inputdata()));
 }
 
 int handleMpiOrder(tests::DistTestExecutor* exec,
@@ -158,8 +130,6 @@ int handleMpiOrder(tests::DistTestExecutor* exec,
                    int msgIdx,
                    std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return order();
 }
 
@@ -168,8 +138,6 @@ int handleMpiReduce(tests::DistTestExecutor* exec,
                     int msgIdx,
                     std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return reduce();
 }
 
@@ -178,8 +146,6 @@ int handleMpiReduceMany(tests::DistTestExecutor* exec,
                         int msgIdx,
                         std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return reduceMany();
 }
 
@@ -188,8 +154,6 @@ int handleMpiScan(tests::DistTestExecutor* exec,
                   int msgIdx,
                   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return scan();
 }
 
@@ -198,8 +162,6 @@ int handleMpiScatter(tests::DistTestExecutor* exec,
                      int msgIdx,
                      std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return scatter();
 }
 
@@ -208,8 +170,6 @@ int handleMpiSend(tests::DistTestExecutor* exec,
                   int msgIdx,
                   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return send();
 }
 
@@ -218,8 +178,6 @@ int handleMpiSendMany(tests::DistTestExecutor* exec,
                       int msgIdx,
                       std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return sendMany();
 }
 
@@ -228,8 +186,6 @@ int handleMpiSendSyncAsync(tests::DistTestExecutor* exec,
                            int msgIdx,
                            std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return sendSyncAsync();
 }
 
@@ -238,8 +194,6 @@ int handleMpiSendRecv(tests::DistTestExecutor* exec,
                       int msgIdx,
                       std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return sendRecv();
 }
 
@@ -248,8 +202,6 @@ int handleMpiStatus(tests::DistTestExecutor* exec,
                     int msgIdx,
                     std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return status();
 }
 
@@ -258,8 +210,6 @@ int handleMpiTypeSize(tests::DistTestExecutor* exec,
                       int msgIdx,
                       std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
     return typeSize();
 }
 

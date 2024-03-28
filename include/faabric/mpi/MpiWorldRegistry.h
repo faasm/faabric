@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/mpi/MpiWorld.h>
+#include <faabric/util/concurrent_map.h>
 
 namespace faabric::mpi {
 class MpiWorldRegistry
@@ -21,8 +22,7 @@ class MpiWorldRegistry
     void clear();
 
   private:
-    std::shared_mutex registryMutex;
-    std::unordered_map<int, MpiWorld> worldMap;
+    faabric::util::ConcurrentMap<int, std::shared_ptr<MpiWorld>> worldMap;
 };
 
 MpiWorldRegistry& getMpiWorldRegistry();

@@ -9,6 +9,9 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
+#include <latch>
+#include <thread>
+
 // The tests in this file are used to test the internal behaviour of MPI when
 // running in a distributed behaviour. They should test very specific things
 // _always_ in mocking mode. For truly multi-host MPI tests you must write
@@ -425,4 +428,178 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     thisWorld.destroy();
 }
 */
+
+// This test exceptionally disables mocking and tests the remote send/recv
+// paths in a unit test
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test remote send/recv without mocking",
+                 "[mpi]")
+{
+    bool originalMockMode = faabric::util::isMockMode();
+
+    int worldSize = 4;
+    int numLocalRanks = 2;
+    int numRemoteRanks = 2;
+    msg.set_mpiworldsize(worldSize);
+    // Synchronise when all threads finish execution to avoid problems with
+    // strugglers
+    std::latch destroyLatch(worldSize);
+
+    // Set up the first world, holding the main rank (which already takes
+    // one slot)
+    faabric::HostResources thisResources;
+    thisResources.set_slots(worldSize);
+    thisResources.set_usedslots(numRemoteRanks);
+    sch.setThisHostResources(thisResources);
+
+    // Set up the other world and add it to the global set of hosts
+    faabric::HostResources otherResources;
+    otherResources.set_slots(numRemoteRanks);
+    sch.addHostToGlobalSet(
+      otherHost, std::make_shared<faabric::HostResources>(otherResources));
+
+    // Mock the world creation whereby we avoid spawning other messages for
+    // other MPI ranks. We will manually call this ranks ourselves
+    faabric::util::setMockMode(true);
+
+    plannerCli.callFunctions(req);
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+
+    faabric::util::setMockMode(false);
+
+    // Build data inputs
+
+    // Data for P2P testing
+    std::vector<int> data;
+    SECTION("Small message")
+    {
+        data = std::vector<int>(3, 2);
+    }
+
+    SECTION("Large message")
+    {
+        data = std::vector<int>(300, 200);
+    }
+
+    // Data for collective testing
+    int inputs[4][8] = {
+        { 0, 1, 2, 3, 4, 5, 6, 7 },
+        { 10, 11, 12, 13, 14, 15, 16, 17 },
+        { 20, 21, 22, 23, 24, 25, 26, 27 },
+        { 30, 31, 32, 33, 34, 35, 36, 37 },
+    };
+
+    int expected[4][8] = {
+        { 0, 1, 10, 11, 20, 21, 30, 31 },
+        { 2, 3, 12, 13, 22, 23, 32, 33 },
+        { 4, 5, 14, 15, 24, 25, 34, 35 },
+        { 6, 7, 16, 17, 26, 27, 36, 37 },
+    };
+
+    // Start the other local thread
+    std::vector<std::jthread> remoteThreads;
+    std::latch remoteThreadsLatch(numRemoteRanks);
+    for (int i = 0; i < numRemoteRanks; i++) {
+        remoteThreads.emplace_back([&, i] {
+            auto ourMsg = msg;
+            ourMsg.set_mpiworldsize(worldSize);
+            ourMsg.set_groupidx(numLocalRanks + i);
+            ourMsg.set_mpirank(numLocalRanks + i);
+
+            // Only initialise the remote world once and wait
+            if (i == 0) {
+                otherWorld.initialiseFromMsg(ourMsg);
+            }
+            remoteThreadsLatch.arrive_and_wait();
+
+            // Initialise the thread-local state
+            otherWorld.initialiseRankFromMsg(ourMsg);
+
+            // Send one message from one rank
+            if (i == 0) {
+                otherWorld.send(
+                  numLocalRanks, 0, BYTES(data.data()), MPI_INT, data.size());
+            }
+
+            // Now all ranks call all-to-all
+            std::vector<int> actual(8, 0);
+            otherWorld.allToAll(ourMsg.mpirank(),
+                                BYTES(inputs[ourMsg.mpirank()]),
+                                MPI_INT,
+                                2,
+                                BYTES(actual.data()),
+                                MPI_INT,
+                                2);
+            std::vector<int> thisExpected(expected[ourMsg.mpirank()],
+                                          expected[ourMsg.mpirank()] + 8);
+            assert(actual == thisExpected);
+
+            destroyLatch.arrive_and_wait();
+            otherWorld.destroy();
+        });
+    }
+
+    std::vector<std::jthread> localThreads;
+    std::latch localThreadsLatch(numLocalRanks);
+    for (int i = 1; i < numLocalRanks; i++) {
+        localThreads.emplace_back([&, i] {
+            auto ourMsg = msg;
+            ourMsg.set_mpiworldsize(worldSize);
+            ourMsg.set_groupidx(i);
+            ourMsg.set_mpirank(i);
+
+            localThreadsLatch.arrive_and_wait();
+
+            // Initialise the thread-local state
+            thisWorld.initialiseRankFromMsg(ourMsg);
+
+            // Now all ranks call all-to-all
+            std::vector<int> actual(8, 0);
+            thisWorld.allToAll(ourMsg.mpirank(),
+                               BYTES(inputs[ourMsg.mpirank()]),
+                               MPI_INT,
+                               2,
+                               BYTES(actual.data()),
+                               MPI_INT,
+                               2);
+            std::vector<int> thisExpected(expected[ourMsg.mpirank()],
+                                          expected[ourMsg.mpirank()] + 8);
+            assert(actual == thisExpected);
+
+            destroyLatch.arrive_and_wait();
+            thisWorld.destroy();
+        });
+    }
+
+    localThreadsLatch.arrive_and_wait();
+    thisWorld.initialiseRankFromMsg(msg);
+
+    // P2P check
+    std::vector<int> actualData(data.size());
+    thisWorld.recv(numLocalRanks,
+                   0,
+                   BYTES(actualData.data()),
+                   MPI_INT,
+                   actualData.size(),
+                   nullptr);
+    REQUIRE(data == actualData);
+
+    // Now all ranks call all-to-all
+    std::vector<int> actual(8, 0);
+    thisWorld.allToAll(msg.mpirank(),
+                       BYTES(inputs[msg.mpirank()]),
+                       MPI_INT,
+                       2,
+                       BYTES(actual.data()),
+                       MPI_INT,
+                       2);
+    std::vector<int> thisExpected(expected[msg.mpirank()],
+                                  expected[msg.mpirank()] + 8);
+    assert(actual == thisExpected);
+
+    destroyLatch.arrive_and_wait();
+    thisWorld.destroy();
+
+    faabric::util::setMockMode(originalMockMode);
+}
 }
