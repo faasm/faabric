@@ -8,6 +8,8 @@
 #include <condition_variable>
 #include <queue>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
+// TODO: install properly rather than just copy headers in the source tree
+#include <faabric/atomic_queue/atomic_queue.h>
 
 #define DEFAULT_QUEUE_TIMEOUT_MS 5000
 #define DEFAULT_QUEUE_SIZE 1024
@@ -256,6 +258,38 @@ class SpinLockQueue
 
   private:
     boost::lockfree::spsc_queue<T, boost::lockfree::capacity<1024>> mq;
+};
+
+template<typename T>
+class NewQueue
+{
+  public:
+    void enqueue(T& value, long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    {
+        mq.push(value);
+    }
+
+    T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    {
+        return mq.pop();
+    }
+
+    long size()
+    {
+        throw std::runtime_error("Size for fast queue unimplemented!");
+    }
+
+    void drain()
+    {
+        while (mq.pop()) {
+            ;
+        }
+    }
+
+    void reset() { ; }
+
+  private:
+    atomic_queue::AtomicQueue2<T, 1024, true, true, false, true> mq;
 };
 
 class TokenPool
