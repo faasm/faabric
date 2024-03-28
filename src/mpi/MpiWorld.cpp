@@ -1933,13 +1933,6 @@ int MpiWorld::getIndexForRanks(int sendRank, int recvRank) const
     return index;
 }
 
-long MpiWorld::getLocalQueueSize(int sendRank, int recvRank)
-{
-    const std::shared_ptr<InMemoryMpiQueue>& queue =
-      getLocalQueue(sendRank, recvRank);
-    return queue->size();
-}
-
 double MpiWorld::getWTime()
 {
     double t = faabric::util::getTimeDiffMillis(creationTime);
