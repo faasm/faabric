@@ -22,9 +22,4 @@ Socket::~Socket()
 {
     ::close(connFd);
 }
-
-int Socket::get()
-{
-    return connFd;
-}
 }

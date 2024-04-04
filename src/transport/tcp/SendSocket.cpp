@@ -23,8 +23,10 @@ void SendSocket::dial()
 
     int connFd = sock.get();
 
-    // Re-dial a number of times to accoun for races during initialisation
-    int numRetries = 5;
+    // Re-dial a number of times to accoun for races during initialisation.
+    // This number must be rather high for higher-latency environments with
+    // high core count
+    int numRetries = 30;
     int pollPeriodMs = 200;
     int numTry = 0;
 

@@ -11,6 +11,7 @@ class RecvSocket
 {
   public:
     RecvSocket(int port, const std::string& host = ANY_HOST);
+    RecvSocket(const RecvSocket& recvSocket) = delete;
     ~RecvSocket();
 
     // Start BIND socket and mark it as a passive socket
