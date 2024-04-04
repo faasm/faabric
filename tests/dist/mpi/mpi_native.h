@@ -8,8 +8,6 @@
 
 namespace tests::mpi {
 
-extern std::atomic<faabric::Message*> executingCall;
-
 // --- List of MPI functions ---
 
 int allGather();

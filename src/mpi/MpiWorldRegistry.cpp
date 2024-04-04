@@ -6,15 +6,15 @@
 namespace faabric::mpi {
 MpiWorldRegistry& getMpiWorldRegistry()
 {
-    static MpiWorldRegistry r;
-    return r;
+    static MpiWorldRegistry reg;
+    return reg;
 }
 
 MpiWorld& MpiWorldRegistry::createWorld(faabric::Message& msg,
                                         int worldId,
                                         std::string hostOverride)
 {
-    if (worldMap.count(worldId) > 0) {
+    if (worldMap.contains(worldId)) {
         SPDLOG_ERROR("World {} already exists", worldId);
         throw std::runtime_error("World already exists");
     }
@@ -25,58 +25,74 @@ MpiWorld& MpiWorldRegistry::createWorld(faabric::Message& msg,
         worldSize = conf.defaultMpiWorldSize;
     }
 
-    faabric::util::FullLock lock(registryMutex);
-    MpiWorld& world = worldMap[worldId];
+    worldMap.tryEmplaceThenMutate(
+      worldId, [&](bool inserted, std::shared_ptr<MpiWorld>& worldPtr) {
+          // Only the first rank will see inserted as true
+          if (inserted) {
+              worldPtr = std::make_shared<MpiWorld>();
 
-    if (!hostOverride.empty()) {
-        world.overrideHost(hostOverride);
+              if (!hostOverride.empty()) {
+                  worldPtr->overrideHost(hostOverride);
+              }
+
+              worldPtr->create(msg, worldId, worldSize);
+          }
+      });
+
+    auto world = worldMap.get(worldId).value_or(nullptr);
+    if (world == nullptr) {
+        SPDLOG_ERROR("World {} points to null!", worldId);
+        throw std::runtime_error("Null-pointing MPI world!");
     }
 
-    world.create(msg, worldId, worldSize);
+    world->initialiseRankFromMsg(msg);
 
-    return worldMap[worldId];
+    return *world;
 }
 
 MpiWorld& MpiWorldRegistry::getOrInitialiseWorld(faabric::Message& msg)
 {
     // Create world locally if not exists
     int worldId = msg.mpiworldid();
-    if (worldMap.find(worldId) == worldMap.end()) {
-        faabric::util::FullLock lock(registryMutex);
-        if (worldMap.find(worldId) == worldMap.end()) {
-            MpiWorld& world = worldMap[worldId];
-            world.initialiseFromMsg(msg);
-        }
+    worldMap.tryEmplaceThenMutate(
+      worldId, [&](bool inserted, std::shared_ptr<MpiWorld>& worldPtr) {
+          if (inserted) {
+              worldPtr = std::make_shared<MpiWorld>();
+
+              worldPtr->initialiseFromMsg(msg);
+          }
+      });
+
+    auto world = worldMap.get(worldId).value_or(nullptr);
+    if (world == nullptr) {
+        SPDLOG_ERROR("World {} points to null!", worldId);
+        throw std::runtime_error("Null-pointing MPI world!");
     }
 
-    {
-        faabric::util::SharedLock lock(registryMutex);
-        MpiWorld& world = worldMap[worldId];
-        world.setMsgForRank(msg);
-        return world;
-    }
+    world->initialiseRankFromMsg(msg);
+
+    return *world;
 }
 
 MpiWorld& MpiWorldRegistry::getWorld(int worldId)
 {
-    if (worldMap.count(worldId) == 0) {
+    auto world = worldMap.get(worldId).value_or(nullptr);
+
+    if (world == nullptr) {
         SPDLOG_ERROR("World {} not initialised", worldId);
         throw std::runtime_error("World not initialised");
     }
 
-    return worldMap[worldId];
+    return *world;
 }
 
 bool MpiWorldRegistry::worldExists(int worldId)
 {
-    faabric::util::SharedLock lock(registryMutex);
-
     return worldMap.contains(worldId);
 }
 
 void MpiWorldRegistry::clear()
 {
-    faabric::util::FullLock lock(registryMutex);
     worldMap.clear();
 }
 }

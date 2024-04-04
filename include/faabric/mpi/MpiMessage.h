@@ -22,7 +22,7 @@ enum MpiMessageType : int32_t
     BROADCAST = 12,
     // Special message type for async messages that have not been unacked yet
     UNACKED_MPI_MESSAGE = 13,
-    SHUTDOWN_WORLD = 14,
+    HANDSHAKE = 14,
 };
 
 /* Simple fixed-size C-struct to capture the state of an MPI message moving

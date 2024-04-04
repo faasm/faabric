@@ -47,6 +47,7 @@ if (NOT ("${CMAKE_PROJECT_NAME}" STREQUAL "faabricmpi"))
 
     target_link_libraries(mpi PRIVATE
         faabric::scheduler
+        faabric::transport_tcp
         faabric::faabricmpi
     )
 endif ()

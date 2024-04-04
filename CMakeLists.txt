@@ -134,6 +134,7 @@ add_library(faabric
     $<TARGET_OBJECTS:snapshot_obj>
     $<TARGET_OBJECTS:state_obj>
     $<TARGET_OBJECTS:transport_obj>
+    $<TARGET_OBJECTS:transport_tcp_obj>
     $<TARGET_OBJECTS:util_obj>
 )
 add_library(faabric::faabric ALIAS faabric)

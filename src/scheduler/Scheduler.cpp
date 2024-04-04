@@ -335,8 +335,11 @@ std::shared_ptr<faabric::executor::Executor> Scheduler::claimExecutor(
             // Reset the just claimed warm executor to guarantee TLS is
             // refreshed
             claimed->reset(msg);
-            SPDLOG_DEBUG(
-              "Reusing warm executor {} for {}", claimed->id, funcStr);
+            SPDLOG_DEBUG("Reusing warm executor {} for {} (idx: {} - rank: {})",
+                         claimed->id,
+                         funcStr,
+                         msg.groupidx(),
+                         msg.mpirank());
             break;
         }
     }

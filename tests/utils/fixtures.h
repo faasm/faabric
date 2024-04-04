@@ -527,9 +527,7 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         plannerCli.callFunctions(req);
 
         // Set up the first world, holding the main rank (which already takes
-        // one slot).
-        // Note that any excess ranks will also be allocated to this world when
-        // the scheduler is overloaded.
+        // one slot)
         faabric::HostResources thisResources;
         thisResources.set_slots(ranksThisWorld);
         thisResources.set_usedslots(1);

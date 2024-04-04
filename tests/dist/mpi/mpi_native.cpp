@@ -20,15 +20,6 @@ using namespace faabric::mpi;
 
 static thread_local MpiContext executingContext;
 
-faabric::Message* getExecutingCall()
-{
-    if (tests::mpi::executingCall == nullptr) {
-        SPDLOG_ERROR("Null-pointing executing call in MPI native");
-        throw std::runtime_error("Executing call not set");
-    }
-    return tests::mpi::executingCall;
-}
-
 MpiWorld& getExecutingWorld()
 {
     MpiWorldRegistry& reg = getMpiWorldRegistry();
@@ -52,23 +43,23 @@ int terminateMpi()
 
 int MPI_Init(int* argc, char*** argv)
 {
-    faabric::Message* call = getExecutingCall();
+    auto* call = &faabric::executor::ExecutorContext::get()->getMsg();
 
     if (call->mpirank() <= 0) {
         // If we are rank 0 and the world already exists, it means we are being
         // migrated
         if (getMpiWorldRegistry().worldExists(call->mpiworldid())) {
-            SPDLOG_TRACE("MPI - MPI_Init (join)");
+            SPDLOG_TRACE("MPI-{} - MPI_Init (join)", call->mpirank());
 
             executingContext.joinWorld(*call);
         } else {
-            SPDLOG_TRACE("MPI - MPI_Init (create)");
+            SPDLOG_TRACE("MPI-{} - MPI_Init (create)", call->mpirank());
 
             int worldId = executingContext.createWorld(*call);
             call->set_mpiworldid(worldId);
         }
     } else {
-        SPDLOG_TRACE("MPI - MPI_Init (join)");
+        SPDLOG_TRACE("MPI-{} - MPI_Init (join)", call->mpirank());
         executingContext.joinWorld(*call);
     }
 
@@ -868,8 +859,7 @@ void mpiMigrationPoint(int entrypointFuncArg)
 
     // Hit the post-migration hook if not migrated (but someone has)
     if (appMustMigrate) {
-        faabric::transport::getPointToPointBroker().postMigrationHook(
-          call->groupid(), call->groupidx());
+        faabric::transport::getPointToPointBroker().postMigrationHook(*call);
     }
 }
 
