@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 
 namespace faabric::transport::tcp {
-void reuseAddr(int connFd)
+void setReuseAddr(int connFd)
 {
     // TODO: do we need to check the value populated in opt?
     int opt = 1;
@@ -18,7 +18,7 @@ void reuseAddr(int connFd)
     }
 }
 
-void noDelay(int connFd)
+void setNoDelay(int connFd)
 {
     int opt = 1;
     int ret = setsockopt(connFd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
@@ -27,7 +27,7 @@ void noDelay(int connFd)
     }
 }
 
-void quickAck(int connFd)
+void setQuickAck(int connFd)
 {
     int opt = 1;
     int ret = setsockopt(connFd, IPPROTO_TCP, TCP_QUICKACK, &opt, sizeof(opt));

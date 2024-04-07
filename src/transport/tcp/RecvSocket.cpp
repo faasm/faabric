@@ -21,7 +21,7 @@ RecvSocket::~RecvSocket()
 void RecvSocket::listen()
 {
     int connFd = sock.get();
-    reuseAddr(connFd);
+    setReuseAddr(connFd);
     if (!isNonBlocking(connFd)) {
         setNonBlocking(connFd);
     }
