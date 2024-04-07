@@ -49,5 +49,7 @@ class SendSocket
 
     std::string host;
     int port;
+
+    setSocketOptions(int connFd);
 };
 }

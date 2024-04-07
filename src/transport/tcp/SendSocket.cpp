@@ -16,6 +16,12 @@ SendSocket::SendSocket(const std::string& host, int port)
   , port(port)
 {}
 
+void SendSocket::setSocketOptions(int connFd)
+{
+    setNoDelay(connFd);
+    setQuickAck(connFd);
+}
+
 void SendSocket::dial()
 {
     if (connected) {
@@ -23,8 +29,7 @@ void SendSocket::dial()
     }
 
     int connFd = sock.get();
-    setNoDelay(connFd);
-    setQuickAck(connFd);
+    setSocketOptions(connFd);
 
     // Re-dial a number of times to accoun for races during initialisation.
     // This number must be rather high for higher-latency environments with
