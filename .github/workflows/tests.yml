@@ -121,6 +121,7 @@ jobs:
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
       - name: "Run tests"
         run: ./bin/inv_wrapper.sh tests
+        timeout-minutes: 15
 
   dist-tests:
     if: github.event.pull_request.draft == false
@@ -138,6 +139,7 @@ jobs:
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
         run: ./dist-test/run.sh
+        timeout-minutes: 15
       - name: "Print planner logs"
         if: always()
         run: docker compose logs planner

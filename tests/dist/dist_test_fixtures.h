@@ -167,7 +167,8 @@ class MpiDistTestsFixture : public DistTestsFixture
         while (batchResults->messageresults_size() != worldSize) {
             if (numRetries >= maxRetries) {
                 SPDLOG_ERROR(
-                  "Timed-out waiting for MPI messages results ({}/{})",
+                  "Timed-out waiting for MPI messages results (app: {}, {}/{})",
+                  req->appid(),
                   batchResults->messageresults_size(),
                   worldSize);
                 throw std::runtime_error("Timed-out waiting for MPI messges");

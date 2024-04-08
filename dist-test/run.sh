@@ -16,6 +16,7 @@ docker compose \
 # Run the tests directly
 docker compose \
     run \
+    -e LOG_LEVEL=trace \
     --rm \
     cli \
     /build/faabric/static/bin/faabric_dist_tests
