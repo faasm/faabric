@@ -1,4 +1,5 @@
 #include <faabric/transport/tcp/SendSocket.h>
+#include <faabric/transport/tcp/SocketOptions.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
@@ -15,6 +16,12 @@ SendSocket::SendSocket(const std::string& host, int port)
   , port(port)
 {}
 
+void SendSocket::setSocketOptions(int connFd)
+{
+    setNoDelay(connFd);
+    setQuickAck(connFd);
+}
+
 void SendSocket::dial()
 {
     if (connected) {
@@ -22,6 +29,7 @@ void SendSocket::dial()
     }
 
     int connFd = sock.get();
+    setSocketOptions(connFd);
 
     // Re-dial a number of times to accoun for races during initialisation.
     // This number must be rather high for higher-latency environments with
