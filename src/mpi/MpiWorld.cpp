@@ -225,7 +225,12 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
 void MpiWorld::destroy()
 {
-    SPDLOG_TRACE("Destroying MPI world {}", id);
+    if (rankState.msg != nullptr) {
+        SPDLOG_TRACE("{}:{}:{} destroying MPI world",
+                     rankState.msg->appid(),
+                     rankState.msg->groupid(),
+                     rankState.msg->mpirank());
+    }
 
     // ----- Per-rank cleanup -----
 
@@ -262,9 +267,11 @@ void MpiWorld::initialiseRankFromMsg(faabric::Message& msg)
     rankState.msg = &msg;
 
     // Pin this thread to a free CPU
+#ifdef FAABRIC_USE_SPINLOCK
     if (rankState.pinnedCpu == nullptr) {
         rankState.pinnedCpu = faabric::util::pinThreadToFreeCpu(pthread_self());
     }
+#endif
 
     // Initialise the TCP sockets for remote messaging
     initSendRecvSockets();
@@ -1759,11 +1766,24 @@ void MpiWorld::initSendRecvSockets()
     }
 #endif
 
+    // Do not need to initialise anything if there are no remote ranks
+    int numRemoteRanks = size - ranksForHost.at(thisHost).size();
+    if (numRemoteRanks == 0) {
+        return;
+    }
+
+    // Guard against calling this method twice from the same thread
     if (rankState.recvSocket != nullptr) {
         assert(rankState.sendSockets.size() == size);
         assert(rankState.recvConnPool.size() == size);
         return;
     }
+
+    // TODO: delete or debug/trace me
+    SPDLOG_INFO("MPI begin TCP handhsake {}:{}:{}",
+                rankState.msg->appid(),
+                rankState.msg->groupid(),
+                rankState.msg->mpirank());
 
     assert(rankState.msg != nullptr);
     int thisRank = rankState.msg->groupidx();
@@ -1810,8 +1830,6 @@ void MpiWorld::initSendRecvSockets()
                                                      sizeof(thisRank));
     }
 
-    int numRemoteRanks = size - ranksForHost.at(thisHost).size();
-
     // ACCEPT from all remote ranks. Note that ACCEPTs may come out of order
     for (int i = 0; i < numRemoteRanks; i++) {
         SPDLOG_TRACE("MPI establishing remote connection ?:?:? -> {} (ACCEPT)",
@@ -1825,19 +1843,35 @@ void MpiWorld::initSendRecvSockets()
         assert(otherRank >= 0);
         assert(otherRank < size);
         assert(otherRank != thisRank);
-        assert(rankState.recvConnPool.at(otherRank) == 0);
-        rankState.recvConnPool.at(otherRank) = newConnFd;
 
-#ifndef NDEBUG
         std::string otherHost = getHostForRank(otherRank);
         int otherPort = getPortForRank(otherRank);
+
+        if (rankState.recvConnPool.at(otherRank) != 0 ||
+            otherRank == thisRank) {
+            SPDLOG_ERROR("MPI accepted connection for repeated rank {}:{}:{} "
+                         "-> {} (app: {})",
+                         otherHost,
+                         otherPort,
+                         otherRank,
+                         thisRank,
+                         rankState.msg->appid());
+            throw std::runtime_error("MPI ACCEPTed repeated connection!");
+        }
+        rankState.recvConnPool.at(otherRank) = newConnFd;
+
         SPDLOG_DEBUG("MPI accepted remote connection {}:{}:{} -> {} (ACCEPT)",
                      otherHost,
                      otherPort,
                      otherRank,
                      thisRank);
-#endif
     }
+
+    // TODO: delete or debug me
+    SPDLOG_INFO("MPI end TCP handhsake {}:{}:{}",
+                rankState.msg->appid(),
+                rankState.msg->groupid(),
+                rankState.msg->mpirank());
 }
 
 // We pre-allocate all _potentially_ necessary queues in advance. Queues are
@@ -2015,6 +2049,7 @@ void MpiWorld::prepareMigration(int thisRank, bool thisRankMustMigrate)
     // so that we pick up the right ranks for the remote ranks
     rankState.sendSockets.clear();
     rankState.recvSocket.reset();
+    rankState.recvConnPool.clear();
 
     // Update local records
     if (thisRank == localLeader) {

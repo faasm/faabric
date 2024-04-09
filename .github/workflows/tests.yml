@@ -139,7 +139,10 @@ jobs:
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
         run: ./dist-test/run.sh
-        timeout-minutes: 15
+        timeout-minutes: 7
+      - name: "Print dist-test server logs"
+        if: always()
+        run: docker compose logs dist-test-server
       - name: "Print planner logs"
         if: always()
         run: docker compose logs planner

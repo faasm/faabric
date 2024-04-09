@@ -232,6 +232,11 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
     // Call the functions
     plannerCli.callFunctions(req);
 
+#ifndef FAABRIC_USE_SPINLOCK
+    auto actualHostsBeforeMigration = waitForMpiMessagesInFlight(req);
+    REQUIRE(hostsBeforeMigration == actualHostsBeforeMigration);
+#endif
+
     // Wait for messages to be finished
     checkAllocationAndResult(req, hostsAfterMigration);
 

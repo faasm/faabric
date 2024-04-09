@@ -163,7 +163,16 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     plannerCli.preloadSchedulingDecision(preloadDec2);
 
     plannerCli.callFunctions(req1);
+#ifndef FAABRIC_USE_SPINLOCK
+    auto actualHostsBefore1 = waitForMpiMessagesInFlight(req1);
+    REQUIRE(hostsBefore1 == actualHostsBefore1);
+#endif
+
     plannerCli.callFunctions(req2);
+#ifndef FAABRIC_USE_SPINLOCK
+    auto actualHostsBefore2 = waitForMpiMessagesInFlight(req2);
+    REQUIRE(hostsBefore2 == actualHostsBefore2);
+#endif
 
     auto hostsAfter1 = std::vector<std::string>(4, getMasterIP());
     auto hostsAfter2 = std::vector<std::string>(4, getWorkerIP());
