@@ -403,6 +403,13 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
               "Task {} threw exception. What: {}", msg.id(), ex.what());
             SPDLOG_ERROR(errorMessage);
             msg.set_outputdata(errorMessage);
+
+            // MPI-specific clean-up after we throw an exception
+            if (msg.ismpi()) {
+                auto& mpiWorld = faabric::mpi::getMpiWorldRegistry().getWorld(
+                  msg.mpiworldid());
+                mpiWorld.destroy();
+            }
         }
 
         // Unset context

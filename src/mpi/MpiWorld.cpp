@@ -1749,13 +1749,7 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
 
 // This method is called by all MPI ranks simultaneously during world creation,
 // and needs to establish bi-directional TCP sockets between each pair of
-// remote ranks. We follow a very simple group handshake protocol. For each
-// remote rank, if the rank is larger than us we CONNECT, and then ACCEPT (i.e
-// open a send socket first, and then accept their connection into our single
-// reception socket). If the rank is smaller than us, we do the symmetric.
-// To guarantee progress and correctness we can only start CONNECT-ing once
-// all smaller local ranks are done CONNECT-ing. Otherwise, when the remote
-// rank ACCEPTs it won't know which local rank CONNECT-ed to it.
+// remote ranks
 void MpiWorld::initSendRecvSockets()
 {
     // Do not need to initialise any send/recv sockets in mock mode
@@ -1785,148 +1779,64 @@ void MpiWorld::initSendRecvSockets()
     rankState.recvConnPool = std::vector<int>(size, 0);
     rankState.recvSocket->listen();
 
-    // To ensure progress and avoid race conditions, we do not want to CONNECT
-    // to remote ranks larger than us until all (local) smaller ranks have
-    // CONNECT-ed to them first. To achieve this goal, we wait for our
-    // immediately smaller (colocated) rank to be done
-    int localSendRank = -1;
-    int localRecvRank = -1;
-    auto itr = ranksForHost.at(thisHost).find(thisRank);
-    if (itr != ranksForHost.at(thisHost).begin()) {
-        localSendRank = *(std::prev(ranksForHost.at(thisHost).find(thisRank)));
-    }
-    if (std::next(itr) != ranksForHost.at(thisHost).end()) {
-        localRecvRank = *(std::next(itr));
-    }
-
-    // Do the handshake between sending and receiving sockets
+    // Once we have bound and listened on the main socket, we can CONNECT to
+    // all remote ranks. Given that we have already bound the listening socket,
+    // CONNECT requests are non-blocking
     for (int otherRank = 0; otherRank < size; otherRank++) {
-        if (otherRank == thisRank) {
+        if (thisRank == otherRank) {
             continue;
         }
 
         std::string otherHost = getHostForRank(otherRank);
         int otherPort = getPortForRank(otherRank);
 
-        // If we need to receive a synchronisation message, do so first
-        if (otherRank == localSendRank) {
-            SPDLOG_TRACE(
-              "MPI waiting for local sync to handshake {} <-> {} (wait on: {})",
-              thisRank,
-              otherRank,
-              localSendRank);
-            recv(localSendRank,
-                 thisRank,
-                 nullptr,
-                 MPI_INT,
-                 0,
-                 nullptr,
-                 MpiMessageType::HANDSHAKE);
-            continue;
-        }
-
-        // If the rank is co-located (and is not the rank we sync from, pass)
         if (otherHost == thisHost) {
             continue;
         }
 
-        if (thisRank < otherRank) {
-            // If we are a smaller rank, we first CONNECT and then ACCEPT
-            SPDLOG_TRACE(
-              "MPI establishing remote connection {} -> {}:{}:{} (CONNECT)",
-              thisRank,
-              otherHost,
-              otherPort,
-              otherRank);
-            rankState.sendSockets.at(otherRank) =
-              std::make_unique<faabric::transport::tcp::SendSocket>(otherHost,
-                                                                    otherPort);
-            rankState.sendSockets.at(otherRank)->dial();
-
-            SPDLOG_TRACE(
-              "MPI establishing remote connection {}:{}:{} -> {} (ACCEPT)",
-              otherHost,
-              otherPort,
-              otherRank,
-              thisRank);
-            rankState.recvConnPool.at(otherRank) =
-              rankState.recvSocket->accept();
-
-            // Smoke-test the bi-directional link
-            send(thisRank,
-                 otherRank,
-                 nullptr,
-                 MPI_INT,
-                 0,
-                 MpiMessageType::HANDSHAKE);
-            recv(otherRank,
-                 thisRank,
-                 nullptr,
-                 MPI_INT,
-                 0,
-                 nullptr,
-                 MpiMessageType::HANDSHAKE);
-
-            SPDLOG_DEBUG("MPI handshake succeeded {} <-> {}:{}:{}",
-                         thisRank,
-                         otherHost,
-                         otherPort,
-                         otherRank);
-        } else {
-            // If we are a larger rank, we ACCEPT the connection from the
-            // smaller rank, then CONNECT to it
-            SPDLOG_TRACE(
-              "MPI establishing remote connection {}:{}:{} -> {} (ACCEPT)",
-              otherHost,
-              otherPort,
-              otherRank,
-              thisRank);
-            rankState.recvConnPool.at(otherRank) =
-              rankState.recvSocket->accept();
-
-            SPDLOG_TRACE(
-              "MPI establishing remote connection {} -> {}:{}:{} (CONNECT)",
-              thisRank,
-              otherHost,
-              otherPort,
-              otherRank);
-            rankState.sendSockets.at(otherRank) =
-              std::make_unique<faabric::transport::tcp::SendSocket>(otherHost,
-                                                                    otherPort);
-            rankState.sendSockets.at(otherRank)->dial();
-
-            // Smoke-test the bi-directional link
-            recv(otherRank,
-                 thisRank,
-                 nullptr,
-                 MPI_INT,
-                 0,
-                 nullptr,
-                 MpiMessageType::HANDSHAKE);
-            send(thisRank,
-                 otherRank,
-                 nullptr,
-                 MPI_INT,
-                 0,
-                 MpiMessageType::HANDSHAKE);
-
-            SPDLOG_DEBUG("MPI handshake succeeded {}:{}:{} <-> {}",
-                         otherHost,
-                         otherPort,
-                         otherRank,
-                         thisRank);
-        }
+        SPDLOG_TRACE(
+          "MPI establishing remote connection {} -> {}:{}:{} (CONNECT)",
+          thisRank,
+          otherHost,
+          otherPort,
+          otherRank);
+        rankState.sendSockets.at(otherRank) =
+          std::make_unique<faabric::transport::tcp::SendSocket>(otherHost,
+                                                                otherPort);
+        rankState.sendSockets.at(otherRank)->dial();
+        // Right after connecting, we send our rank over the raw socket to
+        // identify ourselves
+        rankState.sendSockets.at(otherRank)->sendOne((const uint8_t*)&thisRank,
+                                                     sizeof(thisRank));
     }
 
-    // Once we are done with our handshake protocol, notify the next local
-    // rank (if it exists)
-    if (localRecvRank != -1) {
-        send(thisRank,
-             localRecvRank,
-             nullptr,
-             MPI_INT,
-             0,
-             MpiMessageType::HANDSHAKE);
+    int numRemoteRanks = size - ranksForHost.at(thisHost).size();
+
+    // ACCEPT from all remote ranks. Note that ACCEPTs may come out of order
+    for (int i = 0; i < numRemoteRanks; i++) {
+        SPDLOG_TRACE("MPI establishing remote connection ?:?:? -> {} (ACCEPT)",
+                     thisRank);
+        int newConnFd = rankState.recvSocket->accept();
+
+        // Work-out who CONNECT-ed to us
+        int otherRank = -1;
+        rankState.recvSocket->recvOne(
+          newConnFd, BYTES(&otherRank), sizeof(otherRank));
+        assert(otherRank >= 0);
+        assert(otherRank < size);
+        assert(otherRank != thisRank);
+        assert(rankState.recvConnPool.at(otherRank) == 0);
+        rankState.recvConnPool.at(otherRank) = newConnFd;
+
+#ifndef NDEBUG
+        std::string otherHost = getHostForRank(otherRank);
+        int otherPort = getPortForRank(otherRank);
+        SPDLOG_DEBUG("MPI accepted remote connection {}:{}:{} -> {} (ACCEPT)",
+                     otherHost,
+                     otherPort,
+                     otherRank,
+                     thisRank);
+#endif
     }
 }
 

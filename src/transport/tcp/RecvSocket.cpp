@@ -3,6 +3,7 @@
 #include <faabric/util/logging.h>
 
 #include <emmintrin.h>
+#include <poll.h>
 
 namespace faabric::transport::tcp {
 RecvSocket::RecvSocket(int port, const std::string& host)
@@ -56,8 +57,24 @@ int RecvSocket::accept()
 {
     int connFd = sock.get();
 
-    // Make accept blocking to make sure we account for races in initialisation
-    setBlocking(connFd);
+    // We cannot set a timeout on the ACCEPT system call. Instead, we poll
+    // on the listening file descriptor until someone has CONNECT-ed to us
+    // tiggering a POLLIN event
+    struct pollfd polledFds[1];
+    polledFds[0].fd = connFd;
+    polledFds[0].events = POLLIN;
+    int pollTimeoutMs = 2000;
+    int numReady = ::poll(polledFds, 1, pollTimeoutMs);
+    if (numReady < 1) {
+        SPDLOG_ERROR(
+          "Error accepting connection on {}:{} (fd: {}): poll timed out",
+          host,
+          port,
+          connFd);
+        throw std::runtime_error("Poll timed-out!");
+    }
+
+    // Once poll has returned succesfully, we should be able to accept
     int newConn = ::accept(sock.get(), 0, 0);
     if (newConn < 1) {
         SPDLOG_ERROR("Error accepting connection on {}:{} (fd: {}): {}",
@@ -67,7 +84,6 @@ int RecvSocket::accept()
                      std::strerror(errno));
         throw std::runtime_error("Error accepting TCP connection");
     }
-    setNonBlocking(connFd);
 
     // Set socket options for the newly created receive socket
     setSocketOptions(newConn);
