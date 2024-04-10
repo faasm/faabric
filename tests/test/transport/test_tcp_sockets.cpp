@@ -2,9 +2,11 @@
 
 #include <faabric/transport/tcp/RecvSocket.h>
 #include <faabric/transport/tcp/SendSocket.h>
+#include <faabric/transport/tcp/SocketOptions.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/network.h>
 
+#include <latch>
 #include <thread>
 
 using namespace faabric::transport::tcp;
@@ -34,6 +36,57 @@ TEST_CASE("Test connecting a send/recv socket pair", "[transport]")
     // of scope
     ::close(conn);
     REQUIRE(errno == EBADF);
+}
+
+TEST_CASE("Test setting socket options", "[transport]")
+{
+    std::latch endLatch(2);
+
+    int conn;
+    {
+        RecvSocket dst(TEST_PORT);
+
+        // Start sending socket thread
+        std::jthread sendThread([&] {
+            SendSocket src(LOCALHOST, TEST_PORT);
+
+            // Connect to receiving socket
+            src.dial();
+
+            endLatch.arrive_and_wait();
+        });
+
+        // Connect to send socket and store the connection fd
+        dst.listen();
+        conn = dst.accept();
+
+        // Set options on the socket given by accept (i.e. the send socket)
+        setReuseAddr(conn);
+        setNoDelay(conn);
+        setQuickAck(conn);
+        setQuickAck(conn);
+        setBusyPolling(conn);
+        setNonBlocking(conn);
+        setBlocking(conn);
+
+        REQUIRE(!isNonBlocking(conn));
+
+        endLatch.arrive_and_wait();
+    }
+
+    // Verify that the open connections are closed when the sockets go out
+    // of scope
+    ::close(conn);
+    REQUIRE(errno == EBADF);
+
+    // Any operation on the closed socket will fail
+    REQUIRE_THROWS(setReuseAddr(conn));
+    REQUIRE_THROWS(setNoDelay(conn));
+    REQUIRE_THROWS(setQuickAck(conn));
+    REQUIRE_THROWS(setQuickAck(conn));
+    REQUIRE_THROWS(setBusyPolling(conn));
+    REQUIRE_THROWS(setNonBlocking(conn));
+    REQUIRE_THROWS(setBlocking(conn));
 }
 
 TEST_CASE("Test send/recv one message using raw TCP sockets", "[transport]")

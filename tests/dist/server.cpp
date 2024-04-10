@@ -21,8 +21,8 @@ int main()
     SPDLOG_INFO("Starting distributed test server on worker");
     std::shared_ptr<faabric::executor::ExecutorFactory> fac =
       std::make_shared<tests::DistTestExecutorFactory>();
-    faabric::runner::FaabricMain m(fac);
-    m.startBackground();
+    faabric::runner::FaabricMain faabricMain(fac);
+    faabricMain.startBackground();
 
     SPDLOG_INFO("---------------------------------");
     SPDLOG_INFO("Distributed test server started");
@@ -34,7 +34,7 @@ int main()
     endpoint.start(faabric::endpoint::EndpointMode::SIGNAL);
 
     SPDLOG_INFO("Shutting down");
-    m.shutdown();
+    faabricMain.shutdown();
 
     return EXIT_SUCCESS;
 }

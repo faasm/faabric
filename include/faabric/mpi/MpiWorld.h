@@ -26,7 +26,11 @@ namespace faabric::mpi {
 // as the broker already has mocking capabilities
 std::vector<MpiMessage> getMpiMockedMessages(int sendRank);
 
+#ifdef FAABRIC_USE_SPINLOCK
+typedef faabric::util::SpinLockQueue<MpiMessage> InMemoryMpiQueue;
+#else
 typedef faabric::util::FixedCapacityQueue<MpiMessage> InMemoryMpiQueue;
+#endif
 
 class MpiWorld
 {

@@ -259,13 +259,13 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     }
 
     // Check the executor counts on this host
-    faabric::Message m = reqOne->messages().at(0);
+    faabric::Message msg1 = reqOne->messages().at(0);
     if (isThreads) {
         // For threads we expect only one executor
-        REQUIRE(sch.getFunctionExecutorCount(m) == 1);
+        REQUIRE(sch.getFunctionExecutorCount(msg1) == 1);
     } else {
         // For functions we expect one per core
-        REQUIRE(sch.getFunctionExecutorCount(m) == nCallsOne);
+        REQUIRE(sch.getFunctionExecutorCount(msg1) == nCallsOne);
     }
 
     // Check the number of messages executed locally and remotely
@@ -273,7 +273,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 
     // Now schedule a second batch and check the decision
     std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
-      faabric::util::batchExecFactory("foo", "bar", nCallsTwo);
+      faabric::util::batchExecFactory("foo", "baz", nCallsTwo);
     int appId2 = reqTwo->appid();
 
     std::vector<int> reqTwoMsgIds;
@@ -318,10 +318,11 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     // Check no other functions have been scheduled on this host
     REQUIRE(sch.getRecordedMessages().size() == nCallsOne + nCallsTwo);
 
+    faabric::Message msg2 = reqTwo->messages().at(0);
     if (isThreads) {
-        REQUIRE(sch.getFunctionExecutorCount(m) == 1);
+        REQUIRE(sch.getFunctionExecutorCount(msg2) == 1);
     } else {
-        REQUIRE(sch.getFunctionExecutorCount(m) == nCallsTwo);
+        REQUIRE(sch.getFunctionExecutorCount(msg2) == nCallsTwo);
     }
 }
 

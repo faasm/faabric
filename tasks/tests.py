@@ -4,7 +4,7 @@ from os.path import join
 from subprocess import run
 from tasks.util.env import FAABRIC_STATIC_BUILD_DIR, PROJ_ROOT
 
-IS_CI = "HOST_TYPE" in environ and environ["HOST_TYPE"] == "ci"
+IS_CI = "DEPLOYMENT_TYPE" in environ and environ["DEPLOYMENT_TYPE"] == "gha-ci"
 
 TEST_ENV = {
     "LOG_LEVEL": "info",

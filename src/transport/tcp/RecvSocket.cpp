@@ -2,6 +2,9 @@
 #include <faabric/transport/tcp/SocketOptions.h>
 #include <faabric/util/logging.h>
 
+#include <emmintrin.h>
+#include <poll.h>
+
 namespace faabric::transport::tcp {
 RecvSocket::RecvSocket(int port, const std::string& host)
   : addr(host, port)
@@ -54,8 +57,24 @@ int RecvSocket::accept()
 {
     int connFd = sock.get();
 
-    // Make accept blocking to make sure we account for races in initialisation
-    setBlocking(connFd);
+    // We cannot set a timeout on the ACCEPT system call. Instead, we poll
+    // on the listening file descriptor until someone has CONNECT-ed to us
+    // tiggering a POLLIN event
+    struct pollfd polledFds[1];
+    polledFds[0].fd = connFd;
+    polledFds[0].events = POLLIN;
+    int pollTimeoutMs = 2000;
+    int numReady = ::poll(polledFds, 1, pollTimeoutMs);
+    if (numReady < 1) {
+        SPDLOG_ERROR(
+          "Error accepting connection on {}:{} (fd: {}): poll timed out",
+          host,
+          port,
+          connFd);
+        throw std::runtime_error("Poll timed-out!");
+    }
+
+    // Once poll has returned succesfully, we should be able to accept
     int newConn = ::accept(sock.get(), 0, 0);
     if (newConn < 1) {
         SPDLOG_ERROR("Error accepting connection on {}:{} (fd: {}): {}",
@@ -65,16 +84,31 @@ int RecvSocket::accept()
                      std::strerror(errno));
         throw std::runtime_error("Error accepting TCP connection");
     }
-    setNonBlocking(connFd);
 
-    // Set the newly accepted connection as blocking (we want `recv` to block)
-    // TODO: do we want to block, or do we want to spinlock??
-    setBlocking(newConn);
+    // Set socket options for the newly created receive socket
+    setSocketOptions(newConn);
 
     // TODO: add constructor parameter of max num conn
     openConnections.push_back(newConn);
 
     return newConn;
+}
+
+// Single function to configure _all_ TCP options for a reception socket
+void RecvSocket::setSocketOptions(int connFd)
+{
+#ifdef FAABRIC_USE_SPINLOCK
+    if (!isNonBlocking(connFd)) {
+        setNonBlocking(connFd);
+    }
+
+    // TODO: not clear if this helps or not
+    setBusyPolling(connFd);
+#else
+    if (isNonBlocking(connFd)) {
+        setBlocking(connFd);
+    }
+#endif
 }
 
 void RecvSocket::recvOne(int conn, uint8_t* buffer, size_t bufferSize)
@@ -83,22 +117,29 @@ void RecvSocket::recvOne(int conn, uint8_t* buffer, size_t bufferSize)
 
     while (numRecvd < bufferSize) {
         // Receive from socket
+#ifdef FAABRIC_USE_SPINLOCK
+        int got = ::recv(conn, buffer, bufferSize - numRecvd, MSG_DONTWAIT);
+#else
         int got = ::recv(conn, buffer, bufferSize - numRecvd, 0);
-        if (got < 0) {
-            // TODO: why?
-            if (errno != EAGAIN) {
-                SPDLOG_ERROR("TCP Server error receiving in {}: {}",
-                             conn,
-                             std::strerror(errno));
-                throw std::runtime_error("TCP error receiving!");
+#endif
+        if (got == -1) {
+#ifdef FAABRIC_USE_SPINLOCK
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                _mm_pause();
+#else
+            if (errno == EAGAIN) {
+#endif
+                continue;
             }
 
-            // TODO: ??
-            SPDLOG_ERROR("not expected: {}", std::strerror(errno));
-        } else {
-            buffer += got;
-            numRecvd += got;
+            SPDLOG_ERROR("TCP Server error receiving in {}: {}",
+                         conn,
+                         std::strerror(errno));
+            throw std::runtime_error("TCP error receiving!");
         }
+
+        buffer += got;
+        numRecvd += got;
     }
 
     assert(numRecvd == bufferSize);

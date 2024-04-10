@@ -392,9 +392,10 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 
             // MPI migration
             if (msg.ismpi()) {
-                auto& mpiWorld = faabric::mpi::getMpiWorldRegistry().getWorld(
-                  msg.mpiworldid());
-                mpiWorld.destroy();
+                auto& mpiWorldRegistry = faabric::mpi::getMpiWorldRegistry();
+                if (mpiWorldRegistry.worldExists(msg.mpiworldid())) {
+                    mpiWorldRegistry.getWorld(msg.mpiworldid()).destroy();
+                }
             }
         } catch (const std::exception& ex) {
             returnValue = 1;
@@ -403,6 +404,14 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
               "Task {} threw exception. What: {}", msg.id(), ex.what());
             SPDLOG_ERROR(errorMessage);
             msg.set_outputdata(errorMessage);
+
+            // MPI-specific clean-up after we throw an exception
+            if (msg.ismpi()) {
+                auto& mpiWorldRegistry = faabric::mpi::getMpiWorldRegistry();
+                if (mpiWorldRegistry.worldExists(msg.mpiworldid())) {
+                    mpiWorldRegistry.getWorld(msg.mpiworldid()).destroy();
+                }
+            }
         }
 
         // Unset context
