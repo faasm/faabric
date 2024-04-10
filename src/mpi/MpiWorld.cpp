@@ -1778,11 +1778,10 @@ void MpiWorld::initSendRecvSockets()
         return;
     }
 
-    // TODO: delete or debug/trace me
-    SPDLOG_INFO("MPI begin TCP handhsake {}:{}:{}",
-                rankState.msg->appid(),
-                rankState.msg->groupid(),
-                rankState.msg->mpirank());
+    SPDLOG_TRACE("MPI begin TCP handhsake {}:{}:{}",
+                 rankState.msg->appid(),
+                 rankState.msg->groupid(),
+                 rankState.msg->mpirank());
 
     assert(rankState.msg != nullptr);
     int thisRank = rankState.msg->groupidx();
@@ -1859,18 +1858,17 @@ void MpiWorld::initSendRecvSockets()
         }
         rankState.recvConnPool.at(otherRank) = newConnFd;
 
-        SPDLOG_DEBUG("MPI accepted remote connection {}:{}:{} -> {} (ACCEPT)",
+        SPDLOG_TRACE("MPI accepted remote connection {}:{}:{} -> {} (ACCEPT)",
                      otherHost,
                      otherPort,
                      otherRank,
                      thisRank);
     }
 
-    // TODO: delete or debug me
-    SPDLOG_INFO("MPI end TCP handhsake {}:{}:{}",
-                rankState.msg->appid(),
-                rankState.msg->groupid(),
-                rankState.msg->mpirank());
+    SPDLOG_DEBUG("MPI end TCP handhsake {}:{}:{}",
+                 rankState.msg->appid(),
+                 rankState.msg->groupid(),
+                 rankState.msg->mpirank());
 }
 
 // We pre-allocate all _potentially_ necessary queues in advance. Queues are
