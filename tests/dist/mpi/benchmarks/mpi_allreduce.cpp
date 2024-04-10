@@ -36,7 +36,7 @@ static int bench_allreduce(int rank, int worldSize, std::vector<int> sizes = {})
     auto t1 = CLOCK::now();
     duration d = t1 - t0;
 
-    int tot = std::accumulate(sizes.begin(), sizes.end(), 0);
+    const int tot = std::accumulate(sizes.begin(), sizes.end(), 0);
     int64_t workload = 4 * (worldSize - 1) * sizeof(T) * tot;
 
     PRN_IF(rank == 0,

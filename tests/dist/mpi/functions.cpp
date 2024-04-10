@@ -19,6 +19,14 @@ int handleMpiBenchAllReduce(tests::DistTestExecutor* exec,
     return bench_allreduce();
 }
 
+int handleMpiBenchSendRecv(tests::DistTestExecutor* exec,
+                           int threadPoolIdx,
+                           int msgIdx,
+                           std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    return bench_send_recv();
+}
+
 int handleMpiAllGather(tests::DistTestExecutor* exec,
                        int threadPoolIdx,
                        int msgIdx,
@@ -217,6 +225,8 @@ void registerMpiTestFunctions()
 {
     registerDistTestExecutorCallback(
       "mpi", "bench-allreduce", handleMpiBenchAllReduce);
+    registerDistTestExecutorCallback(
+      "mpi", "bench-send-recv", handleMpiBenchSendRecv);
     registerDistTestExecutorCallback("mpi", "allgather", handleMpiAllGather);
     registerDistTestExecutorCallback("mpi", "allreduce", handleMpiAllReduce);
     registerDistTestExecutorCallback("mpi", "alltoall", handleMpiAllToAll);

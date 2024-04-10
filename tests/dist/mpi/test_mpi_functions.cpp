@@ -37,6 +37,34 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     checkAllocationAndResult(req);
 }
 
+TEST_CASE_METHOD(MpiDistTestsFixture, "Bench MPI send recv local", "[.][bench]")
+{
+    // Set up this host's resources
+    setLocalSlots(2, 2); // 2 local
+
+    auto req = setRequest("bench-send-recv");
+
+    // Call the functions
+    plannerCli.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Bench MPI send recv remote",
+                 "[.][bench]")
+{
+    // Set up this host's resources
+    setLocalSlots(1, 2); // 1 local, 1 remote
+
+    auto req = setRequest("bench-send-recv");
+
+    // Call the functions
+    plannerCli.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all gather", "[mpi]")
 {
     // Set up this host's resources
