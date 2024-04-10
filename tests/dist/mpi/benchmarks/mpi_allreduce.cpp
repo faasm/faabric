@@ -7,9 +7,6 @@
 
 #include "mpi_bench.hpp"
 
-constexpr int64_t Mi = 1 << 20;
-constexpr int64_t Gi = 1 << 30;
-
 template<class T>
 void init_buf(std::vector<T>& x, std::vector<T>& y, T rank)
 {

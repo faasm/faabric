@@ -53,6 +53,9 @@ std::vector<int> resnet50_grad_sizes()
     };
 }
 
+constexpr int64_t Mi = 1 << 20;
+constexpr int64_t Gi = 1 << 30;
+
 std::string show_size(int64_t workload)
 {
     char buf[64];
