@@ -1,5 +1,7 @@
 #include "mpi_bench.hpp"
 
+#include <algorithm>
+
 #ifndef USE_REAL_MPI
 
 int MPI_Get_library_version(char* p, int* n)
