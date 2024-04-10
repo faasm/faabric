@@ -75,13 +75,12 @@ struct MpiRankState
             for (auto& umb : unackedMessageBuffers) {
                 if (umb != nullptr) {
                     if (!umb->empty()) {
+                        // Do not throw exceptions here as this method is
+                        // called as part of the world destructor
                         SPDLOG_ERROR(
                           "Destroying the MPI world with outstanding {}"
                           " messages in the message buffer",
                           umb->size());
-                        throw std::runtime_error(
-                          "Destroying world with a non-empty MPI message "
-                          "buffer");
                     }
                 }
             }
