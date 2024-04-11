@@ -69,5 +69,7 @@ int doAllToAll(int rank, int worldSize, int i);
 
 int bench_allreduce();
 
+int bench_send_recv();
+
 void mpiMigrationPoint(int entrypointFuncArg);
 }
