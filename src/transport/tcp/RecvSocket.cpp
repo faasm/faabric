@@ -103,7 +103,7 @@ void RecvSocket::setSocketOptions(int connFd)
     }
 
     // TODO: not clear if this helps or not
-    setBusyPolling(connFd);
+    // setBusyPolling(connFd);
 #else
     if (isNonBlocking(connFd)) {
         setBlocking(connFd);
