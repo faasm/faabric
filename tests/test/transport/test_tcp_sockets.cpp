@@ -60,7 +60,7 @@ TEST_CASE("Test setting socket options", "[transport]")
         dst.listen();
         conn = dst.accept();
 
-        // Set options on the socket given by accept (i.e. the send socket)
+        // Set options on the socket given by accept (i.e. the recv socket)
         setReuseAddr(conn);
         setNoDelay(conn);
         setQuickAck(conn);
@@ -68,7 +68,8 @@ TEST_CASE("Test setting socket options", "[transport]")
         setBusyPolling(conn);
         setNonBlocking(conn);
         setBlocking(conn);
-        setTimeoutMs(conn, SocketTimeoutMs);
+        setRecvTimeoutMs(conn, SocketTimeoutMs);
+        setSendTimeoutMs(conn, SocketTimeoutMs);
 
         REQUIRE(!isNonBlocking(conn));
 
@@ -88,7 +89,8 @@ TEST_CASE("Test setting socket options", "[transport]")
     REQUIRE_THROWS(setBusyPolling(conn));
     REQUIRE_THROWS(setNonBlocking(conn));
     REQUIRE_THROWS(setBlocking(conn));
-    REQUIRE_THROWS(setTimeoutMs(conn, SocketTimeoutMs));
+    REQUIRE_THROWS(setRecvTimeoutMs(conn, SocketTimeoutMs));
+    REQUIRE_THROWS(setSendTimeoutMs(conn, SocketTimeoutMs));
 }
 
 TEST_CASE("Test send/recv one message using raw TCP sockets", "[transport]")

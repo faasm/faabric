@@ -14,5 +14,6 @@ bool isNonBlocking(int connFd);
 void setBusyPolling(int connFd);
 
 // Set timeout for blocking sockets
-void setTimeoutMs(int connFd, int timeoutMs);
+void setRecvTimeoutMs(int connFd, int timeoutMs);
+void setSendTimeoutMs(int connFd, int timeoutMs);
 }

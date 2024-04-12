@@ -104,7 +104,7 @@ void setBusyPolling(int connFd)
     }
 }
 
-void setTimeoutMs(int connFd, int timeoutMs)
+void setRecvTimeoutMs(int connFd, int timeoutMs)
 {
     struct timeval timeVal;
     timeVal.tv_sec = timeoutMs / 1000;
@@ -117,6 +117,22 @@ void setTimeoutMs(int connFd, int timeoutMs)
                      connFd,
                      std::strerror(errno));
         throw std::runtime_error("Error setting recv timeout");
+    }
+}
+
+void setSendTimeoutMs(int connFd, int timeoutMs)
+{
+    struct timeval timeVal;
+    timeVal.tv_sec = timeoutMs / 1000;
+    timeVal.tv_usec = 0;
+
+    int ret = ::setsockopt(
+      connFd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeVal, sizeof(timeVal));
+    if (ret == -1) {
+        SPDLOG_ERROR("Error setting send timeout for socket {}: {}",
+                     connFd,
+                     std::strerror(errno));
+        throw std::runtime_error("Error setting send timeout");
     }
 }
 }
