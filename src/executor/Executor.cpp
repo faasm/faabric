@@ -362,9 +362,6 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // in the same group
         bool isMigration =
           task.req->type() == faabric::BatchExecuteRequest::MIGRATION;
-        if (isMigration) {
-            faabric::transport::getPointToPointBroker().postMigrationHook(msg);
-        }
 
         SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
@@ -380,6 +377,14 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // Execute the task
         int32_t returnValue;
         try {
+            // Right before executing the task, do any kind of synchronisation
+            // if the task has been migrated. Also benefit from the try/catch
+            // statement in case the migration fails
+            if (isMigration) {
+                faabric::transport::getPointToPointBroker().postMigrationHook(
+                  msg);
+            }
+
             returnValue =
               executeTask(threadPoolIdx, task.messageIndex, task.req);
         } catch (const faabric::util::FunctionMigratedException& ex) {
