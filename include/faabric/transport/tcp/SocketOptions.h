@@ -12,4 +12,7 @@ bool isNonBlocking(int connFd);
 
 // Enable busy polling for non-blocking sockets
 void setBusyPolling(int connFd);
+
+// Set timeout for blocking sockets
+void setTimeoutMs(int connFd, int timeoutMs);
 }

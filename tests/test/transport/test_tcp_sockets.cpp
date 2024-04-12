@@ -68,6 +68,7 @@ TEST_CASE("Test setting socket options", "[transport]")
         setBusyPolling(conn);
         setNonBlocking(conn);
         setBlocking(conn);
+        setTimeoutMs(conn, SocketTimeoutMs);
 
         REQUIRE(!isNonBlocking(conn));
 
@@ -87,6 +88,7 @@ TEST_CASE("Test setting socket options", "[transport]")
     REQUIRE_THROWS(setBusyPolling(conn));
     REQUIRE_THROWS(setNonBlocking(conn));
     REQUIRE_THROWS(setBlocking(conn));
+    REQUIRE_THROWS(setTimeoutMs(conn, SocketTimeoutMs));
 }
 
 TEST_CASE("Test send/recv one message using raw TCP sockets", "[transport]")
