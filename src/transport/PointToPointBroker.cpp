@@ -894,42 +894,14 @@ void PointToPointBroker::resetThreadLocalCache()
 
 void PointToPointBroker::postMigrationHook(faabric::Message& msg)
 {
-    int postMigrationOkCode = 1337;
-    int recvCode = 0;
-
-    // TODO: implement this as a broadcast in the PTP broker
-    int mainIdx = 0;
-    if (msg.groupidx() == mainIdx) {
-        auto groupIdxs = getIdxsRegisteredForGroup(msg.groupid());
-        groupIdxs.erase(mainIdx);
-        for (const auto& recvIdx : groupIdxs) {
-            sendMessage(msg.groupid(),
-                        mainIdx,
-                        recvIdx,
-                        BYTES_CONST(&postMigrationOkCode),
-                        sizeof(int));
-        }
-        recvCode = postMigrationOkCode;
-    } else {
-        std::vector<uint8_t> bytes =
-          recvMessage(msg.groupid(), 0, msg.groupidx());
-        recvCode = faabric::util::bytesToInt(bytes);
-    }
-
-    if (recvCode != postMigrationOkCode) {
-        SPDLOG_ERROR("Error in post-migration hook. {}:{}:{} received code {}",
-                     msg.appid(),
-                     msg.groupid(),
-                     msg.groupidx(),
-                     recvCode);
-        throw std::runtime_error("Error in post-migration hook");
-    }
+    // Make sure all threads are here before we move forward
+    PointToPointGroup::getGroup(msg.groupid())->barrier(msg.groupidx());
 
     // Do per-thread MPI initialisation (mostly send/recv TCP sockets)
     if (msg.ismpi()) {
-        auto& mpiWorld =
-          faabric::mpi::getMpiWorldRegistry().getWorld(msg.mpiworldid());
-        mpiWorld.initialiseRankFromMsg(msg);
+        // Get-or-initialise to initialise the world in case we are migrating
+        // to a completely new world
+        faabric::mpi::getMpiWorldRegistry().getOrInitialiseWorld(msg);
     }
 
     SPDLOG_DEBUG("{}:{}:{} exiting post-migration hook",
