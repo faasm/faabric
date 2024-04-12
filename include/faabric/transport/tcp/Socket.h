@@ -4,6 +4,9 @@
 #include <sys/socket.h>
 
 namespace faabric::transport::tcp {
+
+const int SocketTimeoutMs = 3000;
+
 class Socket
 {
   public:

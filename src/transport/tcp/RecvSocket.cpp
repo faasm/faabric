@@ -105,9 +105,13 @@ void RecvSocket::setSocketOptions(int connFd)
     // TODO: not clear if this helps or not
     // setBusyPolling(connFd);
 #else
+    // Set the socket as blocking
     if (isNonBlocking(connFd)) {
         setBlocking(connFd);
     }
+
+    // Set the timeout
+    setTimeoutMs(connFd, SocketTimeoutMs);
 #endif
 }
 
