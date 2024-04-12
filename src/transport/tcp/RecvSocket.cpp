@@ -130,11 +130,9 @@ void RecvSocket::recvOne(int conn, uint8_t* buffer, size_t bufferSize)
 #ifdef FAABRIC_USE_SPINLOCK
             if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
                 _mm_pause();
-#else
-            if (errno == EAGAIN) {
-#endif
                 continue;
             }
+#endif
 
             SPDLOG_ERROR("TCP Server error receiving in {}: {}",
                          conn,
