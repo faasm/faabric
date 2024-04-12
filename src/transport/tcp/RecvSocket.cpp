@@ -111,7 +111,7 @@ void RecvSocket::setSocketOptions(int connFd)
     }
 
     // Set the timeout
-    setTimeoutMs(connFd, SocketTimeoutMs);
+    setRecvTimeoutMs(connFd, SocketTimeoutMs);
 #endif
 }
 

@@ -20,6 +20,7 @@ void SendSocket::setSocketOptions(int connFd)
 {
     setNoDelay(connFd);
     setQuickAck(connFd);
+    setSendTimeoutMs(connFd, SocketTimeoutMs);
 }
 
 void SendSocket::dial()
@@ -67,7 +68,7 @@ void SendSocket::dial()
 
 void SendSocket::sendOne(const uint8_t* buffer, size_t bufferSize)
 {
-    size_t sent = send(sock.get(), buffer, bufferSize, 0);
+    size_t sent = ::send(sock.get(), buffer, bufferSize, 0);
     if (sent != bufferSize) {
         SPDLOG_ERROR(
           "TCP client error sending TCP message to {}:{} ({}/{}): {}",
