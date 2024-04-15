@@ -108,7 +108,7 @@ void setRecvTimeoutMs(int connFd, int timeoutMs)
 {
     struct timeval timeVal;
     timeVal.tv_sec = timeoutMs / 1000;
-    timeVal.tv_usec = 0;
+    timeVal.tv_usec = (timeoutMs % 1000) * 1e3;
 
     int ret = ::setsockopt(
       connFd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeVal, sizeof(timeVal));
