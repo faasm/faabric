@@ -77,10 +77,14 @@ struct MpiRankState
                     if (!umb->empty()) {
                         // Do not throw exceptions here as this method is
                         // called as part of the world destructor
-                        SPDLOG_ERROR(
-                          "Destroying the MPI world with outstanding {}"
-                          " messages in the message buffer",
-                          umb->size());
+                        SPDLOG_ERROR("{}:{}:{} Destroying the MPI world (id: "
+                                     "{}) with outstanding {}"
+                                     " messages in the message buffer",
+                                     msg->appid(),
+                                     msg->groupid(),
+                                     msg->groupidx(),
+                                     msg->mpiworldid(),
+                                     umb->size());
                     }
                 }
             }
@@ -115,14 +119,11 @@ MpiWorld::MpiWorld()
 void MpiWorld::sendRemoteMpiMessage(int sendRank, int recvRank, MpiMessage& msg)
 {
     size_t payloadSz = payloadSize(msg);
+    rankState.sendSockets.at(recvRank)->sendOne(BYTES(&msg),
+                                                sizeof(MpiMessage));
     if (payloadSz > 0 && msg.buffer != nullptr) {
-        std::array<uint8_t*, 2> buffers = { BYTES(&msg), BYTES(msg.buffer) };
-        std::array<size_t, 2> bufferSizes = { sizeof(MpiMessage), payloadSz };
-
-        rankState.sendSockets.at(recvRank)->sendMany<2>(buffers, bufferSizes);
-    } else {
-        rankState.sendSockets.at(recvRank)->sendOne(BYTES(&msg),
-                                                    sizeof(MpiMessage));
+        rankState.sendSockets.at(recvRank)->sendOne(BYTES(msg.buffer),
+                                                    payloadSz);
     }
 }
 
@@ -235,11 +236,13 @@ void MpiWorld::destroy()
 
     rankState.reset();
 
+#ifndef NDEBUG
     // Clear structures used for mocking
     {
         faabric::util::UniqueLock lock(mockMutex);
         mpiMockedMessages.clear();
     }
+#endif
 }
 
 // Initialise shared (per-host) MPI world state. This method is called once

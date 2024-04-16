@@ -134,9 +134,10 @@ void RecvSocket::recvOne(int conn, uint8_t* buffer, size_t bufferSize)
             }
 #endif
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                SPDLOG_ERROR("TCP recv socket timed-out receiving in {}", conn);
+                SPDLOG_ERROR("Error receinving in TCP socket {}: timed-out",
+                             conn);
             } else {
-                SPDLOG_ERROR("TCP recv socket error in {}: {} (no: {})",
+                SPDLOG_ERROR("Error receiving in TCP socket {}: {} (no: {})",
                              conn,
                              std::strerror(errno),
                              errno);
@@ -147,8 +148,7 @@ void RecvSocket::recvOne(int conn, uint8_t* buffer, size_t bufferSize)
 
         // Handle peer disconnection separately
         if (got == 0 && bufferSize != 0) {
-            SPDLOG_ERROR(
-              "TCP socket trying to receive from disconnected client");
+            SPDLOG_ERROR("Error receiving in TCP socket: client disconnected");
             throw std::runtime_error("TCP socket client disconnected");
         }
 
