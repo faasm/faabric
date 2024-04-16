@@ -89,12 +89,22 @@ void SendSocket::sendOne(const uint8_t* buffer, size_t bufferSize)
                 continue;
             };
 #endif
-            SPDLOG_ERROR("Error error sending TCP message to {}:{} ({}/{}): {}",
-                         host,
-                         port,
-                         totalNumSent,
-                         bufferSize,
-                         std::strerror(errno));
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                SPDLOG_ERROR(
+                  "Error sending TCP message to {}:{} ({}/{}: timed-out)",
+                  host,
+                  port,
+                  totalNumSent,
+                  bufferSize);
+            } else {
+                SPDLOG_ERROR("Error sending TCP message to {}:{} ({}/{}): {}",
+                             host,
+                             port,
+                             totalNumSent,
+                             bufferSize,
+                             std::strerror(errno));
+            }
+
             throw std::runtime_error("Error sending TCP message!");
         }
 

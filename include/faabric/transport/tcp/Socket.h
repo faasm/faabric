@@ -5,7 +5,7 @@
 
 namespace faabric::transport::tcp {
 
-const int SocketTimeoutMs = 3000;
+const int SocketTimeoutMs = 5000;
 
 class Socket
 {
