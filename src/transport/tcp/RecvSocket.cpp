@@ -2,7 +2,9 @@
 #include <faabric/transport/tcp/SocketOptions.h>
 #include <faabric/util/logging.h>
 
+#ifdef FAABRIC_USE_SPINLOCK
 #include <emmintrin.h>
+#endif
 #include <poll.h>
 
 namespace faabric::transport::tcp {
