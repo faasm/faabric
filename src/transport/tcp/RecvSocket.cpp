@@ -133,19 +133,24 @@ void RecvSocket::recvOne(int conn, uint8_t* buffer, size_t bufferSize)
                 continue;
             }
 #endif
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                SPDLOG_ERROR("TCP recv socket timed-out receiving in {}", conn);
+            } else {
+                SPDLOG_ERROR("TCP recv socket error in {}: {} (no: {})",
+                             conn,
+                             std::strerror(errno),
+                             errno);
+            }
 
-            SPDLOG_ERROR("TCP Server error receiving in {}: {}",
-                         conn,
-                         std::strerror(errno));
             throw std::runtime_error("TCP error receiving!");
         }
-#ifndef FAABRIC_USE_SPINLOCK
+
+        // Handle peer disconnection separately
         if (got == 0 && bufferSize != 0) {
             SPDLOG_ERROR(
               "TCP socket trying to receive from disconnected client");
             throw std::runtime_error("TCP socket client disconnected");
         }
-#endif
 
         buffer += got;
         numRecvd += got;

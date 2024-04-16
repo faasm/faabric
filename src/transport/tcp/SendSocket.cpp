@@ -68,16 +68,22 @@ void SendSocket::dial()
 
 void SendSocket::sendOne(const uint8_t* buffer, size_t bufferSize)
 {
-    size_t sent = ::send(sock.get(), buffer, bufferSize, 0);
-    if (sent != bufferSize) {
-        SPDLOG_ERROR(
-          "TCP client error sending TCP message to {}:{} ({}/{}): {}",
-          host,
-          port,
-          sent,
-          bufferSize,
-          std::strerror(errno));
-        throw std::runtime_error("TCP client error sending message!");
+    size_t totalNumSent = 0;
+
+    while (totalNumSent < bufferSize) {
+        size_t nSent = ::send(sock.get(), buffer, bufferSize, 0);
+        if (nSent == -1) {
+            SPDLOG_ERROR(
+              "TCP client error sending TCP message to {}:{} ({}/{}): {}",
+              host,
+              port,
+              nSent,
+              bufferSize,
+              std::strerror(errno));
+            throw std::runtime_error("TCP client error sending message!");
+        }
+
+        totalNumSent += nSent;
     }
 }
 }

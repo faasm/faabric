@@ -30,15 +30,21 @@ class SendSocket
             totalSize += sizeArray.at(i);
         }
 
-        auto nSent = ::writev(sock.get(), msgs.data(), N);
-        if (nSent != totalSize) {
-            SPDLOG_ERROR("Error sending many to {}:{} ({}/{}): {}",
-                         host,
-                         port,
-                         nSent,
-                         totalSize,
-                         std::strerror(errno));
-            throw std::runtime_error("TCP SendSocket sendMany error!");
+        size_t totalNumSent = 0;
+        while (totalNumSent < totalSize) {
+            auto nSent = ::writev(sock.get(), msgs.data(), N);
+            if (nSent == -1) {
+                SPDLOG_ERROR("Error sending many to {}:{} ({}/{}): {} (no: {})",
+                             host,
+                             port,
+                             nSent,
+                             totalSize,
+                             std::strerror(errno),
+                             errno);
+                throw std::runtime_error("TCP SendSocket sendMany error!");
+            }
+
+            totalNumSent += nSent;
         }
     }
 
