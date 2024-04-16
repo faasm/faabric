@@ -17,6 +17,10 @@
 
 #include <string>
 
+// Special group ID magic to indicate MPI decisions that we have preemptively
+// scheduled
+#define MPI_PRELOADED_DECISION_GROUPID -99
+
 namespace faabric::planner {
 
 // ----------------------
@@ -512,6 +516,8 @@ Planner::getPreloadedSchedulingDecision(
                                      msg.id(),
                                      decision->appIdxs.at(idxInDecision),
                                      decision->groupIdxs.at(idxInDecision));
+        filteredDecision->mpiPorts.at(filteredDecision->nFunctions - 1) =
+          decision->mpiPorts.at(idxInDecision);
     }
     assert(filteredDecision->hosts.size() == ber->messages_size());
 
@@ -622,12 +628,33 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         }
     }
 
+    // For a NEW decision of an MPI application, we know that it will be
+    // followed-up by a SCALE_CHANGE one, and that the mpi_world_size parameter
+    // must be set. Thus, we can schedule slots for all the MPI ranks, and
+    // consume them later as a preloaded scheduling decision
+    bool isNew = decisionType == faabric::batch_scheduler::DecisionType::NEW;
+    bool isMpi = req->messages(0).ismpi();
+    std::shared_ptr<BatchExecuteRequest> mpiReq = nullptr;
+
     // Check if there exists a pre-loaded scheduling decision for this app
     // (e.g. if we want to force a migration). Note that we don't want to check
     // pre-loaded decisions for dist-change requests
     std::shared_ptr<batch_scheduler::SchedulingDecision> decision = nullptr;
     if (!isDistChange && state.preloadedSchedulingDecisions.contains(appId)) {
         decision = getPreloadedSchedulingDecision(appId, req);
+    } else if (isNew && isMpi) {
+        mpiReq = faabric::util::batchExecFactory(
+          req->user(), req->function(), req->messages(0).mpiworldsize());
+
+        // Populate the temporary request
+        mpiReq->mutable_messages()->at(0) = req->messages(0);
+        faabric::util::updateBatchExecAppId(mpiReq, appId);
+        for (int i = 0; i < mpiReq->messages_size(); i++) {
+            mpiReq->mutable_messages()->at(i).set_groupidx(i);
+        }
+
+        decision = batchScheduler->makeSchedulingDecision(
+          hostMapCopy, state.inFlightReqs, mpiReq);
     } else {
         decision = batchScheduler->makeSchedulingDecision(
           hostMapCopy, state.inFlightReqs, req);
@@ -648,6 +675,9 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         SPDLOG_INFO("Decided to not migrate app: {}", appId);
         return decision;
     }
+
+    // Skip claiming slots and ports if we have preemptively allocated them
+    bool skipClaim = decision->groupId == MPI_PRELOADED_DECISION_GROUPID;
 
     // A scheduling decision will create a new PTP mapping and, as a
     // consequence, a new group ID
@@ -676,6 +706,23 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             decision->print();
 #endif
 
+            // For a NEW MPI decision that was not preloaded we have
+            // preemptively scheduled all MPI messages but now we just need to
+            // return the first one, and preload the rest
+            if (isMpi && mpiReq != nullptr) {
+                auto mpiDecision = std::make_shared<
+                  faabric::batch_scheduler::SchedulingDecision>(req->appid(),
+                                                                req->groupid());
+                *mpiDecision = *decision;
+                mpiDecision->groupId = MPI_PRELOADED_DECISION_GROUPID;
+                state.preloadedSchedulingDecisions[appId] = mpiDecision;
+
+                // Remove all messages that we do not have to dispatch now
+                for (int i = 1; i < mpiDecision->messageIds.size(); i++) {
+                    decision->removeMessage(mpiDecision->messageIds.at(i));
+                }
+            }
+
             // 2. For a new decision, we just add it to the in-flight map
             state.inFlightReqs[appId] = std::make_pair(req, decision);
 
@@ -689,7 +736,9 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             // with the _new_ messages being scheduled
             for (int i = 0; i < decision->hosts.size(); i++) {
                 auto thisHost = state.hostMap.at(decision->hosts.at(i));
-                claimHostSlots(thisHost);
+                if (!skipClaim) {
+                    claimHostSlots(thisHost);
+                }
             }
 
             // 2. For a scale change request, we want to update the BER with the
@@ -703,8 +752,14 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             for (int i = 0; i < req->messages_size(); i++) {
                 *oldReq->add_messages() = req->messages(i);
                 oldDec->addMessage(decision->hosts.at(i), req->messages(i));
-                oldDec->mpiPorts.at(oldDec->nFunctions - 1) =
-                  claimHostMpiPort(state.hostMap.at(decision->hosts.at(i)));
+                if (!skipClaim) {
+                    oldDec->mpiPorts.at(oldDec->nFunctions - 1) =
+                      claimHostMpiPort(state.hostMap.at(decision->hosts.at(i)));
+                } else {
+                    assert(decision->mpiPorts.at(i) != 0);
+                    oldDec->mpiPorts.at(oldDec->nFunctions - 1) =
+                      decision->mpiPorts.at(i);
+                }
             }
 
             // 2.5.1. Log the updated decision in debug mode
