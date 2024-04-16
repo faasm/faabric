@@ -4,6 +4,9 @@
 #include <faabric/util/macros.h>
 
 #include <arpa/inet.h>
+#ifdef FAABRIC_USE_SPINLOCK
+#include <emmintrin.h>
+#endif
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <unistd.h>
@@ -20,7 +23,14 @@ void SendSocket::setSocketOptions(int connFd)
 {
     setNoDelay(connFd);
     setQuickAck(connFd);
+#ifdef FAABRIC_USE_SPINLOCK
+    setNonBlocking(connFd);
+#else
+    // If we decide to make send sockets non-blocking, then in the sendOne loop
+    // we need to treat the special case where we return EAGAIN or EWOULDBLOCK
+    setBlocking(connFd);
     setSendTimeoutMs(connFd, SocketTimeoutMs);
+#endif
 }
 
 void SendSocket::dial()
@@ -73,14 +83,19 @@ void SendSocket::sendOne(const uint8_t* buffer, size_t bufferSize)
     while (totalNumSent < bufferSize) {
         size_t nSent = ::send(sock.get(), buffer, bufferSize - totalNumSent, 0);
         if (nSent == -1) {
-            SPDLOG_ERROR(
-              "TCP client error sending TCP message to {}:{} ({}/{}): {}",
-              host,
-              port,
-              nSent,
-              bufferSize,
-              std::strerror(errno));
-            throw std::runtime_error("TCP client error sending message!");
+#ifdef FAABRIC_USE_SPINLOCK
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                _mm_pause();
+                continue;
+            };
+#endif
+            SPDLOG_ERROR("Error error sending TCP message to {}:{} ({}/{}): {}",
+                         host,
+                         port,
+                         totalNumSent,
+                         bufferSize,
+                         std::strerror(errno));
+            throw std::runtime_error("Error sending TCP message!");
         }
 
         buffer += nSent;
