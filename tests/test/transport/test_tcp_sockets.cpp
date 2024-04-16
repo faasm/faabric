@@ -96,8 +96,10 @@ TEST_CASE("Test setting socket options", "[transport]")
 TEST_CASE("Test send/recv one message using raw TCP sockets", "[transport]")
 {
     RecvSocket dst(TEST_PORT);
+    std::latch endLatch(2);
 
     std::vector<int> msg;
+    bool timeout = false;
 
     SECTION("Small message")
     {
@@ -109,13 +111,23 @@ TEST_CASE("Test send/recv one message using raw TCP sockets", "[transport]")
         msg = std::vector<int>(300, 200);
     }
 
+    SECTION("Do not send a message")
+    {
+        msg = std::vector<int>(3, 2);
+        timeout = true;
+    }
+
     // Start sending socket thread
     std::jthread sendThread([&] {
         SendSocket src(LOCALHOST, TEST_PORT);
         // Connect to receiving socket
         src.dial();
 
-        src.sendOne(BYTES(msg.data()), sizeof(int) * msg.size());
+        if (!timeout) {
+            src.sendOne(BYTES(msg.data()), sizeof(int) * msg.size());
+        }
+
+        endLatch.arrive_and_wait();
     });
 
     // Prepare receiving socket
@@ -123,9 +135,19 @@ TEST_CASE("Test send/recv one message using raw TCP sockets", "[transport]")
     int conn = dst.accept();
 
     std::vector<int> actual(msg.size());
-    dst.recvOne(conn, BYTES(actual.data()), sizeof(int) * actual.size());
 
-    REQUIRE(actual == msg);
+    // To test the timeout we must set the socket as blocking
+    if (timeout) {
+        setRecvTimeoutMs(conn, 200);
+        REQUIRE_THROWS(
+          dst.recvOne(conn, BYTES(actual.data()), sizeof(int) * actual.size()));
+    } else {
+        dst.recvOne(conn, BYTES(actual.data()), sizeof(int) * actual.size());
+
+        REQUIRE(actual == msg);
+    }
+
+    endLatch.arrive_and_wait();
 }
 
 TEST_CASE("Test using scatter send functionality (sendMany)", "[transport]")

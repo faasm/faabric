@@ -139,6 +139,13 @@ void RecvSocket::recvOne(int conn, uint8_t* buffer, size_t bufferSize)
                          std::strerror(errno));
             throw std::runtime_error("TCP error receiving!");
         }
+#ifndef FAABRIC_USE_SPINLOCK
+        if (got == 0 && bufferSize != 0) {
+            SPDLOG_ERROR(
+              "TCP socket trying to receive from disconnected client");
+            throw std::runtime_error("TCP socket client disconnected");
+        }
+#endif
 
         buffer += got;
         numRecvd += got;

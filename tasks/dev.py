@@ -23,6 +23,7 @@ def cmake(
     coverage=False,
     prof=False,
     cpu=None,
+    disable_spinlock=False,
 ):
     """
     Configures the build
@@ -52,6 +53,9 @@ def cmake(
         "-DFAABRIC_USE_SANITISER={}".format(sanitiser),
         "-DFAABRIC_SELF_TRACING=ON" if prof else "",
         "-DFAABRIC_CODE_COVERAGE=ON" if coverage else "",
+        "-DFAABRIC_USE_SPINLOCK={}".format(
+            "OFF" if disable_spinlock else "ON"
+        ),
         "-DFAABRIC_TARGET_CPU={}".format(cpu) if cpu else "",
         PROJ_ROOT,
     ]
