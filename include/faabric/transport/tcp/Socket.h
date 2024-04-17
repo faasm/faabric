@@ -6,6 +6,9 @@
 namespace faabric::transport::tcp {
 
 const int SocketTimeoutMs = 5000;
+// We get this value from OpenMPI's recommended TCP settings (FAQ 9):
+// https://www.open-mpi.org/faq/?category=tcp
+const size_t SocketBufferSizeBytes = 16777216;
 
 class Socket
 {

@@ -43,6 +43,11 @@ void RecvSocket::listen()
         throw std::runtime_error("Socket error binding to fd");
     }
 
+    // Set the receive buffer size on the listening socket so that ACCEPT-ed
+    // sockets inherit it, and the right buffer size is used to negotiate the
+    // TCP window
+    setRecvBufferSize(connFd, SocketBufferSizeBytes);
+
     ret = ::listen(connFd, 1024);
     if (ret) {
         SPDLOG_ERROR("Error listening to {}:{} (fd: {}): {} (ret: {})",

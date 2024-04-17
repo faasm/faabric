@@ -135,4 +135,32 @@ void setSendTimeoutMs(int connFd, int timeoutMs)
         throw std::runtime_error("Error setting send timeout");
     }
 }
+
+void setRecvBufferSize(int connFd, size_t bufferSizeBytes)
+{
+    int ret = ::setsockopt(
+      connFd, SOL_SOCKET, SO_RCVBUF, &bufferSizeBytes, sizeof(bufferSizeBytes));
+    if (ret == -1) {
+        SPDLOG_ERROR(
+          "Error setting recv buffer size for socket {}: {} (no: {})",
+          connFd,
+          std::strerror(errno),
+          errno);
+        throw std::runtime_error("Error setting recv buffer size");
+    }
+}
+
+void setSendBufferSize(int connFd, size_t bufferSizeBytes)
+{
+    int ret = ::setsockopt(
+      connFd, SOL_SOCKET, SO_SNDBUF, &bufferSizeBytes, sizeof(bufferSizeBytes));
+    if (ret == -1) {
+        SPDLOG_ERROR(
+          "Error setting send buffer size for socket {}: {} (no: {})",
+          connFd,
+          std::strerror(errno),
+          errno);
+        throw std::runtime_error("Error setting send buffer size");
+    }
+}
 }
