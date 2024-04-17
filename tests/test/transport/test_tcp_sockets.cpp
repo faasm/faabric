@@ -70,6 +70,8 @@ TEST_CASE("Test setting socket options", "[transport]")
         setBlocking(conn);
         setRecvTimeoutMs(conn, SocketTimeoutMs);
         setSendTimeoutMs(conn, SocketTimeoutMs);
+        setRecvBufferSize(conn, SocketBufferSizeBytes);
+        setSendBufferSize(conn, SocketBufferSizeBytes);
 
         REQUIRE(!isNonBlocking(conn));
 
@@ -91,6 +93,8 @@ TEST_CASE("Test setting socket options", "[transport]")
     REQUIRE_THROWS(setBlocking(conn));
     REQUIRE_THROWS(setRecvTimeoutMs(conn, SocketTimeoutMs));
     REQUIRE_THROWS(setSendTimeoutMs(conn, SocketTimeoutMs));
+    REQUIRE_THROWS(setRecvBufferSize(conn, SocketBufferSizeBytes));
+    REQUIRE_THROWS(setSendBufferSize(conn, SocketBufferSizeBytes));
 }
 
 TEST_CASE("Test send/recv one message using raw TCP sockets", "[transport]")
@@ -142,6 +146,8 @@ TEST_CASE("Test send/recv one message using raw TCP sockets", "[transport]")
         REQUIRE_THROWS(
           dst.recvOne(conn, BYTES(actual.data()), sizeof(int) * actual.size()));
     } else {
+        setRecvBufferSize(conn, SocketBufferSizeBytes);
+
         dst.recvOne(conn, BYTES(actual.data()), sizeof(int) * actual.size());
 
         REQUIRE(actual == msg);

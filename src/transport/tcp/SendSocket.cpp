@@ -21,8 +21,10 @@ SendSocket::SendSocket(const std::string& host, int port)
 
 void SendSocket::setSocketOptions(int connFd)
 {
+    setSendBufferSize(connFd, SocketBufferSizeBytes);
     setNoDelay(connFd);
     setQuickAck(connFd);
+
 #ifdef FAABRIC_USE_SPINLOCK
     setNonBlocking(connFd);
 #else
@@ -111,5 +113,7 @@ void SendSocket::sendOne(const uint8_t* buffer, size_t bufferSize)
         buffer += nSent;
         totalNumSent += nSent;
     }
+
+    assert(totalNumSent == bufferSize);
 }
 }
