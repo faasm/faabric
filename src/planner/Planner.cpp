@@ -742,32 +742,32 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             std::set<std::string> evictedHosts(evictedHostsVec.begin(),
                                                evictedHostsVec.end());
 
-            // 1. We only need to update the hosts where both decisions differ
-            assert(decision->hosts.size() == oldDec->hosts.size());
-            for (int i = 0; i < decision->hosts.size(); i++) {
-                // If decision is the same, we propagate the port
-                if (decision->hosts.at(i) == oldDec->hosts.at(i)) {
-                    decision->mpiPorts.at(i) = oldDec->mpiPorts.at(i);
-                    continue;
-                }
-
-                auto oldHost = state.hostMap.at(oldDec->hosts.at(i));
-                auto newHost = state.hostMap.at(decision->hosts.at(i));
-
-                // Slots accounting
-                releaseHostSlots(oldHost);
-                claimHostSlots(newHost);
-
-                // MPI ports accounting
-                releaseHostMpiPort(oldHost, oldDec->mpiPorts.at(i));
-                decision->mpiPorts.at(i) = claimHostMpiPort(newHost);
-            }
-
-            // 0. For the time being, when migrating we always print both
-            // decisions (old and new)
+            // For the moment we print the old and new decisions when
+            // migrating. We print them separately to help catching bugs
+            // with the accounting when transfering slots and ports
             SPDLOG_INFO("Decided to migrate app {}!", appId);
             SPDLOG_INFO("Old decision:");
             oldDec->print("info");
+
+            // 1. Clear the slots/ports in the old decision, and then claim
+            // them in the new one. Note that it needs to happen in this order
+            // as we may need all claimed slots in the old decision for the
+            // new one
+            assert(decision->hosts.size() == oldDec->hosts.size());
+
+            for (int i = 0; i < oldDec->hosts.size(); i++) {
+                auto oldHost = state.hostMap.at(oldDec->hosts.at(i));
+                releaseHostSlots(oldHost);
+                releaseHostMpiPort(oldHost, oldDec->mpiPorts.at(i));
+            }
+
+            for (int i = 0; i < decision->hosts.size(); i++) {
+                auto newHost = state.hostMap.at(decision->hosts.at(i));
+                claimHostSlots(newHost);
+                decision->mpiPorts.at(i) = claimHostMpiPort(newHost);
+            }
+
+            // Print the new decision after accounting has been updated
             SPDLOG_INFO("New decision:");
             decision->print("info");
             state.numMigrations += 1;
