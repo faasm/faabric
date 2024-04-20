@@ -1,6 +1,7 @@
 #include <faabric/transport/tcp/RecvSocket.h>
 #include <faabric/transport/tcp/SocketOptions.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 
 #ifdef FAABRIC_USE_SPINLOCK
 #include <emmintrin.h>
@@ -31,9 +32,27 @@ void RecvSocket::listen()
         setNonBlocking(connFd);
     }
 
+    // Attempt to bind a number of times to account for situations where
+    // another messge is being migrated and is vacating the port
+    int numRetries = 5;
+    int pollPeriodMs = 200;
+    int numTry = 0;
+
     SPDLOG_TRACE("Binding TCP socket to {}:{} (fd: {})", host, port, connFd);
     int ret = ::bind(connFd, addr.get(), sizeof(sockaddr_in));
-    if (ret) {
+    while ((ret != 0) && (numTry < numRetries)) {
+        numTry++;
+        SPDLOG_TRACE("Retrying binding to {}:{} (attempt: {}/{}, ret: {})",
+                     host,
+                     port,
+                     numTry,
+                     numRetries,
+                     ret);
+        SLEEP_MS(pollPeriodMs);
+        ret = ::bind(connFd, addr.get(), sizeof(sockaddr_in));
+    }
+
+    if (ret != 0) {
         SPDLOG_ERROR("Error binding to {}:{} (fd: {}): {} (ret: {})",
                      host,
                      port,
@@ -70,7 +89,7 @@ int RecvSocket::accept()
     struct pollfd polledFds[1];
     polledFds[0].fd = connFd;
     polledFds[0].events = POLLIN;
-    int pollTimeoutMs = 2000;
+    int pollTimeoutMs = SocketTimeoutMs;
     int numReady = ::poll(polledFds, 1, pollTimeoutMs);
     if (numReady < 1) {
         SPDLOG_ERROR(
