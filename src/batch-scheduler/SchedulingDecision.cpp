@@ -38,6 +38,33 @@ void SchedulingDecision::addMessage(const std::string& host,
     mpiPorts.push_back(0);
 }
 
+void SchedulingDecision::addMessageInPosition(int32_t pos,
+                                              const std::string& host,
+                                              int32_t messageId,
+                                              int32_t appIdx,
+                                              int32_t groupIdx,
+                                              int32_t mpiPort)
+{
+    nFunctions++;
+
+    int desiredSize = std::max<int>(pos + 1, nFunctions);
+    bool mustResize = desiredSize > hosts.size();
+
+    if (mustResize) {
+        hosts.resize(desiredSize);
+        messageIds.resize(desiredSize);
+        appIdxs.resize(desiredSize);
+        groupIdxs.resize(desiredSize);
+        mpiPorts.resize(desiredSize);
+    }
+
+    hosts.at(pos) = host;
+    messageIds.at(pos) = messageId;
+    appIdxs.at(pos) = appIdx;
+    groupIdxs.at(pos) = groupIdx;
+    mpiPorts.at(pos) = mpiPort;
+}
+
 SchedulingDecision SchedulingDecision::fromPointToPointMappings(
   faabric::PointToPointMappings& mappings)
 {

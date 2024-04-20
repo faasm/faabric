@@ -200,7 +200,9 @@ class MpiWorld
 
     /* Function Migration */
 
-    void prepareMigration(int thisRank, bool thisRankMustMigrate);
+    void prepareMigration(int newGroupId,
+                          int thisRank,
+                          bool thisRankMustMigrate);
 
   private:
     int id = -1;

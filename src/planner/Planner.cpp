@@ -387,6 +387,7 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
                 assert(decision->messageIds.empty());
                 assert(decision->appIdxs.empty());
                 assert(decision->groupIdxs.empty());
+                assert(decision->mpiPorts.empty());
                 state.inFlightReqs.erase(appId);
 
                 // If we are removing the app from in-flight, we can also
@@ -755,16 +756,24 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             // new one
             assert(decision->hosts.size() == oldDec->hosts.size());
 
+            // First release the migrated-from hosts and slots
             for (int i = 0; i < oldDec->hosts.size(); i++) {
-                auto oldHost = state.hostMap.at(oldDec->hosts.at(i));
-                releaseHostSlots(oldHost);
-                releaseHostMpiPort(oldHost, oldDec->mpiPorts.at(i));
+                if (decision->hosts.at(i) != oldDec->hosts.at(i)) {
+                    auto oldHost = state.hostMap.at(oldDec->hosts.at(i));
+
+                    releaseHostSlots(oldHost);
+                    releaseHostMpiPort(oldHost, oldDec->mpiPorts.at(i));
+                }
             }
 
+            // Second, occupy the migrated-to slots and ports
             for (int i = 0; i < decision->hosts.size(); i++) {
-                auto newHost = state.hostMap.at(decision->hosts.at(i));
-                claimHostSlots(newHost);
-                decision->mpiPorts.at(i) = claimHostMpiPort(newHost);
+                if (decision->hosts.at(i) != oldDec->hosts.at(i)) {
+                    auto newHost = state.hostMap.at(decision->hosts.at(i));
+
+                    claimHostSlots(newHost);
+                    decision->mpiPorts.at(i) = claimHostMpiPort(newHost);
+                }
             }
 
             // Print the new decision after accounting has been updated
