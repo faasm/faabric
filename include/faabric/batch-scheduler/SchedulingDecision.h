@@ -101,6 +101,14 @@ class SchedulingDecision
                     int32_t appIdx,
                     int32_t groupIdx);
 
+    // Add a message in a specific position
+    void addMessageInPosition(int32_t pos,
+                              const std::string& host,
+                              int32_t messageId,
+                              int32_t appIdx,
+                              int32_t groupIdx,
+                              int32_t mpiPort);
+
     // Returns the MPI port that we have vacated
     int32_t removeMessage(int32_t messageId);
 

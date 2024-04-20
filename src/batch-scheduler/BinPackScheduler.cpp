@@ -21,6 +21,8 @@ static std::map<std::string, int> getHostFreqCount(
 // This is, we want to keep as many host-message scheduling in the old decision
 // as possible, and also have the overall locality of the new decision (i.e.
 // the host-message histogram)
+// NOTE: keep in mind that the newDecision has the right host histogram, but
+// the messages may be completely out-of-order
 static std::shared_ptr<SchedulingDecision> minimiseNumOfMigrations(
   std::shared_ptr<SchedulingDecision> newDecision,
   std::shared_ptr<SchedulingDecision> oldDecision)
@@ -44,43 +46,37 @@ static std::shared_ptr<SchedulingDecision> minimiseNumOfMigrations(
     };
 
     assert(newDecision->hosts.size() == oldDecision->hosts.size());
-    for (int i = 0; i < newDecision->hosts.size(); i++) {
-        // If both decisions schedule this message to the same host great, as
-        // we can keep the old scheduling
-        if (newDecision->hosts.at(i) == oldDecision->hosts.at(i) &&
-            hostFreqCount.at(newDecision->hosts.at(i)) > 0) {
-            decision->addMessage(oldDecision->hosts.at(i),
-                                 oldDecision->messageIds.at(i),
-                                 oldDecision->appIdxs.at(i),
-                                 oldDecision->groupIdxs.at(i));
-            hostFreqCount.at(oldDecision->hosts.at(i)) -= 1;
-            continue;
-        }
 
-        // If not, assign the old decision as long as we still can (i.e. as
-        // long as we still have slots in the histogram (note that it could be
-        // that the old host is not in the new histogram at all)
-        if (hostFreqCount.contains(oldDecision->hosts.at(i)) &&
-            hostFreqCount.at(oldDecision->hosts.at(i)) > 0) {
-            decision->addMessage(oldDecision->hosts.at(i),
-                                 oldDecision->messageIds.at(i),
-                                 oldDecision->appIdxs.at(i),
-                                 oldDecision->groupIdxs.at(i));
-            hostFreqCount.at(oldDecision->hosts.at(i)) -= 1;
-            continue;
-        }
+    // First we try to allocate to each message the same host they used to have
+    for (int i = 0; i < oldDecision->hosts.size(); i++) {
+        auto oldHost = oldDecision->hosts.at(i);
 
-        // If we can't assign the host from the old decision, then it means
-        // that that message MUST be migrated, so it doesn't really matter
-        // which of the hosts from the new migration we pick (as the new
-        // decision is optimal in terms of bin-packing), as long as there are
-        // still slots in the histogram
-        auto nextHost = nextHostWithSlots();
-        decision->addMessage(nextHost,
-                             oldDecision->messageIds.at(i),
-                             oldDecision->appIdxs.at(i),
-                             oldDecision->groupIdxs.at(i));
-        hostFreqCount.at(nextHost) -= 1;
+        if (hostFreqCount.contains(oldHost) && hostFreqCount.at(oldHost) > 0) {
+            decision->addMessageInPosition(i,
+                                           oldHost,
+                                           oldDecision->messageIds.at(i),
+                                           oldDecision->appIdxs.at(i),
+                                           oldDecision->groupIdxs.at(i),
+                                           oldDecision->mpiPorts.at(i));
+
+            hostFreqCount.at(oldHost) -= 1;
+        }
+    }
+
+    // Second we allocate the rest
+    for (int i = 0; i < oldDecision->hosts.size(); i++) {
+        if (decision->nFunctions <= i || decision->hosts.at(i).empty()) {
+
+            auto nextHost = nextHostWithSlots();
+            decision->addMessageInPosition(i,
+                                           nextHost,
+                                           oldDecision->messageIds.at(i),
+                                           oldDecision->appIdxs.at(i),
+                                           oldDecision->groupIdxs.at(i),
+                                           -1);
+
+            hostFreqCount.at(nextHost) -= 1;
+        }
     }
 
     // Assert that we have preserved the new decision's host-message histogram

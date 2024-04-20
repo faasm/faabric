@@ -331,10 +331,6 @@ void MpiWorld::initLocalRemoteLeaders()
         portForRank.at(rankId) = broker.getMpiPortForReceiver(groupId, rankId);
     }
 
-    // Add the port for this rank
-    int thisRank = rankState.msg->groupidx();
-    portForRank.at(thisRank) = broker.getMpiPortForReceiver(groupId, thisRank);
-
     // Persist the local leader in this host for further use
     localLeader = (*ranksForHost[thisHost].begin());
 }
@@ -1798,7 +1794,16 @@ void MpiWorld::initSendRecvSockets()
     rankState.recvSocket =
       std::make_unique<faabric::transport::tcp::RecvSocket>(thisPort);
     rankState.recvConnPool = std::vector<int>(size, 0);
-    rankState.recvSocket->listen();
+    try {
+        rankState.recvSocket->listen();
+    } catch (std::exception& e) {
+        SPDLOG_ERROR("{}:{}:{} Error binding recv socket! (this host: {})",
+                     rankState.msg->appid(),
+                     rankState.msg->groupid(),
+                     rankState.msg->groupidx(),
+                     thisHost);
+        throw e;
+    }
 
     // Once we have bound and listened on the main socket, we can CONNECT to
     // all remote ranks. Given that we have already bound the listening socket,
@@ -1835,7 +1840,19 @@ void MpiWorld::initSendRecvSockets()
     for (int i = 0; i < numRemoteRanks; i++) {
         SPDLOG_TRACE("MPI establishing remote connection ?:?:? -> {} (ACCEPT)",
                      thisRank);
-        int newConnFd = rankState.recvSocket->accept();
+
+        int newConnFd = -1;
+        try {
+            newConnFd = rankState.recvSocket->accept();
+        } catch (std::exception& e) {
+            SPDLOG_ERROR(
+              "{}:{}:{} Error accepting on recv socket! (this host: {})",
+              rankState.msg->appid(),
+              rankState.msg->groupid(),
+              rankState.msg->groupidx(),
+              thisHost);
+            throw e;
+        }
 
         // Work-out who CONNECT-ed to us
         int otherRank = -1;
@@ -2027,8 +2044,13 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
 #endif
 }
 
-void MpiWorld::prepareMigration(int thisRank, bool thisRankMustMigrate)
+void MpiWorld::prepareMigration(int newGroupId,
+                                int thisRank,
+                                bool thisRankMustMigrate)
 {
+    // Update everybody's group id to make sure initialisation works
+    rankState.msg->set_groupid(newGroupId);
+
     // Check that there are no pending asynchronous messages to send and receive
     auto itr = rankState.unackedMessageBuffers.begin();
     while (itr != rankState.unackedMessageBuffers.end()) {

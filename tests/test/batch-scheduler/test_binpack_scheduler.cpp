@@ -523,6 +523,30 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
           { "foo", "foo", "foo", "bar", "bar", "bar", "bar", "foo", "foo" });
     }
 
+    SECTION("BinPack will minimise the number of messages to migrate (ii)")
+    {
+        config.hostMap =
+          buildHostMap({ "foo", "bar", "baz" }, { 5, 3, 2 }, { 2, 3, 2 });
+        ber = faabric::util::batchExecFactory("bat", "man", 7);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs = buildInFlightReqs(
+          ber, 7, { "bar", "bar", "bar", "baz", "baz", "foo", "foo" });
+        config.expectedDecision = buildExpectedDecision(
+          ber, { "bar", "bar", "foo", "foo", "foo", "foo", "foo" });
+    }
+
+    SECTION("BinPack will minimise the number of messages to migrate (iii)")
+    {
+        config.hostMap =
+          buildHostMap({ "foo", "bar", "baz" }, { 3, 3, 3 }, { 2, 3, 2 });
+        ber = faabric::util::batchExecFactory("bat", "man", 7);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs = buildInFlightReqs(
+          ber, 7, { "foo", "foo", "bar", "bar", "bar", "baz", "baz" });
+        config.expectedDecision = buildExpectedDecision(
+          ber, { "foo", "foo", "bar", "bar", "bar", "baz", "foo" });
+    }
+
     actualDecision = *batchScheduler->makeSchedulingDecision(
       config.hostMap, config.inFlightReqs, ber);
     compareSchedulingDecisions(actualDecision, config.expectedDecision);
