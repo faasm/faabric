@@ -84,9 +84,11 @@ class BatchScheduler
 
     static int numSlots(const Host& host) { return host->slots; }
 
+    static int numUsedSlots(const Host& host) { return host->usedSlots; }
+
     static int numSlotsAvailable(const Host& host)
     {
-        return std::max<int>(0, numSlots(host) - host->usedSlots);
+        return std::max<int>(0, numSlots(host) - numUsedSlots(host));
     }
 
     static void claimSlots(Host& host, int numSlotsToClaim)
@@ -120,4 +122,6 @@ class BatchScheduler
 std::shared_ptr<BatchScheduler> getBatchScheduler();
 
 void resetBatchScheduler();
+
+void resetBatchScheduler(const std::string& newMode);
 }

@@ -723,4 +723,44 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     // Wait for BER to finish
     waitForBerToFinish(ber);
 }
+
+TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
+                 "Test setting the planner policy",
+                 "[planner]")
+{
+    // First, prepare an HTTP request to execute a batch
+    HttpMessage msg;
+    msg.set_type(HttpMessage_Type_SET_POLICY);
+
+    std::string policy;
+
+    SECTION("Valid request (bin-pack)")
+    {
+        policy = "bin-pack";
+        expectedReturnCode = beast::http::status::ok;
+        expectedResponseBody = "Policy set correctly";
+    }
+
+    SECTION("Valid request (compact)")
+    {
+        policy = "compact";
+        expectedReturnCode = beast::http::status::ok;
+        expectedResponseBody = "Policy set correctly";
+    }
+
+    SECTION("Invalid request")
+    {
+        policy = "foo-bar";
+        expectedReturnCode = beast::http::status::bad_request;
+        expectedResponseBody = "Unrecognised policy name: " + policy;
+    }
+
+    msg.set_payloadjson(policy);
+    msgJsonStr = faabric::util::messageToJson(msg);
+
+    std::pair<int, std::string> result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+    REQUIRE(result.second == expectedResponseBody);
+}
 }

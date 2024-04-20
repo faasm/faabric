@@ -132,6 +132,14 @@ void Planner::printConfig() const
     SPDLOG_INFO("HTTP_SERVER_THREADS        {}", config.numthreadshttpserver());
 }
 
+void Planner::setPolicy(const std::string& newPolicy)
+{
+    // Acquire lock to prevent any changes in state whilst we change the policy
+    faabric::util::FullLock lock(plannerMx);
+
+    faabric::batch_scheduler::resetBatchScheduler(newPolicy);
+}
+
 bool Planner::reset()
 {
     SPDLOG_INFO("Resetting planner");
@@ -622,6 +630,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     if (isDistChange) {
         SPDLOG_INFO("App {} asked for migration opportunities", appId);
         auto oldReq = state.inFlightReqs.at(appId).first;
+        req->set_subtype(oldReq->subtype());
         req->clear_messages();
         for (const auto& msg : oldReq->messages()) {
             *req->add_messages() = msg;
@@ -645,6 +654,8 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     } else if (isNew && isMpi) {
         mpiReq = faabric::util::batchExecFactory(
           req->user(), req->function(), req->messages(0).mpiworldsize());
+        // Propagate the subtype for multi-tenant runs
+        mpiReq->set_subtype(req->subtype());
 
         // Populate the temporary request
         mpiReq->mutable_messages()->at(0) = req->messages(0);
@@ -697,7 +708,12 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             for (int i = 0; i < decision->hosts.size(); i++) {
                 auto thisHost = state.hostMap.at(decision->hosts.at(i));
                 claimHostSlots(thisHost);
-                decision->mpiPorts.at(i) = claimHostMpiPort(thisHost);
+                try {
+                    decision->mpiPorts.at(i) = claimHostMpiPort(thisHost);
+                } catch (std::exception& e) {
+                    SPDLOG_ERROR("Error claiming MPI ports for app {}", appId);
+                    decision->print("info");
+                }
             }
             assert(decision->hosts.size() == decision->mpiPorts.size());
 
@@ -827,7 +843,13 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
                     auto newHost = state.hostMap.at(decision->hosts.at(i));
 
                     claimHostSlots(newHost);
-                    decision->mpiPorts.at(i) = claimHostMpiPort(newHost);
+                    try {
+                        decision->mpiPorts.at(i) = claimHostMpiPort(newHost);
+                    } catch (std::exception& e) {
+                        SPDLOG_ERROR("Error claiming MPI ports for app {}",
+                                     appId);
+                        decision->print("info");
+                    }
                 }
             }
 

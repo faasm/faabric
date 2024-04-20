@@ -180,6 +180,7 @@ void PlannerEndpointHandler::onRequest(
                 auto decision = inFlightPair.second;
                 auto* inFlightAppResp = inFlightAppsResponse.add_apps();
                 inFlightAppResp->set_appid(appId);
+                inFlightAppResp->set_subtype(inFlightPair.first->subtype());
                 for (const auto& hostIp : decision->hosts) {
                     inFlightAppResp->add_hostips(hostIp);
                 }
@@ -267,7 +268,6 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_PRELOAD_SCHEDULING_DECISION: {
-            // foo bar
             // in: BatchExecuteRequest
             // out: none
             SPDLOG_DEBUG(
@@ -305,6 +305,26 @@ void PlannerEndpointHandler::onRequest(
             // Prepare the response
             response.result(beast::http::status::ok);
             response.body() = std::string("Decision pre-loaded to planner");
+
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_SET_POLICY: {
+            SPDLOG_DEBUG("Planner received SET_POLICY request");
+
+            std::string newPolicy = msg.payloadjson();
+
+            try {
+                faabric::planner::getPlanner().setPolicy(newPolicy);
+            } catch (std::exception& e) {
+                response.result(beast::http::status::bad_request);
+                response.body() =
+                  std::string("Unrecognised policy name: " + newPolicy);
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Prepare the response
+            response.result(beast::http::status::ok);
+            response.body() = std::string("Policy set correctly");
 
             return ctx.sendFunction(std::move(response));
         }
