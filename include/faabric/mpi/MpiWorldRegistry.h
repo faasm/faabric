@@ -19,6 +19,8 @@ class MpiWorldRegistry
 
     bool worldExists(int worldId);
 
+    void clearWorld(int worldId);
+
     void clear();
 
   private:

@@ -57,7 +57,9 @@ class MpiWorld
 
     int getSize() const;
 
-    void destroy();
+    // Returns true if the world is empty in this host and can be cleared from
+    // the registry
+    bool destroy();
 
     void getCartesianRank(int rank,
                           int maxDims,
@@ -209,6 +211,8 @@ class MpiWorld
     int size = -1;
     std::string thisHost;
     faabric::util::TimePoint creationTime;
+
+    std::atomic<int> activeLocalRanks = 0;
 
     std::atomic_flag isDestroyed = false;
 

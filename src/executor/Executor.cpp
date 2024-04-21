@@ -399,7 +399,19 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             if (msg.ismpi()) {
                 auto& mpiWorldRegistry = faabric::mpi::getMpiWorldRegistry();
                 if (mpiWorldRegistry.worldExists(msg.mpiworldid())) {
-                    mpiWorldRegistry.getWorld(msg.mpiworldid()).destroy();
+                    bool mustClear =
+                      mpiWorldRegistry.getWorld(msg.mpiworldid()).destroy();
+
+                    if (mustClear) {
+                        SPDLOG_DEBUG("{}:{}:{} clearing world {} from host {}",
+                                     msg.appid(),
+                                     msg.groupid(),
+                                     msg.groupidx(),
+                                     msg.mpiworldid(),
+                                     msg.executedhost());
+
+                        mpiWorldRegistry.clearWorld(msg.mpiworldid());
+                    }
                 }
             }
         } catch (const std::exception& ex) {
@@ -414,7 +426,19 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             if (msg.ismpi()) {
                 auto& mpiWorldRegistry = faabric::mpi::getMpiWorldRegistry();
                 if (mpiWorldRegistry.worldExists(msg.mpiworldid())) {
-                    mpiWorldRegistry.getWorld(msg.mpiworldid()).destroy();
+                    bool mustClear =
+                      mpiWorldRegistry.getWorld(msg.mpiworldid()).destroy();
+
+                    if (mustClear) {
+                        SPDLOG_DEBUG("{}:{}:{} clearing world {} from host {}",
+                                     msg.appid(),
+                                     msg.groupid(),
+                                     msg.groupidx(),
+                                     msg.mpiworldid(),
+                                     msg.executedhost());
+
+                        mpiWorldRegistry.clearWorld(msg.mpiworldid());
+                    }
                 }
             }
         }
