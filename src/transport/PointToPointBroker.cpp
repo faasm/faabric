@@ -539,6 +539,21 @@ std::set<int> PointToPointBroker::getIdxsRegisteredForGroup(int groupId)
     return groupIdIdxsMap[groupId];
 }
 
+std::set<std::string> PointToPointBroker::getHostsRegisteredForGroup(
+  int groupId)
+{
+    faabric::util::SharedLock lock(brokerMutex);
+    std::set<int> indexes = groupIdIdxsMap[groupId];
+
+    std::set<std::string> hosts;
+    for (const auto& idx : indexes) {
+        std::string key = getPointToPointKey(groupId, idx);
+        hosts.insert(mappings.at(key));
+    }
+
+    return hosts;
+}
+
 void PointToPointBroker::initSequenceCounters(int groupId)
 {
     if (currentGroupId != NO_CURRENT_GROUP_ID) {

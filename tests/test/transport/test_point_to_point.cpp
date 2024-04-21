@@ -44,6 +44,8 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     REQUIRE(broker.getIdxsRegisteredForGroup(appIdA).empty());
     REQUIRE(broker.getIdxsRegisteredForGroup(appIdB).empty());
+    REQUIRE(broker.getHostsRegisteredForGroup(appIdA).empty());
+    REQUIRE(broker.getHostsRegisteredForGroup(appIdB).empty());
 
     faabric::PointToPointMappings mappingsA;
     mappingsA.set_appid(appIdA);
@@ -73,6 +75,8 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     REQUIRE(broker.getIdxsRegisteredForGroup(groupIdA).size() == 2);
     REQUIRE(broker.getIdxsRegisteredForGroup(groupIdB).size() == 1);
+    REQUIRE(broker.getHostsRegisteredForGroup(groupIdA).size() == 2);
+    REQUIRE(broker.getHostsRegisteredForGroup(groupIdB).size() == 1);
 
     REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA1) == hostA);
     REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA2) == hostB);
