@@ -35,8 +35,21 @@ static void notImplemented(const std::string& funcName)
 
 int terminateMpi()
 {
+    auto* msg = &faabric::executor::ExecutorContext::get()->getMsg();
+
     // Destroy the MPI world
-    getExecutingWorld().destroy();
+    bool mustClear = getExecutingWorld().destroy();
+
+    if (mustClear) {
+        SPDLOG_DEBUG("{}:{}:{} clearing world {} from host {}",
+                     msg->appid(),
+                     msg->groupid(),
+                     msg->groupidx(),
+                     msg->mpiworldid(),
+                     msg->executedhost());
+
+        getMpiWorldRegistry().clearWorld(msg->mpiworldid());
+    }
 
     return MPI_SUCCESS;
 }

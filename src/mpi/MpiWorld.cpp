@@ -96,8 +96,10 @@ struct MpiRankState
         recvSocket.reset();
         recvConnPool.clear();
 
+#ifdef FAABRIC_USE_SPINLOCK
         // Free the pinned-to CPU
         pinnedCpu.reset();
+#endif
 
         // Local message count
         msgCount = 1;
@@ -223,7 +225,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     initLocalQueues();
 }
 
-void MpiWorld::destroy()
+bool MpiWorld::destroy()
 {
     if (rankState.msg != nullptr) {
         SPDLOG_TRACE("{}:{}:{} destroying MPI world",
@@ -243,6 +245,13 @@ void MpiWorld::destroy()
         mpiMockedMessages.clear();
     }
 #endif
+
+    // ----- Global accounting -----
+
+    int numActiveLocalRanks =
+      activeLocalRanks.fetch_sub(1, std::memory_order_acquire);
+
+    return numActiveLocalRanks == 1;
 }
 
 // Initialise shared (per-host) MPI world state. This method is called once
@@ -267,6 +276,7 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
 void MpiWorld::initialiseRankFromMsg(faabric::Message& msg)
 {
     rankState.msg = &msg;
+    activeLocalRanks++;
 
     // Pin this thread to a free CPU
 #ifdef FAABRIC_USE_SPINLOCK
@@ -321,7 +331,7 @@ void MpiWorld::initLocalRemoteLeaders()
                      size);
         throw std::runtime_error("MPI Group-World size mismatch!");
     }
-    assert(rankIds.size() == size);
+
     hostForRank.resize(size);
     portForRank.resize(size);
     for (const auto& rankId : rankIds) {
@@ -1797,11 +1807,12 @@ void MpiWorld::initSendRecvSockets()
     try {
         rankState.recvSocket->listen();
     } catch (std::exception& e) {
-        SPDLOG_ERROR("{}:{}:{} Error binding recv socket! (this host: {})",
+        SPDLOG_ERROR("{}:{}:{} Error binding recv socket! (host: {}:{})",
                      rankState.msg->appid(),
                      rankState.msg->groupid(),
                      rankState.msg->groupidx(),
-                     thisHost);
+                     thisHost,
+                     thisPort);
         throw e;
     }
 
@@ -1829,7 +1840,18 @@ void MpiWorld::initSendRecvSockets()
         rankState.sendSockets.at(otherRank) =
           std::make_unique<faabric::transport::tcp::SendSocket>(otherHost,
                                                                 otherPort);
-        rankState.sendSockets.at(otherRank)->dial();
+        try {
+            rankState.sendSockets.at(otherRank)->dial();
+        } catch (std::exception& e) {
+            SPDLOG_ERROR(
+              "{}:{}:{} Error connecting with send socket to host: {}:{}",
+              rankState.msg->appid(),
+              rankState.msg->groupid(),
+              rankState.msg->groupidx(),
+              otherHost,
+              otherPort);
+            throw e;
+        }
         // Right after connecting, we send our rank over the raw socket to
         // identify ourselves
         rankState.sendSockets.at(otherRank)->sendOne((const uint8_t*)&thisRank,

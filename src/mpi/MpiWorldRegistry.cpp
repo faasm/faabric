@@ -86,6 +86,11 @@ MpiWorld& MpiWorldRegistry::getWorld(int worldId)
     return *world;
 }
 
+void MpiWorldRegistry::clearWorld(int worldId)
+{
+    worldMap.erase(worldId);
+}
+
 bool MpiWorldRegistry::worldExists(int worldId)
 {
     return worldMap.contains(worldId);
