@@ -212,7 +212,11 @@ class MpiWorld
     std::string thisHost;
     faabric::util::TimePoint creationTime;
 
-    std::atomic<int> activeLocalRanks = 0;
+    // Latch used to clear the world from the registry when we are migrating
+    // out of it (i.e. evicting it). Note that this clean-up is only necessary
+    // for migration, as we want to clean things up in case we ever migrate
+    // again back into this host
+    std::atomic<int> evictionLatch = 0;
 
     std::atomic_flag isDestroyed = false;
 

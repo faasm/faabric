@@ -227,11 +227,15 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
 bool MpiWorld::destroy()
 {
+    int groupId = -1;
+
     if (rankState.msg != nullptr) {
         SPDLOG_TRACE("{}:{}:{} destroying MPI world",
                      rankState.msg->appid(),
                      rankState.msg->groupid(),
                      rankState.msg->mpirank());
+
+        groupId = rankState.msg->groupid();
     }
 
     // ----- Per-rank cleanup -----
@@ -246,12 +250,19 @@ bool MpiWorld::destroy()
     }
 #endif
 
-    // ----- Global accounting -----
+    // If we are evicting the host during a migration, use the eviction latch
+    // for proper resource clean-up in the event of a future migration back
+    // into this host
+    bool isEviction =
+      groupId != -1 &&
+      !broker.getHostsRegisteredForGroup(groupId).contains(thisHost);
+    if (isEviction) {
+        int numActiveLocalRanks =
+          evictionLatch.fetch_sub(1, std::memory_order_acquire);
+        return numActiveLocalRanks == 1;
+    }
 
-    int numActiveLocalRanks =
-      activeLocalRanks.fetch_sub(1, std::memory_order_acquire);
-
-    return numActiveLocalRanks == 1;
+    return false;
 }
 
 // Initialise shared (per-host) MPI world state. This method is called once
@@ -276,7 +287,6 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
 void MpiWorld::initialiseRankFromMsg(faabric::Message& msg)
 {
     rankState.msg = &msg;
-    activeLocalRanks++;
 
     // Pin this thread to a free CPU
 #ifdef FAABRIC_USE_SPINLOCK
@@ -341,8 +351,19 @@ void MpiWorld::initLocalRemoteLeaders()
         portForRank.at(rankId) = broker.getMpiPortForReceiver(groupId, rankId);
     }
 
-    // Persist the local leader in this host for further use
-    localLeader = (*ranksForHost[thisHost].begin());
+    // Finally, set up the infrastracture for proper clean-up of the world in
+    // case we are migrating away from it. Note that we are preparing the
+    // latch one migration before we migrate away. This is because we will also
+    // call this method right before evicting, so we want to have the latch
+    // already set
+    int numInThisHost =
+      ranksForHost.contains(thisHost) ? ranksForHost.at(thisHost).size() : 0;
+    bool mustEvictHost = numInThisHost == 0;
+
+    if (!mustEvictHost) {
+        evictionLatch.store(numInThisHost, std::memory_order_release);
+        localLeader = (*ranksForHost[thisHost].begin());
+    }
 }
 
 void MpiWorld::getCartesianRank(int rank,
@@ -1918,9 +1939,14 @@ void MpiWorld::initSendRecvSockets()
 // corresponding receiver is local to this host, for any sender
 void MpiWorld::initLocalQueues()
 {
+    // Nothing to do if we are migrating away from this host
+    if (!ranksForHost.contains(thisHost)) {
+        return;
+    }
+
     localQueues.resize(size * size);
     for (int sendRank = 0; sendRank < size; sendRank++) {
-        for (const int recvRank : ranksForHost[thisHost]) {
+        for (const int recvRank : ranksForHost.at(thisHost)) {
             // We handle messages-to-self as memory copies
             if (sendRank == recvRank) {
                 continue;

@@ -119,6 +119,8 @@ class PointToPointBroker
 
     std::set<int> getIdxsRegisteredForGroup(int groupId);
 
+    std::set<std::string> getHostsRegisteredForGroup(int groupId);
+
     void updateHostForIdx(int groupId, int groupIdx, std::string newHost);
 
     void sendMessage(int groupId,
