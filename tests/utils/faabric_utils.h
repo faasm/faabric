@@ -96,4 +96,6 @@ std::pair<int, std::string> postToUrl(const std::string& host,
 void flushPlannerWorkers();
 
 void resetPlanner();
+
+void updatePlannerPolicy(const std::string& newPolicy);
 }

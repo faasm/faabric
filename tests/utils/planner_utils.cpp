@@ -16,6 +16,19 @@ void resetPlanner()
     assert(result.first == 200);
 }
 
+void updatePlannerPolicy(const std::string& newPolicy)
+{
+    faabric::planner::HttpMessage msg;
+    msg.set_type(faabric::planner::HttpMessage_Type_SET_POLICY);
+    msg.set_payloadjson(newPolicy);
+    std::string jsonStr = faabric::util::messageToJson(msg);
+
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    std::pair<int, std::string> result =
+      postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
+    assert(result.first == 200);
+}
+
 void flushPlannerWorkers()
 {
     faabric::planner::HttpMessage msg;

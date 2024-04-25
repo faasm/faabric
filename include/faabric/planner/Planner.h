@@ -33,6 +33,8 @@ class Planner
 
     void printConfig() const;
 
+    void setPolicy(const std::string& newPolicy);
+
     // ----------
     // Util public API
     // ----------

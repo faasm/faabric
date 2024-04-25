@@ -99,7 +99,7 @@ std::pair<HostMap, InFlightReqs> readOccupationFromFile(
  * where `-1` indicate empty slots.
  *
  * An example usage of this method is:
- * is_app_migratable AppId /path/to/worker_occupation.csv
+ * is_app_migratable bin-pack AppId /path/to/worker_occupation.csv
  */
 int main(int argc, char** argv)
 {
@@ -107,19 +107,21 @@ int main(int argc, char** argv)
     // Process command line arguments
     // ------
 
-    if (argc != 3) {
-        std::cout << "ERROR: required two positional arguments, got "
+    if (argc != 4) {
+        std::cout << "ERROR: required three positional arguments, got "
                   << argc - 1 << " instead!" << std::endl;
         throw std::runtime_error("Unexpected number of positional arguments!");
     }
 
-    int32_t appId = std::atoi(argv[1]);
-    std::string workerOccupationFilePath = argv[2];
+    std::string plannerPolicy = argv[1];
+    int32_t appId = std::atoi(argv[2]);
+    std::string workerOccupationFilePath = argv[3];
 
     // ------
     // Prepare variables to get a trustworthy scheduling decision
     // ------
 
+    resetBatchScheduler(plannerPolicy);
     auto batchScheduler = getBatchScheduler();
     auto [hostMap, inFlightReqs] =
       readOccupationFromFile(workerOccupationFilePath);

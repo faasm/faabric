@@ -45,6 +45,7 @@ message HttpMessage {
         EXECUTE_BATCH = 10;
         EXECUTE_BATCH_STATUS = 11;
         PRELOAD_SCHEDULING_DECISION = 12;
+        SET_POLICY = 13;
     }
 
     Type type = 1 [json_name = "http_type"];
@@ -55,13 +56,15 @@ message HttpMessage {
     // - EXECUTE_BATCH_STATUS: where the body is a BER too
     // - PRELOAD_SCHEDULING_DECISION: where the body is a
     //     faabric::BatchExecuteRequest
+    // - SET_POLICY: where the body is a string with the new planner policy
     string payloadJson = 2 [json_name = "payload"];
 }
 
 message GetInFlightAppsResponse {
     message InFlightApp {
         int32 appId = 1;
-        repeated string hostIps = 2;
+        int32 subType = 2;
+        repeated string hostIps = 3;
     }
 
     repeated InFlightApp apps = 1;

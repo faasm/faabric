@@ -2,7 +2,6 @@
 
 #include "dist_test_fixtures.h"
 #include "faabric_utils.h"
-#include "init.h"
 #include "mpi/mpi_native.h"
 
 #include <faabric/scheduler/Scheduler.h>
@@ -62,7 +61,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture,
-                 "Test MPI migration with two MPI worlds",
+                 "Test MPI migration with two MPI worlds (bin-pack)",
                  "[mpi]")
 {
     int worldSize = 4;
@@ -126,7 +125,72 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture,
-                 "Test migrating two MPI applications in parallel",
+                 "Test MPI migration with two MPI worlds (compact)",
+                 "[mpi]")
+{
+    updatePlannerPolicy("compact");
+
+    int worldSize = 4;
+
+    // Prepare both requests:
+    // - The first will do work, sleep for five seconds, and do work again
+    // - The second will do work and check for migration opportunities
+    auto req1 = setRequest("alltoall-sleep");
+    auto req2 = setRequest("migration");
+    auto& msg = req2->mutable_messages()->at(0);
+    msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
+
+    updateLocalSlots(8);
+    updateRemoteSlots(8);
+
+    std::vector<std::string> hostsBefore1 = {
+        getMasterIP(), getMasterIP(), getMasterIP(), getMasterIP()
+    };
+    std::vector<std::string> hostsBefore2;
+
+    SECTION("Migrate main rank")
+    {
+        hostsBefore2 = {
+            getWorkerIP(), getWorkerIP(), getWorkerIP(), getWorkerIP()
+        };
+    }
+
+    SECTION("Don't migrate main rank")
+    {
+        hostsBefore2 = {
+            getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
+        };
+    }
+
+    std::vector<std::string> hostsAfterMigration =
+      std::vector<std::string>(worldSize, getMasterIP());
+
+    // Preload decisions to force sub-optimal scheduling
+    auto preloadDec1 = std::make_shared<batch_scheduler::SchedulingDecision>(
+      req1->appid(), req1->groupid());
+    auto preloadDec2 = std::make_shared<batch_scheduler::SchedulingDecision>(
+      req2->appid(), req2->groupid());
+    for (int i = 0; i < worldSize; i++) {
+        preloadDec1->addMessage(hostsBefore1.at(i), 0, 0, i);
+        preloadDec2->addMessage(hostsBefore2.at(i), 0, 0, i);
+    }
+    plannerCli.preloadSchedulingDecision(preloadDec1);
+    plannerCli.preloadSchedulingDecision(preloadDec2);
+
+    plannerCli.callFunctions(req1);
+    auto actualHostsBefore1 = waitForMpiMessagesInFlight(req1);
+    REQUIRE(hostsBefore1 == actualHostsBefore1);
+
+    plannerCli.callFunctions(req2);
+
+    checkAllocationAndResult(req1, hostsBefore1);
+    checkAllocationAndResult(req2, hostsAfterMigration);
+
+    updatePlannerPolicy("bin-pack");
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Test migrating two MPI applications in parallel (bin-pack)",
                  "[mpi]")
 {
     // Set the slots for the first request: 2 locally and 2 remote
