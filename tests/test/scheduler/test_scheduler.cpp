@@ -195,7 +195,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     SECTION("Processes")
     {
         execMode = faabric::BatchExecuteRequest::PROCESSES;
-        expectedSnapshot = "procSnap";
+        expectedSnapshot = "";
 
         expectedSubType = 345;
         expectedContextData = "proc context";

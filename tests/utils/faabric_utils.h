@@ -3,6 +3,7 @@
 #include <catch2/catch.hpp>
 
 #include <faabric/batch-scheduler/SchedulingDecision.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/state/State.h>
 #include <faabric/state/StateServer.h>
 #include <faabric/util/ExecGraph.h>
@@ -97,5 +98,9 @@ void flushPlannerWorkers();
 
 void resetPlanner();
 
+faabric::planner::GetInFlightAppsResponse getInFlightApps();
+
 void updatePlannerPolicy(const std::string& newPolicy);
+
+void setNextEvictedVmIp(const std::set<std::string>& evictedVmIps);
 }

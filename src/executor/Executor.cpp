@@ -414,6 +414,32 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
                     }
                 }
             }
+        } catch (const faabric::util::FunctionFrozenException& ex) {
+            SPDLOG_DEBUG(
+              "Task {} frozen, shutting down executor {}", msg.id(), id);
+
+            returnValue = FROZEN_FUNCTION_RETURN_VALUE;
+
+            // TODO: maybe we do not need this here as we know this VM will be
+            // destroyed soon, but we do it nontheless just in case
+            if (msg.ismpi()) {
+                auto& mpiWorldRegistry = faabric::mpi::getMpiWorldRegistry();
+                if (mpiWorldRegistry.worldExists(msg.mpiworldid())) {
+                    bool mustClear =
+                      mpiWorldRegistry.getWorld(msg.mpiworldid()).destroy();
+
+                    if (mustClear) {
+                        SPDLOG_DEBUG("{}:{}:{} clearing world {} from host {}",
+                                     msg.appid(),
+                                     msg.groupid(),
+                                     msg.groupidx(),
+                                     msg.mpiworldid(),
+                                     msg.executedhost());
+
+                        mpiWorldRegistry.clearWorld(msg.mpiworldid());
+                    }
+                }
+            }
         } catch (const std::exception& ex) {
             returnValue = 1;
 
@@ -482,8 +508,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // main host we still have the zero-th thread executing)
         auto mainThreadSnapKey = faabric::util::getMainThreadSnapshotKey(msg);
         std::vector<faabric::util::SnapshotDiff> diffs;
-        // FIXME: thread 0 locally is not part of this batch, but is still
-        // in the same executor
+
         bool isRemoteThread =
           task.req->messages(0).mainhost() != conf.endpointHost;
         if (isLastThreadInBatch && doDirtyTracking && isRemoteThread) {

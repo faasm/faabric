@@ -1,5 +1,5 @@
-#include <faabric/batch-scheduler/CompactScheduler.h>
 #include <faabric/batch-scheduler/SchedulingDecision.h>
+#include <faabric/batch-scheduler/SpotScheduler.h>
 #include <faabric/util/batch.h>
 #include <faabric/util/logging.h>
 
@@ -91,110 +91,32 @@ static std::shared_ptr<SchedulingDecision> minimiseNumOfMigrations(
     return decision;
 }
 
-bool CompactScheduler::isFirstDecisionBetter(
+bool SpotScheduler::isFirstDecisionBetter(
   std::shared_ptr<SchedulingDecision> decisionA,
   std::shared_ptr<SchedulingDecision> decisionB)
 {
     throw std::runtime_error("Method not supported for COMPACT scheduler");
 }
 
-static HostMap deepCopyHostMap(const HostMap& hostMap)
+// Filter-out from the host map the next VM that will be evicted
+static std::set<std::string> filterHosts(HostMap& hostMap)
 {
-    HostMap newHostMap;
+    std::set<std::string> ipsToRemove;
 
-    for (const auto& [ip, host] : hostMap) {
-        newHostMap[ip] =
-          std::make_shared<HostState>(host->ip, host->slots, host->usedSlots);
+    for (const auto& [hostIp, host] : hostMap) {
+        if (host->ip == MUST_EVICT_IP) {
+            ipsToRemove.insert(hostIp);
+        }
     }
 
-    return newHostMap;
-}
-
-// For the Compact scheduler, a decision is better than another one if the
-// total number of empty hosts has increased
-bool CompactScheduler::isFirstDecisionBetter(
-  HostMap& hostMap,
-  std::shared_ptr<SchedulingDecision> newDecision,
-  std::shared_ptr<SchedulingDecision> oldDecision)
-{
-    auto getNumFreeHosts = [](const HostMap& hostMap) -> int {
-        int numFreeHosts = 0;
-
-        for (const auto& [ip, host] : hostMap) {
-            if (host->usedSlots == 0) {
-                numFreeHosts++;
-            }
-        }
-
-        return numFreeHosts;
-    };
-
-    auto updateHostMapWithDecision =
-      [](const HostMap& hostMap,
-         std::shared_ptr<SchedulingDecision> decision,
-         const std::string& opr) -> HostMap {
-        // Be explicit about copying the host maps here
-        HostMap newHostMap = deepCopyHostMap(hostMap);
-
-        for (const auto& hostIp : decision->hosts) {
-            try {
-                if (opr == "add") {
-                    newHostMap.at(hostIp)->usedSlots++;
-                } else if (opr == "subtract") {
-                    newHostMap.at(hostIp)->usedSlots--;
-                }
-            } catch (std::exception& e) {
-                SPDLOG_ERROR("Error accesing host {} in new host map!", hostIp);
-                for (const auto& [ip, host] : newHostMap) {
-                    SPDLOG_ERROR("{}: {}/{}", ip, host->usedSlots, host->slots);
-                }
-            }
-        }
-
-        return newHostMap;
-    };
-
-    // Here we compare the number of free hosts in the original decision and
-    // in the new one. Note that, as part of getSortedHosts, we have already
-    // subtrated the old decision from the host map, so we need to add it again
-
-    auto originalHostMap =
-      updateHostMapWithDecision(hostMap, oldDecision, "add");
-    int numFreeHostsBefore = getNumFreeHosts(originalHostMap);
-
-    // Update the host map by removing the old decision and adding the new one
-
-    auto newHostMap = updateHostMapWithDecision(hostMap, newDecision, "add");
-    int numFreeHostsAfter = getNumFreeHosts(newHostMap);
-
-    // The first (new) decision is better if it has MORE free hosts
-    return numFreeHostsAfter > numFreeHostsBefore;
-}
-
-// Filter-out from the host map all nodes that are executing requests from a
-// different user
-static void filterHosts(HostMap& hostMap,
-                        const InFlightReqs& inFlightReqs,
-                        std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    // We temporarily use the request subtype field to attach a user id for our
-    // multi-tenant simulations
-    int thisUserId = req->subtype();
-
-    for (const auto& [appId, inFlightPair] : inFlightReqs) {
-        if (inFlightPair.first->subtype() == thisUserId) {
-            continue;
-        }
-
-        // Remove from the host map all hosts that are in a different user's
-        // BER scheduling decision
-        for (const auto& host : inFlightPair.second->hosts) {
-            hostMap.erase(host);
-        }
+    for (const auto& ipToRemove : ipsToRemove) {
+        hostMap.erase(ipToRemove);
     }
+
+    return ipsToRemove;
 }
 
-std::vector<Host> CompactScheduler::getSortedHosts(
+std::vector<Host> SpotScheduler::getSortedHosts(
   HostMap& hostMap,
   const InFlightReqs& inFlightReqs,
   std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -213,7 +135,7 @@ std::vector<Host> CompactScheduler::getSortedHosts(
     }
 
     auto isFirstHostLarger = [&](const Host& hostA, const Host& hostB) -> bool {
-        // The Compact scheduler sorts hosts by number of available slots
+        // The SPOT scheduler sorts hosts by number of available slots
         int nAvailableA = numSlotsAvailable(hostA);
         int nAvailableB = numSlotsAvailable(hostB);
         if (nAvailableA != nAvailableB) {
@@ -233,9 +155,10 @@ std::vector<Host> CompactScheduler::getSortedHosts(
 
     auto isFirstHostLargerWithFreq = [&](auto hostA, auto hostB) -> bool {
         // When updating an existing scheduling decision (SCALE_CHANGE or
-        // DIST_CHANGE), the BinPack scheduler takes into consideration the
+        // DIST_CHANGE), the SPOT scheduler takes into consideration the
         // existing host-message histogram (i.e. how many messages for this app
-        // does each host _already_ run)
+        // does each host _already_ run). This behaviour is the same than the
+        // BIN_PACK and COMPACT policies
 
         int numInHostA = hostFreqCount.contains(getIp(hostA))
                            ? hostFreqCount.at(getIp(hostA))
@@ -257,30 +180,15 @@ std::vector<Host> CompactScheduler::getSortedHosts(
         return isFirstHostLarger(hostA, hostB);
     };
 
-    auto isFirstHostFuller = [&](const Host& hostA, const Host& hostB) -> bool {
-        // In a DIST_CHANGE decision we want to globally minimise the
-        // number of free VMs (i.e. COMPACT), so we sort the hosts in
-        // increasing order of fullness and, in case of a tie, prefer hosts
-        // that are already running messages for this app
-        int nUsedA = numUsedSlots(hostA);
-        int nUsedB = numUsedSlots(hostB);
-        if (nUsedA != nUsedB) {
-            return nUsedA > nUsedB;
-        }
-
-        // In case of a tie in free slots, prefer hosts already running
-        // messages for this app
-        // return isFirstHostLargerWithFreq(hostA, hostB);
-        return isFirstHostLarger(hostA, hostB);
-    };
-
     switch (decisionType) {
         case DecisionType::NEW: {
-            // For a NEW decision type, the Compact scheduler just sorts the
+            // For a NEW decision type, the SPOT scheduler just sorts the
             // hosts in decreasing order of capacity, and bin-packs messages
-            // to hosts in this order
+            // to hosts in this order. This has one caveat that it skips the
+            // next VM that we know will be evicted
             std::sort(
               sortedHosts.begin(), sortedHosts.end(), isFirstHostLarger);
+
             break;
         }
         case DecisionType::SCALE_CHANGE: {
@@ -295,20 +203,21 @@ std::vector<Host> CompactScheduler::getSortedHosts(
             std::sort(sortedHosts.begin(),
                       sortedHosts.end(),
                       isFirstHostLargerWithFreq);
+
             break;
         }
         case DecisionType::DIST_CHANGE: {
-            // When migrating, we want to know if the provided for app (which
-            // is already in-flight) can be improved according to the compact
-            // scheduling logic. This is equivalent to saying that the global
-            // number of free hosts increases
+            // A DIST_CHANGE with the SPOT scheduler means that, if the app
+            // is running any messages of the to-be-evicted VM, we must move
+            // them from there. Two things may happen:
+            // * We have slots to move them-to (equivalent to re-scheduling
+            //   from scratch without the tainted VM)
+            // * We do not have slots to move them-to, in which case all
+            //   messages need to freeze until there is capacity in the cluster
+            //   again
+
             auto oldDecision = inFlightReqs.at(req->appid()).second;
             auto hostFreqCount = getHostFreqCount(oldDecision);
-
-            // To decide on a migration opportunity, is like having another
-            // shot at re-scheduling the app from scratch. Thus, we remove
-            // the current slots we occupy, and try to fill in holes in the
-            // existing host map
 
             // First remove the slots the app occupies to have a fresh new
             // shot at the scheduling
@@ -318,8 +227,12 @@ std::vector<Host> CompactScheduler::getSortedHosts(
                 }
             }
 
-            std::sort(
-              sortedHosts.begin(), sortedHosts.end(), isFirstHostFuller);
+            // Try to schedule again without the tainted VM. Note that this
+            // app may not be using the tainted VM _at all_ in which case we
+            // will just discard the suggested migration.
+            std::sort(sortedHosts.begin(),
+                      sortedHosts.end(),
+                      isFirstHostLargerWithFreq);
 
             break;
         }
@@ -335,17 +248,22 @@ std::vector<Host> CompactScheduler::getSortedHosts(
 // The BinPack's scheduler decision algorithm is very simple. It first sorts
 // hosts (i.e. bins) in a specific order (depending on the scheduling type),
 // and then starts filling bins from begining to end, until it runs out of
-// messages to schedule
-std::shared_ptr<SchedulingDecision> CompactScheduler::makeSchedulingDecision(
+// messages to schedule. The SPOT scheduler behaves as the BinPack for
+// NEW and SCALE_CHANGE requests, with two caveats:
+// - it avoids setting any messages to a host that is going to be evicted
+// - when migrating, it will check if the migration candidate has any messages
+//   running in the to-be-evicted VM. If so, it will try to migrate messages
+//   away from the evicted-to-VM. If it cannot, it will request the app to
+//   INTERRUPT
+std::shared_ptr<SchedulingDecision> SpotScheduler::makeSchedulingDecision(
   HostMap& hostMap,
   const InFlightReqs& inFlightReqs,
   std::shared_ptr<BatchExecuteRequest> req)
 {
     auto decision = std::make_shared<SchedulingDecision>(req->appid(), 0);
 
-    // Filter the hosts removing hosts that are executing tasks from different
-    // users
-    filterHosts(hostMap, inFlightReqs, req);
+    // Filter the hosts removing the VM that will be evicted next
+    std::set<std::string> evictedHostIps = filterHosts(hostMap);
 
     // Get the sorted list of hosts
     auto decisionType = getDecisionType(inFlightReqs, req);
@@ -378,19 +296,31 @@ std::shared_ptr<SchedulingDecision> CompactScheduler::makeSchedulingDecision(
         itr++;
     }
 
+    bool isDistChange = decisionType == DecisionType::DIST_CHANGE;
+
     // If we still have enough slots to schedule, we are out of slots
-    if (numLeftToSchedule > 0) {
+    if (numLeftToSchedule > 0 && !isDistChange) {
         return std::make_shared<SchedulingDecision>(NOT_ENOUGH_SLOTS_DECISION);
     }
 
-    // In case of a DIST_CHANGE decision (i.e. migration), we want to make sure
-    // that the new decision is better than the previous one
-    if (decisionType == DecisionType::DIST_CHANGE) {
+    if (isDistChange) {
+        // If we ran out of slots whilst processing a migration request it
+        // means that we have some messages running in the to-be-evicted VM
+        // and we can not migrate them elsewhere. In this case we must FREEZE
+        // all messages
+        if (numLeftToSchedule > 0) {
+            return std::make_shared<SchedulingDecision>(MUST_FREEZE_DECISION);
+        }
+
+        // Check if we are running any messages in the to-be evicted VM. Only
+        // migrate if we are
         auto oldDecision = inFlightReqs.at(req->appid()).second;
-        if (isFirstDecisionBetter(hostMap, decision, oldDecision)) {
-            // If we are sending a better migration, make sure that we minimise
-            // the number of migrations to be done
-            return minimiseNumOfMigrations(decision, oldDecision);
+        for (const auto& hostIp : oldDecision->hosts) {
+            if (evictedHostIps.contains(hostIp)) {
+                // If we are requesting a migration, make sure that we minimise
+                // the number of messages to actuall migrate
+                return minimiseNumOfMigrations(decision, oldDecision);
+            }
         }
 
         return std::make_shared<SchedulingDecision>(DO_NOT_MIGRATE_DECISION);

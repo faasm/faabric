@@ -46,6 +46,11 @@ message HttpMessage {
         EXECUTE_BATCH_STATUS = 11;
         PRELOAD_SCHEDULING_DECISION = 12;
         SET_POLICY = 13;
+        GET_POLICY = 14;
+        // This endpoint is only used with the SPOT planner policy. In a real
+        // deployment we would get this value from a cloud-provider-specific
+        // API
+        SET_NEXT_EVICTED_VM = 15;
     }
 
     Type type = 1 [json_name = "http_type"];
@@ -64,11 +69,22 @@ message GetInFlightAppsResponse {
     message InFlightApp {
         int32 appId = 1;
         int32 subType = 2;
-        repeated string hostIps = 3;
+        int32 size = 3;
+        repeated string hostIps = 4;
+    }
+
+    message FrozenApp {
+        int32 appId = 1;
+        int32 subType = 2;
+        int32 size = 3;
     }
 
     repeated InFlightApp apps = 1;
+
+    // Auxiliary fields to visualise the state of the cluster
     int32 numMigrations = 2;
+    repeated string nextEvictedVmIps = 3;
+    repeated FrozenApp frozenApps = 4;
 }
 
 message NumMigrationsResponse {
@@ -132,3 +148,6 @@ message AvailableHostsResponse {
     repeated Host hosts = 1;
 }
 
+message SetEvictedVmIpsRequest {
+    repeated string vmIps = 1;
+}

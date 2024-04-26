@@ -12,6 +12,10 @@ namespace faabric::planner {
  */
 struct PlannerState
 {
+    // Policy to operate the planner in. Mostly determins the batch scheduler
+    // behaviour, but also the planner's in some cases
+    std::string policy;
+
     // Accounting of the hosts that are registered in the system and responsive
     // We deliberately use the host's IP as unique key, but assign a unique host
     // id for redundancy
@@ -36,5 +40,19 @@ struct PlannerState
 
     // Helper coutner of the total number of migrations
     std::atomic<int> numMigrations = 0;
+
+    // -----
+    // Data structures used only under the SPOT policy
+    // -----
+
+    // Map containing the BER that have been evicted due to a SPOT VM eviction.
+    // All messages in the VM have been checkpointed, are in the snapshot
+    // registry in the planner, and are ready to be scheduled when capacity
+    // appears
+    std::map<int, std::shared_ptr<BatchExecuteRequest>> evictedRequests;
+
+    // This variable simulates the values we would get from a cloud provider's
+    // API indicating the (set of) VM to be evicted next
+    std::set<std::string> nextEvictedHostIps;
 };
 }

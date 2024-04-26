@@ -662,9 +662,14 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     // in-flight apps (we poll the planner until all messages have finished)
     waitForBerToFinish(ber);
 
+    // We also set this host as evicted
+    updatePlannerPolicy("spot");
+    setNextEvictedVmIp({ conf.endpointHost });
+
     // Once we are sure the batch has finished, check again that there are
     // zero apps in-flight
     GetInFlightAppsResponse emptyExpectedResponse;
+    emptyExpectedResponse.add_nextevictedvmips(conf.endpointHost);
     msgJsonStr = faabric::util::messageToJson(inFlightMsg);
     expectedResponseBody = faabric::util::messageToJson(emptyExpectedResponse);
     result = doPost(msgJsonStr);
@@ -748,6 +753,13 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
         expectedResponseBody = "Policy set correctly";
     }
 
+    SECTION("Valid request (spot)")
+    {
+        policy = "spot";
+        expectedReturnCode = beast::http::status::ok;
+        expectedResponseBody = "Policy set correctly";
+    }
+
     SECTION("Invalid request")
     {
         policy = "foo-bar";
@@ -759,6 +771,74 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     msgJsonStr = faabric::util::messageToJson(msg);
 
     std::pair<int, std::string> result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+    REQUIRE(result.second == expectedResponseBody);
+
+    if (expectedReturnCode == beast::http::status::ok) {
+        // Second, get the policy we just set
+        msg.set_type(HttpMessage_Type_GET_POLICY);
+        msg.clear_payloadjson();
+        msgJsonStr = faabric::util::messageToJson(msg);
+
+        std::pair<int, std::string> result = doPost(msgJsonStr);
+        REQUIRE(boost::beast::http::int_to_status(result.first) ==
+                expectedReturnCode);
+        REQUIRE(result.second == policy);
+    }
+}
+
+TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
+                 "Test setting the next evicted VM",
+                 "[planner]")
+{
+    HttpMessage policyMsg;
+    policyMsg.set_type(HttpMessage_Type_SET_POLICY);
+    HttpMessage msg;
+
+    SetEvictedVmIpsRequest evictedRequest;
+    evictedRequest.add_vmips("1.1.1.1");
+
+    msg.set_type(HttpMessage_Type_SET_NEXT_EVICTED_VM);
+    msg.set_payloadjson(faabric::util::messageToJson(evictedRequest));
+    msgJsonStr = faabric::util::messageToJson(msg);
+
+    std::string policy;
+
+    SECTION("Valid request")
+    {
+        policy = "spot";
+        expectedReturnCode = beast::http::status::ok;
+        expectedResponseBody = "Next evicted VM set";
+    }
+
+    SECTION("Invalid request (bad request body)")
+    {
+        policy = "spot";
+        msg.set_payloadjson("1.1.1.1");
+        msgJsonStr = faabric::util::messageToJson(msg);
+        expectedReturnCode = beast::http::status::bad_request;
+        expectedResponseBody = "Bad JSON in body's payload";
+    }
+
+    SECTION("Invalid request (bad policy)")
+    {
+        policy = "compact";
+        expectedReturnCode = beast::http::status::bad_request;
+        expectedResponseBody =
+          "Next evicted VM must only be set in 'spot' policy";
+    }
+
+    policyMsg.set_payloadjson(policy);
+    std::string policyMsgJsonStr = faabric::util::messageToJson(policyMsg);
+
+    // First set the policy
+    std::pair<int, std::string> result = doPost(policyMsgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            boost::beast::http::status::ok);
+
+    // Second set the next evicted VM
+    result = doPost(msgJsonStr);
     REQUIRE(boost::beast::http::int_to_status(result.first) ==
             expectedReturnCode);
     REQUIRE(result.second == expectedResponseBody);

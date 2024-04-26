@@ -1,5 +1,6 @@
 #include "mpi_native.h"
 
+#include <faabric/batch-scheduler/BatchScheduler.h>
 #include <faabric/executor/ExecutorContext.h>
 #include <faabric/mpi/MpiContext.h>
 #include <faabric/mpi/MpiMessage.h>
@@ -15,6 +16,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/network.h>
 
 using namespace faabric::mpi;
 
@@ -785,7 +787,40 @@ void mpiMigrationPoint(int entrypointFuncArg)
 
     // Detect if there is a pending migration for the current app
     auto migration = sch.checkForMigrationOpportunities(*call);
-    bool appMustMigrate = migration != nullptr;
+    bool appMustFreeze =
+      migration != nullptr && migration->appid() == MUST_FREEZE;
+
+    // Short-cut for when all messages need to freeze. We only need to send
+    // a snapshot to the planner, and throw an exception
+    if (appMustFreeze) {
+        std::string argStr = std::to_string(entrypointFuncArg);
+        std::vector<uint8_t> inputData(argStr.begin(), argStr.end());
+        std::string snapKey = "migration_" + std::to_string(call->id());
+
+        call->set_inputdata(inputData.data(), inputData.size());
+        call->set_snapshotkey(snapKey);
+
+        auto* exec = faabric::executor::ExecutorContext::get()->getExecutor();
+        auto snap =
+          std::make_shared<faabric::util::SnapshotData>(exec->getMemoryView());
+        auto& reg = faabric::snapshot::getSnapshotRegistry();
+        reg.registerSnapshot(snapKey, snap);
+
+        auto plannerIp = faabric::util::getIPFromHostname(
+          faabric::util::getSystemConfig().plannerHost);
+        faabric::snapshot::getSnapshotClient(plannerIp)->pushSnapshot(snapKey,
+                                                                      snap);
+
+        SPDLOG_INFO("{}:{}:{} Freezing message!",
+                    call->appid(),
+                    call->groupid(),
+                    call->groupidx());
+
+        // Throw an exception to be caught by the executor and terminate
+        throw faabric::util::FunctionFrozenException("Freezing MPI rank");
+    }
+
+    bool appMustMigrate = migration != nullptr && !appMustFreeze;
 
     // Detect if this particular function needs to be migrated or not
     bool funcMustMigrate = false;

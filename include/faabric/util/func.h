@@ -6,8 +6,17 @@
 #include <vector>
 
 #define MIGRATED_FUNCTION_RETURN_VALUE -99
+#define FROZEN_FUNCTION_RETURN_VALUE -98
 
 namespace faabric::util {
+
+class FunctionFrozenException : public faabric::util::FaabricException
+{
+  public:
+    explicit FunctionFrozenException(std::string message)
+      : FaabricException(std::move(message))
+    {}
+};
 
 class FunctionMigratedException : public faabric::util::FaabricException
 {

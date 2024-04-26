@@ -33,6 +33,8 @@ class Planner
 
     void printConfig() const;
 
+    std::string getPolicy();
+
     void setPolicy(const std::string& newPolicy);
 
     // ----------
@@ -87,9 +89,20 @@ class Planner
     // the planner was last reset
     int getNumMigrations();
 
+    // Helper method to get the next host that will be evicted
+    std::set<std::string> getNextEvictedHostIps();
+
+    std::map<int32_t, std::shared_ptr<BatchExecuteRequest>> getEvictedReqs();
+
     // Main entrypoint to request the execution of batches
     std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> callBatch(
       std::shared_ptr<BatchExecuteRequest> req);
+
+    // ----------
+    // API exclusive to SPOT policy mode
+    // ----------
+
+    void setNextEvictedVm(const std::set<std::string>& vmIp);
 
   private:
     // There's a singleton instance of the planner running, but it must allow
