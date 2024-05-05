@@ -243,4 +243,168 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     checkAllocationAndResult(req1, hostsAfter1);
     checkAllocationAndResult(req2, hostsAfter2);
 }
+
+TEST_CASE_METHOD(
+  MpiDistTestsFixture,
+  "Test migrating an MPI app as a consequence of an eviction (SPOT)",
+  "[mpi]")
+{
+    updatePlannerPolicy("spot");
+
+    int worldSize = 4;
+
+    // Prepare both requests:
+    // - The first will do work, sleep for five seconds, and do work again
+    // - The second will do work and check for migration opportunities
+    auto req1 = setRequest("alltoall-sleep");
+    auto req2 = setRequest("migration");
+    auto& msg = req2->mutable_messages()->at(0);
+    msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
+
+    updateLocalSlots(8);
+    updateRemoteSlots(8);
+
+    std::vector<std::string> hostsBefore1 = {
+        getMasterIP(), getMasterIP(), getMasterIP(), getMasterIP()
+    };
+    std::vector<std::string> hostsBefore2;
+    std::vector<std::string> hostsAfterMigration;
+
+    std::string evictedVmIp;
+
+    SECTION("Migrate main rank")
+    {
+        hostsBefore2 = {
+            getWorkerIP(), getWorkerIP(), getMasterIP(), getMasterIP()
+        };
+        evictedVmIp = getWorkerIP();
+        hostsAfterMigration =
+          std::vector<std::string>(worldSize, getMasterIP());
+    }
+
+    SECTION("Don't migrate main rank")
+    {
+        hostsBefore2 = {
+            getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
+        };
+        evictedVmIp = getWorkerIP();
+        hostsAfterMigration =
+          std::vector<std::string>(worldSize, getMasterIP());
+    }
+
+    SECTION("Migrate all ranks")
+    {
+        hostsBefore2 = {
+            getMasterIP(), getMasterIP(), getMasterIP(), getMasterIP()
+        };
+        evictedVmIp = getMasterIP();
+        hostsAfterMigration =
+          std::vector<std::string>(worldSize, getWorkerIP());
+    }
+
+    // Preload decisions to force sub-optimal scheduling
+    auto preloadDec1 = std::make_shared<batch_scheduler::SchedulingDecision>(
+      req1->appid(), req1->groupid());
+    auto preloadDec2 = std::make_shared<batch_scheduler::SchedulingDecision>(
+      req2->appid(), req2->groupid());
+    for (int i = 0; i < worldSize; i++) {
+        preloadDec1->addMessage(hostsBefore1.at(i), 0, 0, i);
+        preloadDec2->addMessage(hostsBefore2.at(i), 0, 0, i);
+    }
+    plannerCli.preloadSchedulingDecision(preloadDec1);
+    plannerCli.preloadSchedulingDecision(preloadDec2);
+
+    // Preload should overwrite the evicted IP, so we can set it before we
+    // call callFunctions
+    setNextEvictedVmIp({ evictedVmIp });
+
+    plannerCli.callFunctions(req1);
+    auto actualHostsBefore1 = waitForMpiMessagesInFlight(req1);
+    REQUIRE(hostsBefore1 == actualHostsBefore1);
+
+    plannerCli.callFunctions(req2);
+
+    checkAllocationAndResult(req1, hostsBefore1);
+    checkAllocationAndResult(req2, hostsAfterMigration);
+
+    updatePlannerPolicy("bin-pack");
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Test stopping and resuming an MPI application (SPOT)",
+                 "[mpi]")
+{
+    updatePlannerPolicy("spot");
+
+    int worldSize = 4;
+
+    // Prepare both requests:
+    // - The first will do work, sleep for five seconds, and do work again
+    // - The second will do work and check for migration opportunities
+    auto req1 = setRequest("alltoall-sleep");
+    auto req2 = setRequest("migration");
+    auto& msg = req2->mutable_messages()->at(0);
+    msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
+
+    // Make it so that there is not enough slots to migrate. We will have to
+    // wait for the first request to finish to be able to resume the app
+    updateLocalSlots(4);
+    updateRemoteSlots(4);
+
+    auto hostsBefore1 = std::vector<std::string>(worldSize, getMasterIP());
+    // This app will realise it is running on a VM that will be evicted, so
+    // it will FREEZE
+    auto hostsBefore2 = std::vector<std::string>(worldSize, getWorkerIP());
+    std::string evictedVmIp = getWorkerIP();
+
+    // Preload decisions to force the allocation we want
+    auto preloadDec1 = std::make_shared<batch_scheduler::SchedulingDecision>(
+      req1->appid(), req1->groupid());
+    auto preloadDec2 = std::make_shared<batch_scheduler::SchedulingDecision>(
+      req2->appid(), req2->groupid());
+    for (int i = 0; i < worldSize; i++) {
+        preloadDec1->addMessage(hostsBefore1.at(i), 0, 0, i);
+        preloadDec2->addMessage(hostsBefore2.at(i), 0, 0, i);
+    }
+    plannerCli.preloadSchedulingDecision(preloadDec1);
+    plannerCli.preloadSchedulingDecision(preloadDec2);
+
+    // Mark the worker VM as evicted (note that preload takes preference over
+    // eviction marks)
+    setNextEvictedVmIp({ evictedVmIp });
+
+    plannerCli.callFunctions(req1);
+    auto actualHostsBefore1 = waitForMpiMessagesInFlight(req1);
+    REQUIRE(hostsBefore1 == actualHostsBefore1);
+
+    plannerCli.callFunctions(req2);
+
+    // First, if we try to get the batch results it shoud say that the app
+    // is not finished (even though it will try to re-schedule it again). To
+    // the eyes of the client, a FROZEN app is still running
+    auto batchResults2 = plannerCli.getBatchResults(req2);
+    REQUIRE(!batchResults2->finished());
+
+    // Second, let's wait for the first request to finish so that more
+    // slots free up
+    checkAllocationAndResult(req1, hostsBefore1);
+
+    // Third, no apps are currently in-flight (1 finished, 1 frozen)
+    auto inFlightApps = getInFlightApps();
+    REQUIRE(inFlightApps.apps_size() == 0);
+    REQUIRE(inFlightApps.frozenapps_size() == 1);
+    REQUIRE(inFlightApps.frozenapps(0).appid() == req2->appid());
+
+    // Fourth, try to get the batch results for the FROZEN app again to trigger
+    // an un-FREEZE
+    batchResults2 = plannerCli.getBatchResults(req2);
+    REQUIRE(!batchResults2->finished());
+
+    // Finally, we should be able to wait on
+    auto hostsAfterMigration =
+      std::vector<std::string>(worldSize, getMasterIP());
+    checkAllocationAndResult(req2, hostsAfterMigration);
+
+    updatePlannerPolicy("bin-pack");
+}
 }

@@ -181,6 +181,12 @@ void PlannerEndpointHandler::onRequest(
                 auto* inFlightAppResp = inFlightAppsResponse.add_apps();
                 inFlightAppResp->set_appid(appId);
                 inFlightAppResp->set_subtype(inFlightPair.first->subtype());
+
+                if (inFlightPair.first->messages(0).ismpi()) {
+                    inFlightAppResp->set_size(
+                      inFlightPair.first->messages(0).mpiworldsize());
+                }
+
                 for (const auto& hostIp : decision->hosts) {
                     inFlightAppResp->add_hostips(hostIp);
                 }
@@ -190,6 +196,25 @@ void PlannerEndpointHandler::onRequest(
             int numMigrations =
               faabric::planner::getPlanner().getNumMigrations();
             inFlightAppsResponse.set_nummigrations(numMigrations);
+
+            // Include the next VM that will be evicted
+            auto nextEvictedIps =
+              faabric::planner::getPlanner().getNextEvictedHostIps();
+            for (const auto& nextEvictedHostIp : nextEvictedIps) {
+                inFlightAppsResponse.add_nextevictedvmips(nextEvictedHostIp);
+            }
+
+            // Include the currently frozen apps
+            auto evictedApps = faabric::planner::getPlanner().getEvictedReqs();
+            for (const auto& [appId, ber] : evictedApps) {
+                auto* frozenApp = inFlightAppsResponse.add_frozenapps();
+
+                frozenApp->set_appid(appId);
+
+                if (ber->messages(0).ismpi()) {
+                    frozenApp->set_size(ber->messages(0).mpiworldsize());
+                }
+            }
 
             response.result(beast::http::status::ok);
             response.body() =
@@ -325,6 +350,48 @@ void PlannerEndpointHandler::onRequest(
             // Prepare the response
             response.result(beast::http::status::ok);
             response.body() = std::string("Policy set correctly");
+
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_GET_POLICY: {
+            SPDLOG_DEBUG("Planner received GET_POLICY request");
+
+            // Prepare the response
+            response.result(beast::http::status::ok);
+            response.body() = faabric::planner::getPlanner().getPolicy();
+
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_SET_NEXT_EVICTED_VM: {
+            SPDLOG_DEBUG("Planner received SET_NEXT_EVICTED_VM request");
+
+            SetEvictedVmIpsRequest evictedReq;
+            try {
+                faabric::util::jsonToMessage(msg.payloadjson(), &evictedReq);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Bad JSON in body's payload");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            std::string vmIp = msg.payloadjson();
+            std::set<std::string> vmIps;
+            for (const auto& vmIp : evictedReq.vmips()) {
+                vmIps.insert(vmIp);
+            }
+
+            try {
+                faabric::planner::getPlanner().setNextEvictedVm(vmIps);
+            } catch (std::exception& e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string(
+                  "Next evicted VM must only be set in 'spot' policy");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Prepare the response
+            response.result(beast::http::status::ok);
+            response.body() = std::string("Next evicted VM set");
 
             return ctx.sendFunction(std::move(response));
         }

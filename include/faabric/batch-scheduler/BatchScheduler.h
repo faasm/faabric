@@ -12,6 +12,11 @@
 #define NOT_ENOUGH_SLOTS_DECISION                                              \
     faabric::batch_scheduler::SchedulingDecision(NOT_ENOUGH_SLOTS,             \
                                                  NOT_ENOUGH_SLOTS)
+#define MUST_FREEZE -97
+#define MUST_FREEZE_DECISION                                                   \
+    faabric::batch_scheduler::SchedulingDecision(MUST_FREEZE, MUST_FREEZE)
+
+#define MUST_EVICT_IP "E.VI.CT.ME"
 
 namespace faabric::batch_scheduler {
 

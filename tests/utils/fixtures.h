@@ -646,6 +646,12 @@ class BatchSchedulerFixture : public ConfFixture
         return decision;
     }
 
+    static void markHostAsEvicted(faabric::batch_scheduler::HostMap& hostMap,
+                                  const std::string& hostIp)
+    {
+        hostMap.at(hostIp)->ip = MUST_EVICT_IP;
+    }
+
     static void compareSchedulingDecisions(
       const faabric::batch_scheduler::SchedulingDecision& decisionA,
       const faabric::batch_scheduler::SchedulingDecision& decisionB)

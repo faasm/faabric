@@ -17,8 +17,6 @@
 #include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 
-#include <unordered_set>
-
 using namespace faabric::util;
 using namespace faabric::snapshot;
 
@@ -298,9 +296,25 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
         for (int i = 0; i < nMessages; i++) {
             faabric::Message& localMsg = req->mutable_messages()->at(i);
 
-            std::shared_ptr<faabric::executor::Executor> e =
-              claimExecutor(localMsg, lock);
-            e->executeTasks({ i }, req);
+            try {
+                std::shared_ptr<faabric::executor::Executor> exec =
+                  claimExecutor(localMsg, lock);
+                exec->executeTasks({ i }, req);
+            } catch (std::exception& exc) {
+                SPDLOG_ERROR(
+                  "{}:{}:{} Error trying to claim executor for message {}",
+                  localMsg.appid(),
+                  localMsg.groupid(),
+                  localMsg.groupidx(),
+                  localMsg.id());
+
+                // Even if the task is not executed, set its result so that
+                // everybody knows it has failed
+                localMsg.set_returnvalue(1);
+                localMsg.set_outputdata("Error trying to claim executor");
+                faabric::planner::getPlannerClient().setMessageResult(
+                  std::make_shared<faabric::Message>(localMsg));
+            }
         }
     }
 }
@@ -454,6 +468,8 @@ Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
         // Update the group ID if we want to migrate
         if (decision == DO_NOT_MIGRATE_DECISION) {
             newGroupId = groupId;
+        } else if (decision == MUST_FREEZE_DECISION) {
+            newGroupId = MUST_FREEZE;
         } else {
             newGroupId = decision.groupId;
         }
@@ -473,6 +489,13 @@ Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
         // we can set it here (and in fact, we need to do so when faking two
         // hosts)
         newGroupId = overwriteNewGroupId;
+    }
+
+    if (newGroupId == MUST_FREEZE) {
+        auto migration = std::make_shared<faabric::PendingMigration>();
+        migration->set_appid(MUST_FREEZE);
+
+        return migration;
     }
 
     bool appMustMigrate = newGroupId != groupId;

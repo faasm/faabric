@@ -132,11 +132,19 @@ void Planner::printConfig() const
     SPDLOG_INFO("HTTP_SERVER_THREADS        {}", config.numthreadshttpserver());
 }
 
+std::string Planner::getPolicy()
+{
+    faabric::util::SharedLock lock(plannerMx);
+
+    return state.policy;
+}
+
 void Planner::setPolicy(const std::string& newPolicy)
 {
     // Acquire lock to prevent any changes in state whilst we change the policy
     faabric::util::FullLock lock(plannerMx);
 
+    state.policy = newPolicy;
     faabric::batch_scheduler::resetBatchScheduler(newPolicy);
 }
 
@@ -193,10 +201,16 @@ void Planner::flushSchedulingState()
 {
     faabric::util::FullLock lock(plannerMx);
 
+    state.policy = "bin-pack";
+
     state.inFlightReqs.clear();
     state.appResults.clear();
     state.appResultWaiters.clear();
+
     state.numMigrations = 0;
+
+    state.evictedRequests.clear();
+    state.nextEvictedHostIps.clear();
 }
 
 std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()
@@ -349,14 +363,57 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
                  msg->groupid(),
                  msg->groupidx());
 
+    // If we are setting the result for a frozen message, it is important
+    // that we store the message itself in the evicted BER as it contains
+    // information like the function pointer and snapshot key to eventually
+    // un-freeze from. In addition, we want to skip setting the message result
+    // as we will set it when the message finally succeeds
+    bool isFrozenMsg = msg->returnvalue() == FROZEN_FUNCTION_RETURN_VALUE;
+    if (isFrozenMsg) {
+        if (!state.evictedRequests.contains(msg->appid())) {
+            SPDLOG_ERROR("Message {} is frozen but app (id: {}) not in map!",
+                         msg->id(),
+                         msg->appid());
+            throw std::runtime_error("Orphaned frozen message!");
+        }
+
+        auto ber = state.evictedRequests.at(msg->appid());
+        bool found = false;
+        for (int i = 0; i < ber->messages_size(); i++) {
+            if (ber->messages(i).id() == msg->id()) {
+                SPDLOG_DEBUG("Setting message {} in the forzen BER for app {}",
+                             msg->id(),
+                             appId);
+
+                // Propagate the fields that we set during migration
+                ber->mutable_messages(i)->set_funcptr(msg->funcptr());
+                ber->mutable_messages(i)->set_inputdata(msg->inputdata());
+                ber->mutable_messages(i)->set_snapshotkey(msg->snapshotkey());
+                ber->mutable_messages(i)->set_returnvalue(msg->returnvalue());
+
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            SPDLOG_ERROR(
+              "Error trying to set message {} in the frozen BER for app {}",
+              msg->id(),
+              appId);
+        }
+    }
+
     // Release the slot only once
     assert(state.hostMap.contains(msg->executedhost()));
-    if (!state.appResults[appId].contains(msgId)) {
+    if (!state.appResults[appId].contains(msgId) || isFrozenMsg) {
         releaseHostSlots(state.hostMap.at(msg->executedhost()));
     }
 
     // Set the result
-    state.appResults[appId][msgId] = msg;
+    if (!isFrozenMsg) {
+        state.appResults[appId][msgId] = msg;
+    }
 
     // Remove the message from the in-flight requests
     if (!state.inFlightReqs.contains(appId)) {
@@ -412,6 +469,12 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
                 }
             }
         }
+    }
+
+    // When setting a frozen's message result, we can skip notifying waiting
+    // hosts
+    if (isFrozenMsg) {
+        return;
     }
 
     // Finally, dispatch an async message to all hosts that are waiting once
@@ -537,20 +600,77 @@ std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(
 {
     auto berStatus = faabric::util::batchExecStatusFactory(appId);
 
+    // When querying for the result of a batch we always check if it has been
+    // evicted, as it is one of the triggers to try and re-schedule it again
+    bool isFrozen = false;
+    std::shared_ptr<BatchExecuteRequest> frozenBer = nullptr;
+
     // Acquire a read lock to copy all the results we have for this batch
     {
         faabric::util::SharedLock lock(plannerMx);
 
-        if (!state.appResults.contains(appId)) {
-            return nullptr;
+        if (state.evictedRequests.contains(appId)) {
+            isFrozen = true;
+
+            // To prevent race conditions, before treating an app as frozen
+            // we require all messages to have reported as frozen
+            for (const auto& msg :
+                 state.evictedRequests.at(appId)->messages()) {
+                if (msg.returnvalue() != FROZEN_FUNCTION_RETURN_VALUE) {
+                    isFrozen = false;
+                }
+            }
+
+            if (isFrozen) {
+                frozenBer = state.evictedRequests.at(appId);
+
+                // If the app is frozen (i.e. all messages have frozen) it
+                // should not be fully in the in-flight map anymore
+                if (state.inFlightReqs.contains(appId) &&
+                    frozenBer->messages_size() ==
+                      state.inFlightReqs.at(appId).first->messages_size()) {
+                    SPDLOG_ERROR("Inconsistent planner state: app {} is both "
+                                 "frozen and in-flight!",
+                                 appId);
+                    return nullptr;
+                }
+            }
         }
 
-        for (auto msgResultPair : state.appResults.at(appId)) {
-            *berStatus->add_messageresults() = *(msgResultPair.second);
+        if (!isFrozen) {
+            if (!state.appResults.contains(appId)) {
+                return nullptr;
+            }
+
+            for (auto msgResultPair : state.appResults.at(appId)) {
+                *berStatus->add_messageresults() = *(msgResultPair.second);
+            }
+
+            // Set the finished condition
+            berStatus->set_finished(!state.inFlightReqs.contains(appId));
+        }
+    }
+
+    // Only try to un-freeze when the app is fully frozen and not in-flight.
+    // Note that when we un-freeze it may be that the app is not still
+    // fully in-flight, and hence we have not removed it from the evicted map
+    if (isFrozen && !state.inFlightReqs.contains(appId)) {
+        SPDLOG_DEBUG("Planner trying to un-freeze app {}", appId);
+
+        // This should trigger a NEW decision. We make a deep-copy of the BER
+        // to avoid changing the values in the evicted map
+        auto newBer = std::make_shared<BatchExecuteRequest>();
+        *newBer = *frozenBer;
+        auto decision = callBatch(newBer);
+
+        // This means that there are not enough free slots to schedule the
+        // decision, we must just return a keep-alive to the poller thread
+        if (*decision == NOT_ENOUGH_SLOTS_DECISION) {
+            SPDLOG_DEBUG("Can not un-freeze app {}: not enough slots!", appId);
         }
 
-        // Set the finished condition
-        berStatus->set_finished(!state.inFlightReqs.contains(appId));
+        // In any case, the app is in-flight and so not finished
+        berStatus->set_finished(false);
     }
 
     return berStatus;
@@ -592,14 +712,41 @@ int Planner::getNumMigrations()
     return state.numMigrations.load(std::memory_order_acquire);
 }
 
+std::set<std::string> Planner::getNextEvictedHostIps()
+{
+    faabric::util::SharedLock lock(plannerMx);
+
+    return state.nextEvictedHostIps;
+}
+
+std::map<int32_t, std::shared_ptr<BatchExecuteRequest>>
+Planner::getEvictedReqs()
+{
+    faabric::util::SharedLock lock(plannerMx);
+
+    std::map<int32_t, std::shared_ptr<BatchExecuteRequest>> evictedReqs;
+
+    for (const auto& [appId, ber] : state.evictedRequests) {
+        evictedReqs[appId] = std::make_shared<BatchExecuteRequest>();
+        *evictedReqs.at(appId) = *ber;
+    }
+
+    return evictedReqs;
+}
+
 static faabric::batch_scheduler::HostMap convertToBatchSchedHostMap(
-  std::map<std::string, std::shared_ptr<Host>> hostMapIn)
+  std::map<std::string, std::shared_ptr<Host>> hostMapIn,
+  const std::set<std::string>& nextEvictedHostIps)
 {
     faabric::batch_scheduler::HostMap hostMap;
 
     for (const auto& [ip, host] : hostMapIn) {
         hostMap[ip] = std::make_shared<faabric::batch_scheduler::HostState>(
           host->ip(), host->slots(), host->usedslots());
+
+        if (nextEvictedHostIps.contains(ip)) {
+            hostMap.at(ip)->ip = MUST_EVICT_IP;
+        }
     }
 
     return hostMap;
@@ -620,7 +767,8 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
 
     // Make a copy of the host-map state to make sure the scheduling process
     // does not modify it
-    auto hostMapCopy = convertToBatchSchedHostMap(state.hostMap);
+    auto hostMapCopy =
+      convertToBatchSchedHostMap(state.hostMap, state.nextEvictedHostIps);
     bool isDistChange =
       decisionType == faabric::batch_scheduler::DecisionType::DIST_CHANGE;
 
@@ -652,17 +800,19 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     if (!isDistChange && state.preloadedSchedulingDecisions.contains(appId)) {
         decision = getPreloadedSchedulingDecision(appId, req);
     } else if (isNew && isMpi) {
-        mpiReq = faabric::util::batchExecFactory(
-          req->user(), req->function(), req->messages(0).mpiworldsize());
-        // Propagate the subtype for multi-tenant runs
-        mpiReq->set_subtype(req->subtype());
+        mpiReq = std::make_shared<BatchExecuteRequest>();
+        *mpiReq = *req;
 
-        // Populate the temporary request
-        mpiReq->mutable_messages()->at(0) = req->messages(0);
-        faabric::util::updateBatchExecAppId(mpiReq, appId);
-        for (int i = 0; i < mpiReq->messages_size(); i++) {
-            mpiReq->mutable_messages()->at(i).set_groupidx(i);
+        // Deep-copy as many messages we can from the original BER, and mock
+        // the rest
+        for (int i = req->messages_size(); i < req->messages(0).mpiworldsize();
+             i++) {
+            auto* newMpiMsg = mpiReq->add_messages();
+
+            newMpiMsg->set_appid(req->appid());
+            newMpiMsg->set_groupidx(i);
         }
+        assert(mpiReq->messages_size() == req->messages(0).mpiworldsize());
 
         decision = batchScheduler->makeSchedulingDecision(
           hostMapCopy, state.inFlightReqs, mpiReq);
@@ -678,13 +828,76 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
           "Not enough free slots to schedule app: {} (requested: {})",
           appId,
           req->messages_size());
+#ifndef NDEBUG
         printHostState(state.hostMap, "error");
+#endif
         return decision;
     }
 
     if (*decision == DO_NOT_MIGRATE_DECISION) {
         SPDLOG_INFO("Decided to not migrate app: {}", appId);
         return decision;
+    }
+
+    if (*decision == MUST_FREEZE_DECISION) {
+        SPDLOG_INFO("Decided to FREEZE app: {}", appId);
+
+        // Note that the app will be naturally removed from in-flight as the
+        // messages throw an exception and finish, so here we only need to
+        // add the request to the evicted requests. Also, given that the
+        // app will be removed from in-flight, we want to deep copy the BER
+        state.evictedRequests[appId] =
+          std::make_shared<faabric::BatchExecuteRequest>();
+        *state.evictedRequests.at(appId) = *state.inFlightReqs.at(appId).first;
+
+        return decision;
+    }
+
+    // If we have managed to schedule a frozen request, un-freeze it by
+    // removing it from the evicted request map
+    if (state.evictedRequests.contains(appId)) {
+        // When un-freezing an MPI app, we treat it as a NEW request, and thus
+        // we will go through the two-step initialisation with a preloaded
+        // decision
+        if (isNew && isMpi) {
+            // During the first step, and to make the downstream assertions
+            // pass, it is safe to remove all messages greater than zero from
+            // here
+            SPDLOG_INFO("Decided to un-FREEZE  app {}", appId);
+
+            auto firstMessage = req->messages(0);
+            req->clear_messages();
+            *req->add_messages() = firstMessage;
+        } else if (isMpi && !isDistChange) {
+            // During the second step, we amend the messages provided by MPI
+            // (as part of MPI_Init) with the fields that we require for a
+            // successful restore
+            assert(req->messages_size() == req->messages(0).mpiworldsize() - 1);
+
+            auto evictedBer = state.evictedRequests.at(appId);
+            for (int i = 0; i < req->messages_size(); i++) {
+                for (int j = 1; j < evictedBer->messages_size(); j++) {
+                    // We match by groupidx and not by message id, as the
+                    // message id is set by MPI and we need to overwrite it
+                    if (req->messages(i).groupidx() ==
+                        evictedBer->messages(j).groupidx()) {
+
+                        req->mutable_messages()->at(i).set_id(
+                          evictedBer->messages(j).id());
+                        req->mutable_messages()->at(i).set_funcptr(
+                          evictedBer->messages(j).funcptr());
+                        req->mutable_messages()->at(i).set_inputdata(
+                          evictedBer->messages(j).inputdata());
+                        req->mutable_messages()->at(i).set_snapshotkey(
+                          evictedBer->messages(j).snapshotkey());
+
+                        break;
+                    }
+                }
+            }
+
+            state.evictedRequests.erase(appId);
+        }
     }
 
     // Skip claiming slots and ports if we have preemptively allocated them
@@ -967,12 +1180,50 @@ void Planner::dispatchSchedulingDecision(
             }
         }
 
+        // In an un-FREEZE request, we need to first push the snapshots to
+        // the destination host. This snapshots correspond to the messages
+        // that were FROZEN
+        if (!isThreads && !hostReq->messages(0).snapshotkey().empty()) {
+            // Unlike in a THREADS request, each un-forzen message has a
+            // different snapshot
+            // TODO: consider ways to optimise this transferring
+            for (int i = 0; i < hostReq->messages_size(); i++) {
+                auto snapshotKey = hostReq->messages(i).snapshotkey();
+                try {
+                    auto snap = snapshotRegistry.getSnapshot(snapshotKey);
+
+                    // TODO: could we push only the diffs?
+                    faabric::snapshot::getSnapshotClient(hostIp)->pushSnapshot(
+                      snapshotKey, snap);
+                } catch (std::runtime_error& e) {
+                    // Catch errors, but don't let them crash the planner. Let
+                    // the worker crash instead
+                    SPDLOG_ERROR("Snapshot {} not regsitered in planner!",
+                                 snapshotKey);
+                }
+            }
+        }
+
         faabric::scheduler::getFunctionCallClient(hostIp)->executeFunctions(
           hostReq);
     }
 
     SPDLOG_DEBUG("Finished dispatching {} messages for execution",
                  req->messages_size());
+}
+
+// TODO: should check if the VM is in the host map!
+void Planner::setNextEvictedVm(const std::set<std::string>& vmIps)
+{
+    faabric::util::FullLock lock(plannerMx);
+
+    if (state.policy != "spot") {
+        SPDLOG_ERROR("Error setting evicted VM with policy {}", state.policy);
+        SPDLOG_ERROR("To set the next evicted VM policy must be: spot");
+        throw std::runtime_error("Error setting the next evicted VM!");
+    }
+
+    state.nextEvictedHostIps = vmIps;
 }
 
 Planner& getPlanner()

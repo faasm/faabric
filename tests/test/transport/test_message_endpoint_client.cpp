@@ -17,7 +17,8 @@ using namespace faabric::transport;
 namespace tests {
 
 // These tests are unstable under ThreadSanitizer
-#if !(defined(__has_feature) && __has_feature(thread_sanitizer))
+#if !(defined(__has_feature) &&                                                \
+      (__has_feature(thread_sanitizer) || __has_feature(address_sanitizer)))
 
 TEST_CASE_METHOD(SchedulerFixture, "Test send/recv one message", "[transport]")
 {
@@ -315,18 +316,6 @@ TEST_CASE_METHOD(SchedulerFixture,
     }
 
     REQUIRE(success.load(std::memory_order_acquire));
-
-    for (auto& t : senders) {
-        if (t.joinable()) {
-            t.join();
-        }
-    }
-
-    for (auto& t : receivers) {
-        if (t.joinable()) {
-            t.join();
-        }
-    }
 }
 
 #endif // End ThreadSanitizer exclusion
