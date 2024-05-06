@@ -243,7 +243,7 @@ int Scheduler::reapStaleExecutors()
 long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
 {
     faabric::util::SharedLock lock(mx);
-    const std::string funcStr = faabric::util::funcToString(msg, false);
+    const std::string funcStr = faabric::util::funcToString(msg, true);
     return executors[funcStr].size();
 }
 
@@ -252,7 +252,8 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     faabric::util::FullLock lock(mx);
 
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    auto funcStr = faabric::util::funcToString(req);
+    auto funcStr = faabric::util::funcToString(req->messages(0), true);
+
     int nMessages = req->messages_size();
 
     // Records for tests - copy messages before execution to avoid races
@@ -265,8 +266,8 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     // For threads we only need one executor, for anything else we want
     // one Executor per function in flight.
     if (isThreads) {
-        // Threads use the existing executor. We assume there's only
-        // one running at a time.
+        // Threads use the existing executor. There must only be one at a time,
+        // thus we use a function string that includes the app id
         std::vector<std::shared_ptr<faabric::executor::Executor>>&
           thisExecutors = executors[funcStr];
 
@@ -335,7 +336,7 @@ std::shared_ptr<faabric::executor::Executor> Scheduler::claimExecutor(
   faabric::Message& msg,
   faabric::util::FullLock& schedulerLock)
 {
-    std::string funcStr = faabric::util::funcToString(msg, false);
+    std::string funcStr = faabric::util::funcToString(msg, true);
 
     std::vector<std::shared_ptr<faabric::executor::Executor>>& thisExecutors =
       executors[funcStr];

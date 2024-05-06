@@ -24,7 +24,7 @@ std::string funcToString(const faabric::Message& msg, bool includeId)
     std::string str = msg.user() + "/" + msg.function();
 
     if (includeId) {
-        str += ":" + std::to_string(msg.id());
+        str += ":" + std::to_string(msg.appid());
     }
 
     return str;
