@@ -307,13 +307,16 @@ faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
     // to other hosts. Given that we don't support nested threading, if we
     // have a THREADS request here it means that we are being called from the
     // main thread (which holds the main snapshot)
-    const std::string funcStr =
-      faabric::util::funcToString(req->messages(0), false);
+    std::string snapshotKey;
     auto& reg = faabric::snapshot::getSnapshotRegistry();
 
-    std::string snapshotKey;
-    const auto firstMsg = req->messages(0);
-    if (isThreads) {
+    // Note that with threads we may have 0-sized BERs
+    if (isThreads && req->messages_size() > 0) {
+        const std::string funcStr =
+          faabric::util::funcToString(req->messages(0), false);
+
+        const auto firstMsg = req->messages(0);
+
         if (!firstMsg.snapshotkey().empty()) {
             SPDLOG_ERROR("{} should not provide snapshot key for {} threads",
                          funcStr,

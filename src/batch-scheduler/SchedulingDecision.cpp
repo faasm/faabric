@@ -15,7 +15,7 @@ bool SchedulingDecision::isSingleHost() const
 
     std::string thisHost = conf.endpointHost;
     std::set<std::string> hostSet(hosts.begin(), hosts.end());
-    return hostSet.size() == 1;
+    return hostSet.size() <= 1;
 }
 
 void SchedulingDecision::addMessage(const std::string& host,

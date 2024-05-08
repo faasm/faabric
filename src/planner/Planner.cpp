@@ -19,7 +19,7 @@
 
 // Special group ID magic to indicate MPI decisions that we have preemptively
 // scheduled
-#define MPI_PRELOADED_DECISION_GROUPID -99
+#define FIXED_SIZE_PRELOADED_DECISION_GROUPID -99
 
 namespace faabric::planner {
 
@@ -781,7 +781,8 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
       decisionType == faabric::batch_scheduler::DecisionType::SCALE_CHANGE;
     bool isDistChange =
       decisionType == faabric::batch_scheduler::DecisionType::DIST_CHANGE;
-    bool existsPreloadedDec = state.preloadedSchedulingDecisions.contains(appId);
+    bool existsPreloadedDec =
+      state.preloadedSchedulingDecisions.contains(appId);
 
     // For a SCALE_CHANGE decision (i.e. fork) with the elastic flag set, we
     // want to scale up to as many available cores as possible in the app's
@@ -793,26 +794,49 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
 
         int numAvail = availableSlots(state.hostMap.at(mainHost));
         int numRequested = req->messages_size();
-        int lastMsgIdx = req->messages(numRequested - 1).groupidx();
-        for (int itr  = 0; itr < (numAvail - numRequested); itr++) {
+        int lastMsgIdx =
+          numRequested == 0 ? 0 : req->messages(numRequested - 1).groupidx();
+        for (int itr = 0; itr < (numAvail - numRequested); itr++) {
             // Differentiate between the position in the message array (itr)
             // and the new group index. Usually, in a fork, they would be
             // offset by one
             int msgIdx = lastMsgIdx + itr + 1;
-            SPDLOG_DEBUG("Adding elastically scaled up msg idx {} (app: {})", msgIdx, appId);
+            SPDLOG_DEBUG("Adding elastically scaled up msg idx {} (app: {})",
+                         msgIdx,
+                         appId);
 
             // To add a new message, copy from the last, and update the indexes
-            *req->add_messages() = req->messages(numRequested - 1);
-            req->mutable_messages(numRequested + itr)->set_appidx(msgIdx);
-            req->mutable_messages(numRequested + itr)->set_groupidx(msgIdx);
+            if (numRequested == 0) {
+                // This is a special case where we scale up from zero
+                // parallelism (i.e. 1 OpenMP thread) that requires special
+                // care
+                auto* newMsg = req->add_messages();
+                *newMsg = state.inFlightReqs.at(appId).first->messages(0);
+                newMsg->set_mainhost(mainHost);
+                newMsg->set_appidx(msgIdx);
+                newMsg->set_groupidx(msgIdx);
+
+                // For requests that elastically scale from 1 (i.e. zero-
+                // parallelism) we make use of the group id field to pass the
+                // actual function pointer as a hack
+                newMsg->set_funcptr(req->groupid());
+            } else {
+                *req->add_messages() = req->messages(numRequested - 1);
+                req->mutable_messages(numRequested + itr)->set_appidx(msgIdx);
+                req->mutable_messages(numRequested + itr)->set_groupidx(msgIdx);
+            }
 
             // Also update the message id to make sure we can wait-for and
             // clean-up the resources we use
-            req->mutable_messages(numRequested + itr)->set_id(faabric::util::generateGid());
+            req->mutable_messages(numRequested + itr)
+              ->set_id(faabric::util::generateGid());
         }
 
         if (numAvail > numRequested) {
-            SPDLOG_INFO("Elastically scaled-up app {} ({} -> {})", appId, numRequested, numAvail);
+            SPDLOG_INFO("Elastically scaled-up app {} ({} -> {})",
+                        appId,
+                        numRequested,
+                        numAvail);
         } else {
             SPDLOG_INFO("Decided NOT to elastically scaled-up app {}", appId);
         }
@@ -831,13 +855,14 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         }
     }
 
-    // For a NEW decision of an MPI application, we know that it will be
-    // followed-up by a SCALE_CHANGE one, and that the mpi_world_size parameter
-    // must be set. Thus, we can schedule slots for all the MPI ranks, and
-    // consume them later as a preloaded scheduling decision
+    // For a NEW decision of an MPI/OpenMP application, we know that it will be
+    // followed-up by a SCALE_CHANGE one, and that the size parameter
+    // must be set. Thus, we can schedule slots for all the MPI ranks/OMP
+    // threads, and consume them later as a preloaded scheduling decision
     bool isNew = decisionType == faabric::batch_scheduler::DecisionType::NEW;
-    bool isMpi = req->messages(0).ismpi();
-    std::shared_ptr<BatchExecuteRequest> mpiReq = nullptr;
+    bool isMpi = req->messages_size() > 0 && req->messages(0).ismpi();
+    bool isOmp = req->messages_size() > 0 && req->messages(0).isomp();
+    std::shared_ptr<BatchExecuteRequest> knownSizeReq = nullptr;
 
     // Check if there exists a pre-loaded scheduling decision for this app
     // (e.g. if we want to force a migration). Note that we don't want to check
@@ -849,25 +874,29 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
         // In general, after a scale change decision (that has been preloaded)
         // it is safe to remove it
         if (isScaleChange) {
+            SPDLOG_DEBUG("Removing pre-loaded scheduling decision for app {}",
+                         appId);
             state.preloadedSchedulingDecisions.erase(appId);
         }
-    } else if (isNew && isMpi) {
-        mpiReq = std::make_shared<BatchExecuteRequest>();
-        *mpiReq = *req;
+    } else if (isNew && (isMpi || isOmp)) {
+        knownSizeReq = std::make_shared<BatchExecuteRequest>();
+        *knownSizeReq = *req;
 
         // Deep-copy as many messages we can from the original BER, and mock
         // the rest
-        for (int i = req->messages_size(); i < req->messages(0).mpiworldsize();
-             i++) {
-            auto* newMpiMsg = mpiReq->add_messages();
+        size_t reqSize = isMpi ? req->messages(0).mpiworldsize()
+                               : req->messages(0).ompnumthreads();
+        assert(reqSize > 0);
+        for (int i = req->messages_size(); i < reqSize; i++) {
+            auto* newMpiMsg = knownSizeReq->add_messages();
 
             newMpiMsg->set_appid(req->appid());
             newMpiMsg->set_groupidx(i);
         }
-        assert(mpiReq->messages_size() == req->messages(0).mpiworldsize());
+        assert(knownSizeReq->messages_size() == reqSize);
 
         decision = batchScheduler->makeSchedulingDecision(
-          hostMapCopy, state.inFlightReqs, mpiReq);
+          hostMapCopy, state.inFlightReqs, knownSizeReq);
     } else {
         decision = batchScheduler->makeSchedulingDecision(
           hostMapCopy, state.inFlightReqs, req);
@@ -953,7 +982,7 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     }
 
     // Skip claiming slots and ports if we have preemptively allocated them
-    bool skipClaim = decision->groupId == MPI_PRELOADED_DECISION_GROUPID;
+    bool skipClaim = decision->groupId == FIXED_SIZE_PRELOADED_DECISION_GROUPID;
 
     // A scheduling decision will create a new PTP mapping and, as a
     // consequence, a new group ID
@@ -990,17 +1019,19 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
             // For a NEW MPI decision that was not preloaded we have
             // preemptively scheduled all MPI messages but now we just need to
             // return the first one, and preload the rest
-            if (isMpi && mpiReq != nullptr) {
-                auto mpiDecision = std::make_shared<
+            if ((isMpi || isOmp) && knownSizeReq != nullptr) {
+                auto knownSizeDecision = std::make_shared<
                   faabric::batch_scheduler::SchedulingDecision>(req->appid(),
                                                                 req->groupid());
-                *mpiDecision = *decision;
-                mpiDecision->groupId = MPI_PRELOADED_DECISION_GROUPID;
-                state.preloadedSchedulingDecisions[appId] = mpiDecision;
+                *knownSizeDecision = *decision;
+                knownSizeDecision->groupId =
+                  FIXED_SIZE_PRELOADED_DECISION_GROUPID;
+                state.preloadedSchedulingDecisions[appId] = knownSizeDecision;
 
                 // Remove all messages that we do not have to dispatch now
-                for (int i = 1; i < mpiDecision->messageIds.size(); i++) {
-                    decision->removeMessage(mpiDecision->messageIds.at(i));
+                for (int i = 1; i < knownSizeDecision->messageIds.size(); i++) {
+                    decision->removeMessage(
+                      knownSizeDecision->messageIds.at(i));
                 }
             }
 
@@ -1192,7 +1223,8 @@ void Planner::dispatchSchedulingDecision(
             // Propagate the single host hint
             hostRequests[thisHost]->set_singlehosthint(req->singlehosthint());
             // Propagate the elastic scaling hint
-            hostRequests[thisHost]->set_elasticscalehint(req->elasticscalehint());
+            hostRequests[thisHost]->set_elasticscalehint(
+              req->elasticscalehint());
         }
 
         *hostRequests[thisHost]->add_messages() = msg;

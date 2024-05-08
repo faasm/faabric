@@ -307,6 +307,13 @@ std::shared_ptr<SchedulingDecision> BinPackScheduler::makeSchedulingDecision(
     auto decisionType = getDecisionType(inFlightReqs, req);
     auto sortedHosts = getSortedHosts(hostMap, inFlightReqs, req, decisionType);
 
+    // For an OpenMP request with the single host hint, we only consider
+    // scheduling in one VM
+    bool isOmp = req->messages_size() > 0 && req->messages(0).isomp();
+    if (req->singlehosthint() && isOmp) {
+        sortedHosts.erase(sortedHosts.begin() + 1, sortedHosts.end());
+    }
+
     // Assign slots from the list (i.e. bin-pack)
     auto it = sortedHosts.begin();
     int numLeftToSchedule = req->messages_size();

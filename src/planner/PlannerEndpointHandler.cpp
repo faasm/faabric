@@ -187,6 +187,11 @@ void PlannerEndpointHandler::onRequest(
                       inFlightPair.first->messages(0).mpiworldsize());
                 }
 
+                if (inFlightPair.first->messages(0).isomp()) {
+                    inFlightAppResp->set_size(
+                      inFlightPair.first->messages(0).ompnumthreads());
+                }
+
                 for (const auto& hostIp : decision->hosts) {
                     inFlightAppResp->add_hostips(hostIp);
                 }

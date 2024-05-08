@@ -249,6 +249,10 @@ long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
 
 void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
+    if (req->messages_size() == 0) {
+        return;
+    }
+
     faabric::util::FullLock lock(mx);
 
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;

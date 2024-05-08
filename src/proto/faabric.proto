@@ -145,6 +145,10 @@ message Message {
     repeated int32 chainedMsgIds = 36;
     map<string, int32> intExecGraphDetails = 37;
     map<string, string> execGraphDetails = 38;
+
+    // OpenMP
+    bool isOmp = 39;
+    int32 ompNumThreads = 40;
 }
 
 // ---------------------------------------------
