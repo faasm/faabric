@@ -54,6 +54,9 @@ message BatchExecuteRequest {
     // Hint set by the user to hint that this execution should all be in a
     // single host
     bool singleHostHint = 11;
+
+    // Hint set by the user to make scale-up requests elastic
+    bool elasticScaleHint = 12;
 }
 
 message BatchExecuteRequestStatus {
@@ -142,6 +145,10 @@ message Message {
     repeated int32 chainedMsgIds = 36;
     map<string, int32> intExecGraphDetails = 37;
     map<string, string> execGraphDetails = 38;
+
+    // OpenMP
+    bool isOmp = 39;
+    int32 ompNumThreads = 40;
 }
 
 // ---------------------------------------------

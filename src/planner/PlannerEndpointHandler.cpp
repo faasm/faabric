@@ -187,6 +187,22 @@ void PlannerEndpointHandler::onRequest(
                       inFlightPair.first->messages(0).mpiworldsize());
                 }
 
+                if (inFlightPair.first->messages(0).isomp()) {
+                    // What if we told here the scaled-up size (?)
+                    int numOmpThreads =
+                      inFlightPair.first->messages(0).ompnumthreads();
+
+                    if (inFlightPair.first->elasticscalehint() &&
+                        numOmpThreads < inFlightPair.first->messages_size()) {
+
+                        inFlightAppResp->set_size(
+                          inFlightPair.first->messages_size());
+                    } else {
+                        inFlightAppResp->set_size(
+                          inFlightPair.first->messages(0).ompnumthreads());
+                    }
+                }
+
                 for (const auto& hostIp : decision->hosts) {
                     inFlightAppResp->add_hostips(hostIp);
                 }
