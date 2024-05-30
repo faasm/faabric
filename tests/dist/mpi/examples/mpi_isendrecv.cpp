@@ -41,9 +41,6 @@ int iSendRecv()
     }
     printf("Rank %i - async working properly\n", rank);
 
-    delete sendRequest;
-    delete recvRequest;
-
     MPI_Finalize();
 
     return 0;
