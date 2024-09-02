@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <faabric/util/exception.h>
 #include <string>
 #include <vector>
