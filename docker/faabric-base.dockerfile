@@ -11,7 +11,7 @@ RUN apt update \
         wget \
     # LLVM APT Repo config
     && wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc \
-    && add-apt-repository -y "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${LLVM_VERSION_MAJOR} main"
+    && add-apt-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION_MAJOR} main"
 
 # Install APT packages
 RUN apt update && apt install -y \

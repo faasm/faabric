@@ -5,7 +5,7 @@ ARG FAABRIC_VERSION
 SHELL ["/bin/bash", "-c"]
 
 # Flag to say we're in a container
-ENV FAABRIC_DOCKER="on"
+ENV FAABRIC_DOCKER "on"
 
 # Put the code in place
 WORKDIR /code
