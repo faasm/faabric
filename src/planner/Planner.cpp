@@ -120,6 +120,7 @@ static void releaseHostMpiPort(std::shared_ptr<Host> host, int mpiPort)
     throw std::runtime_error("Requested to free unavailable MPI port!");
 }
 
+#ifndef NDEBUG
 static void printHostState(std::map<std::string, std::shared_ptr<Host>> hostMap,
                            const std::string& logLevel = "debug")
 {
@@ -147,6 +148,7 @@ static void printHostState(std::map<std::string, std::shared_ptr<Host>> hostMap,
         SPDLOG_ERROR("Unrecognised log level: {}", logLevel);
     }
 }
+#endif
 
 // ----------------------
 // Planner
