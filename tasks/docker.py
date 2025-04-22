@@ -1,7 +1,7 @@
 from invoke import task
 from os.path import join
 from subprocess import run
-from tasks.util.env import ACR_NAME, LLVM_VERSION, PROJ_ROOT, get_version
+from tasks.util.env import CR_NAME, LLVM_VERSION, PROJ_ROOT, get_version
 
 FAABRIC_IMAGE_NAME = "faabric"
 FAABRIC_BASE_IMAGE_NAME = "faabric-base"
@@ -10,7 +10,7 @@ FAABRIC_PLANNER_IMAGE_NAME = "planner"
 
 def _get_docker_tag(img_name):
     ver = get_version()
-    return "{}/{}:{}".format(ACR_NAME, img_name, ver)
+    return "{}/{}:{}".format(CR_NAME, img_name, ver)
 
 
 def _do_container_build(name, nocache=False, push=False, build_args={}):

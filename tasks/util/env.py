@@ -14,7 +14,7 @@ FAABRIC_INSTALL_PREFIX = join(_FAABRIC_BUILD_DIR, "install")
 
 FAABRIC_CONFIG_FILE = join(PROJ_ROOT, "faabric.ini")
 
-ACR_NAME = "faasm.azurecr.io"
+CR_NAME = "ghcr.io/faasm"
 
 # This LLVM version is for the LLVM that we use to compile regular C/C++ code
 # to x86. For the LLVM version to cross-compile code to WebAssembly see
