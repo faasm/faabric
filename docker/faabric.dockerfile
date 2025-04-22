@@ -1,4 +1,4 @@
-FROM faasm.azurecr.io/faabric-base:0.15.0
+FROM ghcr.io/faasm/faabric-base:0.15.0
 ARG FAABRIC_VERSION
 
 # faabic-base image is not re-built often, so tag may be behind
@@ -30,7 +30,7 @@ RUN ./bin/create_venv.sh \
 RUN echo "set auto-load safe-path /" > /root/.gdbinit
 
 # CLI setup
-ENV TERM xterm-256color
+ENV TERM=xterm-256color
 
 RUN echo ". /code/faabric/bin/workon.sh" >> ~/.bashrc
 CMD ["/bin/bash", "-l"]

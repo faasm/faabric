@@ -29,14 +29,14 @@ jobs:
       - name: "Log in to ACR"
         uses: docker/login-action@v3
         with:
-          registry: faasm.azurecr.io
-          username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
-          password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
+          registry: ghcr.io
+          username: faasm
+          password: ${{ secrets.GHCR_PAT }}
       - name: "Build Faabric container"
         uses: docker/build-push-action@v5.2.0
         with:
           push: true
           file: docker/${{ matrix.image }}.dockerfile
           context: .
-          tags: faasm.azurecr.io/${{ matrix.image }}:${{ env.TAG_VERSION }}
+          tags: ghcr.io/faasm/${{ matrix.image }}:${{ env.TAG_VERSION }}
           build-args: FAABRIC_VERSION=${{ env.TAG_VERSION }}

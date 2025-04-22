@@ -5,7 +5,7 @@ services:
     image: redis
 
   planner:
-    image: faasm.azurecr.io/planner:${FAABRIC_VERSION}
+    image: ghcr.io/faasm/planner:${FAABRIC_VERSION}
     # The planner entrypoint supports changing the location of the
     # planner_server binary. If the binary is not found, it will wait until
     # it is built
