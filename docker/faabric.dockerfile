@@ -1,4 +1,4 @@
-FROM ghcr.io/faasm/faabric-base:0.15.0
+FROM ghcr.io/faasm/faabric-base:0.21.0
 ARG FAABRIC_VERSION
 
 # faabic-base image is not re-built often, so tag may be behind
