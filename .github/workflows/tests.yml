@@ -84,6 +84,8 @@ jobs:
           from: faabric
       - name: "Ping redis"
         run: redis-cli -h redis ping
+      - name: "Run conan"
+        run: ./bin/inv_wrapper.sh dev.conan --clean --build=Debug
       - name: "Run cmake for tests"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --coverage
       - name: "Build tests"
@@ -126,6 +128,8 @@ jobs:
           from: faabric
       - name: "Ping redis"
         run: redis-cli -h redis ping
+      - name: "Run conan"
+        run: ./bin/inv_wrapper.sh dev.conan --clean --build=Debug
       - name: "Run cmake for tests"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Build tests"
@@ -180,6 +184,8 @@ jobs:
         with:
           build-type: Release
           from: faabric
+      - name: "Run conan"
+        run: ./bin/inv_wrapper.sh dev.conan --clean --build=Release
       - name: "Run cmake shared"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --shared --build=Release
       - name: "Build Faabric shared library"
