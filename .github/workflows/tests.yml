@@ -30,9 +30,10 @@ jobs:
         with:
           build-type: Debug
           from: faabric
-          mount-path: conan-cache
       - name: "Build Conan deps to be shared by all runs"
-        run: ./bin/inv_wrapper.sh dev.conan --build Debug --clean
+        run: |
+          ./bin/inv_wrapper.sh dev.conan --build Debug --clean
+          ./bin/inv_wrapper.sh dev.conan --build Release --clean
 
   docs:
     if: github.event.pull_request.draft == false
@@ -81,7 +82,6 @@ jobs:
         with:
           build-type: Debug
           from: faabric
-          mount-path: conan-cache
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
@@ -124,7 +124,6 @@ jobs:
         with:
           build-type: Debug
           from: faabric
-          mount-path: conan-cache
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
@@ -149,7 +148,6 @@ jobs:
         with:
           build-type: Debug
           from: faabric
-          mount-path: conan-cache
       - name: "Build distributed tests"
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
@@ -182,7 +180,6 @@ jobs:
         with:
           build-type: Release
           from: faabric
-          mount-path: conan-cache
       - name: "Run cmake shared"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --shared --build=Release
       - name: "Build Faabric shared library"

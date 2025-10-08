@@ -4,7 +4,7 @@ include (ExternalProject)
 include (FetchContent)
 find_package (Threads REQUIRED)
 
-# Find conan-generated package descriptions
+# Find conan-generated package descriptions.
 list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR})
 list(PREPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
