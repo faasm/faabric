@@ -9,8 +9,6 @@ protobuf/3.20.0
 readerwriterqueue/1.0.6
 spdlog/1.10.0
 zlib/1.2.12
-# (Optional) Only if CMake can’t find fmt below:
-# fmt/9.1.0
 
 [generators]
 CMakeToolchain

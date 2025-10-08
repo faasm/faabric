@@ -26,9 +26,12 @@ jobs:
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
-      - uses: faasm/conan-cache-action@v3
-      - name: "Build Conan CMake deps to be shared by all runs"
-        run: ./bin/inv_wrapper.sh dev.cmake --build Debug --clean
+      - uses: faasm/conan-cache-action@main
+        with:
+          build-type: Debug
+          from: faabric
+      - name: "Build Conan deps to be shared by all runs"
+        run: ./bin/inv_wrapper.sh dev.conan --build Debug --clean
 
   docs:
     if: github.event.pull_request.draft == false
