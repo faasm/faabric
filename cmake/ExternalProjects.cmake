@@ -9,7 +9,7 @@ list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR})
 list(PREPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 find_package(absl QUIET REQUIRED)
-find_package(Boost 1.84.0 QUIET REQUIRED COMPONENTS system)
+find_package(Boost 1.84.0 QUIET REQUIRED COMPONENTS filesystem program_options system)
 find_package(Catch2 QUIET REQUIRED)
 find_package(flatbuffers CONFIG QUIET REQUIRED)
 find_package(fmt QUIET REQUIRED)
@@ -83,6 +83,8 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     absl::strings
     atomic_queue::atomic_queue
     Boost::headers
+    Boost::filesystem
+    Boost::program_options
     Boost::system
     flatbuffers::flatbuffers
     hiredis::hiredis

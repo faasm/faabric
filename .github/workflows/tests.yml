@@ -77,7 +77,11 @@ jobs:
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
-      - uses: faasm/conan-cache-action@v3
+      - uses: faasm/conan-cache-action@main
+        with:
+          build-type: Debug
+          from: faabric
+          mount-path: conan-cache
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
@@ -116,7 +120,11 @@ jobs:
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
-      - uses: faasm/conan-cache-action@v3
+      - uses: faasm/conan-cache-action@main
+        with:
+          build-type: Debug
+          from: faabric
+          mount-path: conan-cache
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
@@ -137,8 +145,11 @@ jobs:
       # --- Code update ---
       - name: "Check out code"
         uses: actions/checkout@v4
-      - name: "Conan cache"
-        uses: faasm/conan-cache-action@v3
+      - uses: faasm/conan-cache-action@main
+        with:
+          build-type: Debug
+          from: faabric
+          mount-path: conan-cache
       - name: "Build distributed tests"
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
@@ -167,9 +178,11 @@ jobs:
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
-      - uses: faasm/conan-cache-action@v3
+      - uses: faasm/conan-cache-action@main
         with:
-          build-type: "release"
+          build-type: Release
+          from: faabric
+          mount-path: conan-cache
       - name: "Run cmake shared"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --shared --build=Release
       - name: "Build Faabric shared library"

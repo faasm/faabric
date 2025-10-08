@@ -40,9 +40,9 @@ def conan(ctx, clean=False, build="Debug"):
         run(conan_cmd, shell=True, check=True)
 
     conan_install_cmd = (
-        f"conan install {PROJ_ROOT} -pr:h={conan_profile} -pr:b={conan_profile}"
-        f" -s build_type={build} -of {conan_cache} --build=missing "
-        f"--lockfile={conan_lockfile}"
+        f"conan install {PROJ_ROOT} -pr:h={conan_profile} "
+        f"-pr:b={conan_profile} -s build_type={build} -of {conan_cache} "
+        f"--build=missing --lockfile={conan_lockfile}"
     )
     print(conan_install_cmd)
     run(conan_install_cmd, shell=True, check=True)
