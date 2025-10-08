@@ -30,6 +30,7 @@ jobs:
         with:
           build-type: Debug
           from: faabric
+          mount-path: conan-cache
       - name: "Build Conan deps to be shared by all runs"
         run: ./bin/inv_wrapper.sh dev.conan --build Debug --clean
 

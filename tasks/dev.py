@@ -31,11 +31,19 @@ def conan(ctx, clean=False, build="Debug"):
     # comitted for version control.
     if not exists(conan_lockfile):
         run("conan remote list", shell=True, check=True)
-        conan_cmd = f"conan lock create {PROJ_ROOT} -pr:h={conan_profile} -pr:b={conan_profile} -s build_type={build} --lockfile-out={conan_lockfile}"
+        conan_cmd = (
+            f"conan lock create {PROJ_ROOT} -pr:h={conan_profile} "
+            f"-pr:b={conan_profile} -s build_type={build} "
+            f"--lockfile-out={conan_lockfile}"
+        )
         print(conan_cmd)
         run(conan_cmd, shell=True, check=True)
 
-    conan_install_cmd = f"conan install {PROJ_ROOT} -pr:h={conan_profile} -pr:b={conan_profile} -s build_type={build} -of {conan_cache} --build=missing --lockfile={conan_lockfile}"
+    conan_install_cmd = (
+        f"conan install {PROJ_ROOT} -pr:h={conan_profile} -pr:b={conan_profile}"
+        f" -s build_type={build} -of {conan_cache} --build=missing "
+        f"--lockfile={conan_lockfile}"
+    )
     print(conan_install_cmd)
     run(conan_install_cmd, shell=True, check=True)
 
