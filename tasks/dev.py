@@ -3,6 +3,7 @@ from os.path import exists, join
 from shutil import rmtree
 from subprocess import run
 from tasks.util.env import (
+    FAABRIC_CONAN_CACHE,
     FAABRIC_SHARED_BUILD_DIR,
     FAABRIC_STATIC_BUILD_DIR,
     FAABRIC_INSTALL_PREFIX,
@@ -12,6 +13,30 @@ from tasks.util.env import (
 
 from invoke import task
 
+@task
+def conan(ctx, clean=False, build="Debug"):
+    """
+    Configure dependencies using Conan
+    """
+    conan_lockfile = f"{PROJ_ROOT}/conan-{build.lower()}.lock"
+    conan_cache = f"{FAABRIC_CONAN_CACHE}/{build.lower()}"
+    conan_profile = join(PROJ_ROOT, "conanprofile.txt")
+
+    if clean:
+        run(f"rm -f {conan_lockfile}", shell=True, check=True)
+        run(f"rm -rf {conan_cache}", shell=True, check=True)
+
+    # Generate a conan lock file if it does not exist. This file should be
+    # comitted for version control.
+    if not exists(conan_lockfile):
+        run("conan remote list", shell=True, check=True)
+        conan_cmd = f"conan lock create {PROJ_ROOT} -pr:h={conan_profile} -pr:b={conan_profile} -s build_type={build} --lockfile-out={conan_lockfile}"
+        print(conan_cmd)
+        run(conan_cmd, shell=True, check=True)
+
+    conan_install_cmd = f"conan install {PROJ_ROOT} -pr:h={conan_profile} -pr:b={conan_profile} -s build_type={build} -of {conan_cache} --build=missing --lockfile={conan_lockfile}"
+    print(conan_install_cmd)
+    run(conan_install_cmd, shell=True, check=True)
 
 @task
 def cmake(
@@ -42,9 +67,16 @@ def cmake(
     if build not in build_types:
         raise RuntimeError("Expected build to be in {}".format(build_types))
 
+    conan_cache = f"{FAABRIC_CONAN_CACHE}/{build.lower()}"
+    if not exists(conan_cache):
+        print(f"ERROR: expected conan cache in {conan_cache}")
+        print("ERROR: make sure to run 'inv dev.conan' first")
+        raise RuntimeError(f"Expected conan cache in {conan_cache}")
+
     cmd = [
         "cmake",
         "-GNinja",
+        f"-DCMAKE_TOOLCHAIN_FILE={conan_cache}/conan_toolchain.cmake",
         "-DCMAKE_INSTALL_PREFIX={}".format(FAABRIC_INSTALL_PREFIX),
         "-DCMAKE_BUILD_TYPE={}".format(build),
         "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),

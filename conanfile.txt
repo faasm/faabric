@@ -1,0 +1,31 @@
+[requires]
+abseil/20220623.0
+boost/1.84.0
+catch2/2.13.9
+flatbuffers/23.5.26
+hiredis/1.0.2
+openssl/3.6.0
+protobuf/3.20.0
+readerwriterqueue/1.0.6
+spdlog/1.10.0
+zlib/1.2.12
+# (Optional) Only if CMake can’t find fmt below:
+# fmt/9.1.0
+
+[generators]
+CMakeToolchain
+CMakeDeps
+
+[options]
+boost/*:error_code_header_only=True
+boost/*:system_no_deprecated=True
+boost/*:zlib=False
+boost/*:bzip2=False
+boost/*:lzma=False
+boost/*:zstd=False
+boost/*:without_locale=True
+boost/*:without_log=True
+boost/*:without_mpi=True
+boost/*:without_python=True
+boost/*:without_test=True
+boost/*:without_wave=True

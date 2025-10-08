@@ -10,7 +10,7 @@ add_custom_command(
     OUTPUT "${FB_HEADER}"
     DEPENDS faabric.fbs
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-    COMMAND ${CONAN_FLATBUFFERS_ROOT}/bin/flatc
+    COMMAND flatbuffers::flatc
     ARGS --cpp --gen-mutable --raw-binary faabric.fbs
 )
 
