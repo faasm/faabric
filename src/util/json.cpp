@@ -14,7 +14,8 @@ std::string messageToJson(const google::protobuf::Message& msg)
     google::protobuf::util::JsonPrintOptions jsonOptions;
     jsonOptions.always_print_enums_as_ints = true;
 
-    auto status = google::protobuf::util::MessageToJsonString(msg, &jsonStr, jsonOptions);
+    auto status =
+      google::protobuf::util::MessageToJsonString(msg, &jsonStr, jsonOptions);
     if (!status.ok()) {
         SPDLOG_ERROR("Serialising JSON string to protobuf message: {}",
                      status.message().data());
