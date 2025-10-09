@@ -32,8 +32,8 @@ jobs:
           from: faabric
       - name: "Build Conan deps to be shared by all runs"
         run: |
-          ./bin/inv_wrapper.sh dev.conan --build Debug --clean
-          ./bin/inv_wrapper.sh dev.conan --build Release --clean
+          ./bin/inv_wrapper.sh dev.conan --build Debug
+          ./bin/inv_wrapper.sh dev.conan --build Release
 
   docs:
     if: github.event.pull_request.draft == false
@@ -85,7 +85,7 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run conan"
-        run: ./bin/inv_wrapper.sh dev.conan --clean --build=Debug
+        run: ./bin/inv_wrapper.sh dev.conan --build=Debug
       - name: "Run cmake for tests"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --coverage
       - name: "Build tests"
@@ -128,9 +128,15 @@ jobs:
           from: faabric
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      # Re-run conan with the --clean flag to rebuild the packages with sanitisers
-      - name: "Run conan"
+      # For sanitised builds, we need to also re-build all Conan dependencies
+      # so that they are also sanitized. Otherwise this causes unexpected
+      # crashes.
+      - name: "Re-build conan deps"
+        if: ${{ matrix.sanitiser != 'None' }}
         run: ./bin/inv_wrapper.sh dev.conan --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
+      - name: "Run conan"
+        if: ${{ matrix.sanitiser == 'None' }}
+        run: ./bin/inv_wrapper.sh dev.conan --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Run cmake for tests"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Build tests"
