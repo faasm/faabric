@@ -9,7 +9,7 @@ pushd ${PROJ_ROOT} >> /dev/null
 source ./bin/workon.sh
 
 # Run the debug build
-inv dev.conan --build=Debug --clean
+inv dev.conan --build=Debug
 inv dev.cmake --build=Debug --clean
 inv dev.cc faabric_dist_tests
 inv dev.cc faabric_dist_test_server

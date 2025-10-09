@@ -11,3 +11,5 @@ race:faabric::mpi::MpiWorld::*
 
 # Race in ReaderWriterQueue
 race:moodycamel::*
+
+race:google::protobuf::*

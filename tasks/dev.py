@@ -4,6 +4,7 @@ from shutil import rmtree
 from subprocess import run
 from tasks.util.env import (
     FAABRIC_CONAN_CACHE,
+    FAABRIC_CONAN_PROFILES,
     FAABRIC_SHARED_BUILD_DIR,
     FAABRIC_STATIC_BUILD_DIR,
     FAABRIC_INSTALL_PREFIX,
@@ -15,13 +16,18 @@ from invoke import task
 
 
 @task
-def conan(ctx, clean=False, build="Debug"):
+def conan(ctx, clean=False, build="Debug", sanitiser="None"):
     """
     Configure dependencies using Conan
     """
     conan_lockfile = f"{PROJ_ROOT}/conan-{build.lower()}.lock"
     conan_cache = f"{FAABRIC_CONAN_CACHE}/{build.lower()}"
-    conan_profile = join(PROJ_ROOT, "conanprofile.txt")
+    if sanitiser == "Thread":
+        conan_profile = join(FAABRIC_CONAN_PROFILES, "tsan.txt")
+    elif sanitiser == "Address":
+        conan_profile = join(FAABRIC_CONAN_PROFILES, "asan.txt")
+    else:
+        conan_profile = join(FAABRIC_CONAN_PROFILES, "default.txt")
 
     if clean:
         run(f"rm -f {conan_lockfile}", shell=True, check=True)
@@ -39,10 +45,13 @@ def conan(ctx, clean=False, build="Debug"):
         print(conan_cmd)
         run(conan_cmd, shell=True, check=True)
 
+    # Ensure a clean build by re-building all Conan packages
+    build_type = "*" if clean else "missing"
+
     conan_install_cmd = (
         f"conan install {PROJ_ROOT} -pr:h={conan_profile} "
         f"-pr:b={conan_profile} -s build_type={build} -of {conan_cache} "
-        f"--build=missing --lockfile={conan_lockfile}"
+        f"--build={build_type} --lockfile={conan_lockfile}"
     )
     print(conan_install_cmd)
     run(conan_install_cmd, shell=True, check=True)

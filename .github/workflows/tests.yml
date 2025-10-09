@@ -108,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitiser: [None, Undefined]
+        sanitiser: [None, Thread, Address, Undefined]
     env:
       DEPLOYMENT_TYPE: gha-ci
       REDIS_QUEUE_HOST: redis
@@ -128,8 +128,9 @@ jobs:
           from: faabric
       - name: "Ping redis"
         run: redis-cli -h redis ping
+      # Re-run conan with the --clean flag to rebuild the packages with sanitisers
       - name: "Run conan"
-        run: ./bin/inv_wrapper.sh dev.conan --clean --build=Debug
+        run: ./bin/inv_wrapper.sh dev.conan --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Run cmake for tests"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Build tests"
@@ -185,7 +186,7 @@ jobs:
           build-type: Release
           from: faabric
       - name: "Run conan"
-        run: ./bin/inv_wrapper.sh dev.conan --clean --build=Release
+        run: ./bin/inv_wrapper.sh dev.conan --build=Release
       - name: "Run cmake shared"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --shared --build=Release
       - name: "Build Faabric shared library"
