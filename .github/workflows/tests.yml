@@ -108,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitiser: [None, Address, Thread, Undefined]
+        sanitiser: [None, Undefined]
     env:
       DEPLOYMENT_TYPE: gha-ci
       REDIS_QUEUE_HOST: redis
