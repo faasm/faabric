@@ -5,6 +5,7 @@ from os.path import join, exists
 from shutil import rmtree
 from subprocess import run
 from tasks.util.env import (
+    FAABRIC_CONAN_CACHE,
     FAABRIC_INSTALL_PREFIX,
     LLVM_VERSION_MAJOR,
     PROJ_ROOT,
@@ -28,12 +29,19 @@ def build(ctx, clean=False):
     if not exists(BUILD_DIR):
         makedirs(BUILD_DIR)
 
+    conan_cache = f"{FAABRIC_CONAN_CACHE}/release"
+    if not exists(conan_cache):
+        print(f"ERROR: expected conan cache in {conan_cache}")
+        print("ERROR: make sure to run 'inv dev.conan' first")
+        raise RuntimeError(f"Expected conan cache in {conan_cache}")
+
     # Cmake
     cmake_cmd = " ".join(
         [
             "cmake",
             "-GNinja",
             "-DCMAKE_BUILD_TYPE=Release",
+            f"-DCMAKE_TOOLCHAIN_FILE={conan_cache}/conan_toolchain.cmake",
             "-DCMAKE_CXX_FLAGS=-I{}".format(INCLUDE_DIR),
             "-DCMAKE_EXE_LINKER_FLAGS=-L{}".format(LIB_DIR),
             "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-{}".format(

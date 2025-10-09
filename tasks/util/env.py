@@ -14,6 +14,9 @@ FAABRIC_INSTALL_PREFIX = join(_FAABRIC_BUILD_DIR, "install")
 
 FAABRIC_CONFIG_FILE = join(PROJ_ROOT, "faabric.ini")
 
+FAABRIC_CONAN_CACHE = join(PROJ_ROOT, "conan-cache")
+FAABRIC_CONAN_PROFILES = join(PROJ_ROOT, "conan-profiles")
+
 CR_NAME = "ghcr.io/faasm"
 
 # This LLVM version is for the LLVM that we use to compile regular C/C++ code

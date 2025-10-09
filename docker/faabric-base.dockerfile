@@ -50,18 +50,20 @@ RUN apt update && apt install -y \
     unzip
 
 # Install up-to-date CMake
+ARG CMAKE_VERSION=4.1.2
 RUN apt remove --purge --auto-remove cmake \
     && mkdir -p /setup \
     && cd /setup \
     && wget -q -O cmake-linux.sh \
-        https://github.com/Kitware/CMake/releases/download/v3.28.0/cmake-3.28.0-linux-x86_64.sh \
+        https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.sh \
     && sh cmake-linux.sh -- --skip-license --prefix=/usr/local \
     && apt clean autoclean -y \
     && apt autoremove -y
 
 # Install Conan
+ARG CONAN_VERSION=2.21.0
 RUN curl -s -L -o \
-        /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.63.0/conan-ubuntu-64.deb \
+        /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/${CONAN_VERSION}/conan-${CONAN_VERSION}-amd64.deb \
     && sudo dpkg -i /tmp/conan-latest.deb \
     && rm -f /tmp/conan-latest.deb
 

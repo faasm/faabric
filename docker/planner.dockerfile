@@ -1,4 +1,4 @@
-FROM ghcr.io/faasm/faabric-base:0.21.0
+FROM ghcr.io/faasm/faabric-base:0.22.0
 ARG FAABRIC_VERSION
 
 # Flag to say we're in a container
@@ -15,6 +15,7 @@ RUN rm -rf /code \
     && cd /code/faabric \
     && ./bin/create_venv.sh \
     && source venv/bin/activate \
+    && inv dev.conan --build=Release \
     && inv dev.cmake --build=Release \
     && inv dev.cc planner_server
 

@@ -20,21 +20,26 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/faasm/faabric:0.21.0
+      image: ghcr.io/faasm/faabric:0.22.0
     env:
       DEPLOYMENT_TYPE: gha-ci
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
-      - uses: faasm/conan-cache-action@v3
-      - name: "Build Conan CMake deps to be shared by all runs"
-        run: ./bin/inv_wrapper.sh dev.cmake --build Debug --clean
+      - uses: faasm/conan-cache-action@main
+        with:
+          build-type: Debug
+          from: faabric
+      - name: "Build Conan deps to be shared by all runs"
+        run: |
+          ./bin/inv_wrapper.sh dev.conan --build Debug
+          ./bin/inv_wrapper.sh dev.conan --build Release
 
   docs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/faasm/faabric:0.21.0
+      image: ghcr.io/faasm/faabric:0.22.0
     steps:
       - name: "Check out code"
         uses: actions/checkout@v4
@@ -45,7 +50,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/faasm/faabric:0.21.0
+      image: ghcr.io/faasm/faabric:0.22.0
     steps:
       - name: "Check out code"
         uses: actions/checkout@v4
@@ -65,7 +70,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: ghcr.io/faasm/faabric:0.21.0
+      image: ghcr.io/faasm/faabric:0.22.0
       options: --privileged
     services:
       redis:
@@ -73,9 +78,14 @@ jobs:
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
-      - uses: faasm/conan-cache-action@v3
+      - uses: faasm/conan-cache-action@main
+        with:
+          build-type: Debug
+          from: faabric
       - name: "Ping redis"
         run: redis-cli -h redis ping
+      - name: "Run conan"
+        run: ./bin/inv_wrapper.sh dev.conan --build=Debug
       - name: "Run cmake for tests"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --coverage
       - name: "Build tests"
@@ -98,13 +108,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitiser: [None, Address, Thread, Undefined]
+        sanitiser: [None, Thread, Address, Undefined]
     env:
       DEPLOYMENT_TYPE: gha-ci
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: ghcr.io/faasm/faabric:0.21.0
+      image: ghcr.io/faasm/faabric:0.22.0
       options: --privileged
     services:
       redis:
@@ -112,9 +122,21 @@ jobs:
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
-      - uses: faasm/conan-cache-action@v3
+      - uses: faasm/conan-cache-action@main
+        with:
+          build-type: Debug
+          from: faabric
       - name: "Ping redis"
         run: redis-cli -h redis ping
+      # For sanitised builds, we need to also re-build all Conan dependencies
+      # so that they are also sanitized. Otherwise this causes unexpected
+      # crashes.
+      - name: "Re-build conan deps"
+        if: ${{ matrix.sanitiser != 'None' }}
+        run: ./bin/inv_wrapper.sh dev.conan --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
+      - name: "Run conan"
+        if: ${{ matrix.sanitiser == 'None' }}
+        run: ./bin/inv_wrapper.sh dev.conan --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Run cmake for tests"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Build tests"
@@ -133,8 +155,10 @@ jobs:
       # --- Code update ---
       - name: "Check out code"
         uses: actions/checkout@v4
-      - name: "Conan cache"
-        uses: faasm/conan-cache-action@v3
+      - uses: faasm/conan-cache-action@main
+        with:
+          build-type: Debug
+          from: faabric
       - name: "Build distributed tests"
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
@@ -156,22 +180,27 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: ghcr.io/faasm/faabric:0.21.0
+      image: ghcr.io/faasm/faabric:0.22.0
     services:
       redis:
         image: redis
     steps:
       - name: "Check-out code"
         uses: actions/checkout@v4
-      - uses: faasm/conan-cache-action@v3
+      - uses: faasm/conan-cache-action@main
         with:
-          build-type: "release"
+          build-type: Release
+          from: faabric
+      - name: "Run conan"
+        run: ./bin/inv_wrapper.sh dev.conan --build=Release
       - name: "Run cmake shared"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --shared --build=Release
       - name: "Build Faabric shared library"
         run: ./bin/inv_wrapper.sh dev.cc faabric --shared
       - name: "Install Faabric shared library"
         run: ./bin/inv_wrapper.sh dev.install faabric --shared
+      - name: "Re-run conan (needed for examples)"
+        run: ./bin/inv_wrapper.sh dev.conan --build=Release
       - name: "Build examples"
         run: ./bin/inv_wrapper.sh examples
       - name: "Run example to check"

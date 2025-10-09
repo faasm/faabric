@@ -1,4 +1,4 @@
-FROM ghcr.io/faasm/faabric-base:0.21.0
+FROM ghcr.io/faasm/faabric-base:0.22.0
 ARG FAABRIC_VERSION
 
 # faabic-base image is not re-built often, so tag may be behind
@@ -18,6 +18,7 @@ WORKDIR /code/faabric
 # Python set-up and code builds
 RUN ./bin/create_venv.sh \
     && source venv/bin/activate \
+    && inv dev.conan --build=Release \
     # Static build
     && inv dev.cmake --build=Release \
     && inv dev.cc faabric \

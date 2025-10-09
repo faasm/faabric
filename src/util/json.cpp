@@ -11,10 +11,10 @@ std::string messageToJson(const google::protobuf::Message& msg)
 
     // Set the JSON print options. This is very important to ensure backwards-
     // compatibility with clients sending HTTP requests to faabric
-    google::protobuf::util::JsonOptions jsonOptions;
+    google::protobuf::util::JsonPrintOptions jsonOptions;
     jsonOptions.always_print_enums_as_ints = true;
 
-    google::protobuf::util::Status status =
+    auto status =
       google::protobuf::util::MessageToJsonString(msg, &jsonStr, jsonOptions);
     if (!status.ok()) {
         SPDLOG_ERROR("Serialising JSON string to protobuf message: {}",
@@ -28,8 +28,7 @@ std::string messageToJson(const google::protobuf::Message& msg)
 
 void jsonToMessage(const std::string& jsonStr, google::protobuf::Message* msg)
 {
-    google::protobuf::util::Status status =
-      google::protobuf::util::JsonStringToMessage(jsonStr, msg);
+    auto status = google::protobuf::util::JsonStringToMessage(jsonStr, msg);
     if (!status.ok()) {
         SPDLOG_ERROR("Deserialising JSON string to protobuf message: {}",
                      status.message().data());
