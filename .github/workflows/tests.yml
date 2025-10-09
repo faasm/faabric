@@ -193,6 +193,8 @@ jobs:
         run: ./bin/inv_wrapper.sh dev.cc faabric --shared
       - name: "Install Faabric shared library"
         run: ./bin/inv_wrapper.sh dev.install faabric --shared
+      - name: "Re-run conan (needed for examples)"
+        run: ./bin/inv_wrapper.sh dev.conan --build=Release
       - name: "Build examples"
         run: ./bin/inv_wrapper.sh examples
       - name: "Run example to check"
