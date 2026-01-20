@@ -22,7 +22,6 @@ int sendSyncAsync()
             MPI_Send(&r, 1, MPI_INT, r, 0, MPI_COMM_WORLD);
             MPI_Wait(&sendRequest, MPI_STATUS_IGNORE);
         }
-        delete sendRequest;
     } else {
         // Asynchronously receive twice from rank 0
         int recvValue1 = -1;
@@ -47,8 +46,6 @@ int sendSyncAsync()
                    rank);
             return 1;
         }
-        delete recvRequest1;
-        delete recvRequest2;
     }
     printf("Rank %i - send sync and async working properly\n", rank);
 
